@@ -14,6 +14,7 @@ describe('motor de costos', () => {
     expect(result.suggested_product_price).toBe(3046.4)
     expect(result.suggested_customer_total).toBe(3196.4)
     expect(result.estimated_profit).toBe(396)
+    expect(calculateCosts({ ...result, markup_percent: 40 }, [{ cost: 80 }, { cost: 50 }, { cost: 150 }]).suggested_product_price).toBe(2665.6)
   })
 
   it('evita costos negativos y muestra advertencia de venta bajo costo', () => {
