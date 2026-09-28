@@ -7,6 +7,7 @@ const business = { id: '22222222-2222-4222-8222-222222222222', owner_id: userId,
 
 async function mockBackend(page: Page, existing = false) {
   let profile: Record<string, unknown> | null = existing ? { ...business } : null
+  let quote: Record<string, unknown> | null = null
   await page.route('**/auth/v1/**', async route => {
     const url = route.request().url()
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(url.includes('/user') ? user : url.includes('/logout') || url.includes('/recover') ? {} : session) })
@@ -16,6 +17,14 @@ async function mockBackend(page: Page, existing = false) {
     if (method === 'POST') profile = { ...business, ...route.request().postDataJSON() }
     if (method === 'PATCH') profile = { ...profile, ...route.request().postDataJSON() }
     await route.fulfill({ status: method === 'POST' ? 201 : 200, contentType: 'application/json', body: JSON.stringify(method === 'GET' ? profile ? [profile] : [] : profile) })
+  })
+  await page.route('**/rest/v1/arpe_quotes*', async route => {
+    const method = route.request().method()
+    if (method === 'POST') quote = { id: '33333333-3333-4333-8333-333333333333', business_id: business.id, quote_number: 'ARPE-COT-2026-0001', customer_name: 'María López', customer_phone: '', product: 'Pastel de chocolate', portions: 12, flavor: '', filling: '', decoration: '', extras: '', delivery_date: null, delivery_time: null, notes: '', total_amount: 1000, deposit_type: 'percentage', deposit_value: 50, deposit_required: 500, status: 'draft', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), ...route.request().postDataJSON() }
+    if (method === 'PATCH' && quote) quote = { ...quote, ...route.request().postDataJSON() }
+    if (method === 'DELETE') quote = null
+    const body = method === 'GET' ? quote ? [quote] : [] : method === 'DELETE' ? '' : quote
+    await route.fulfill({ status: method === 'POST' ? 201 : 200, contentType: 'application/json', body: JSON.stringify(body) })
   })
 }
 
@@ -123,4 +132,31 @@ test('logo upload, signed preview and removal', async ({ page }) => {
   await expect(page.getByRole('status')).toContainText('se guardaron correctamente')
   await expect(page.getByAltText('Logo de Dulce Encanto')).toHaveCount(0)
   expect(storageCalls).toContain('DELETE')
+})
+
+test('quotes: create, calculate deposit, edit, change status and delete', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 900 })
+  await mockBackend(page, true)
+  await login(page)
+  await page.getByRole('navigation').getByRole('link', { name: 'Cotizar', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Cotizaciones.' })).toBeVisible()
+  await page.getByRole('button', { name: /Nueva cotización/ }).click()
+  await page.getByLabel('Nombre del cliente').fill('María López')
+  await page.getByLabel('Producto').fill('Pastel de chocolate')
+  await page.getByLabel('Porciones').fill('12')
+  await page.getByLabel('Precio total').fill('1000')
+  await page.getByLabel('Valor del anticipo').fill('50')
+  await expect(page.getByText(/C\$ 500/)).toBeVisible()
+  await page.getByRole('button', { name: 'Guardar borrador' }).click()
+  await expect(page.getByText('ARPE-COT-2026-0001', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Editar ARPE-COT-2026-0001' }).click()
+  await page.getByLabel('Producto').fill('Pastel de chocolate premium')
+  await page.getByRole('button', { name: 'Guardar cambios' }).click()
+  await expect(page.getByText('Pastel de chocolate premium')).toBeVisible()
+  await page.getByLabel('Estado de ARPE-COT-2026-0001').selectOption('accepted')
+  await expect(page.getByText('ahora está aceptada')).toBeVisible()
+  await page.getByRole('button', { name: 'Eliminar ARPE-COT-2026-0001' }).click()
+  await expect(page.getByRole('alertdialog')).toBeVisible()
+  await page.getByRole('button', { name: 'Eliminar', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Todo comienza con una buena idea' })).toBeVisible()
 })
