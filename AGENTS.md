@@ -9,3 +9,4 @@ ARPE se construye para personas que no necesitan conocimientos técnicos. Cada f
 - Mantener visible de forma discreta: “Sistema diseñado por Ing. Edwin Nicaragua”.
 - Preservar autenticación, onboarding, configuración y seguridad existentes al añadir fases nuevas.
 - En Supabase, no usar `service_role` ni secretos en frontend; aplicar RLS por negocio y validar también en el servidor.
+- En ARPE el usuario introduce datos; el sistema realiza las matemáticas. Los módulos financieros deben explicar claramente qué representa cada valor y evitar exigir cálculos manuales al usuario.
