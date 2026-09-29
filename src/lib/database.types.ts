@@ -2,6 +2,7 @@ export type Currency = 'NIO' | 'USD' | 'EUR' | 'CRC'
 export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'rejected'
 export type DepositType = 'percentage' | 'fixed'
 export type CostItemCategory = 'packaging' | 'topper' | 'decoration' | 'supplies' | 'other'
+export type OrderStatus = 'confirmed' | 'in_preparation' | 'ready' | 'delivered' | 'cancelled'
 
 export type Business = {
   id: string
@@ -91,6 +92,35 @@ export type QuoteCostItem = {
   created_at: string
 }
 
+export type Order = {
+  id: string
+  business_id: string
+  quote_id: string
+  order_number: string
+  source_quote_number: string
+  customer_name: string
+  customer_phone: string
+  product: string
+  portions: number | null
+  flavor: string
+  filling: string
+  decoration: string
+  extras: string
+  delivery_date: string | null
+  delivery_time: string | null
+  notes: string
+  total_amount: number
+  deposit_type: DepositType
+  deposit_value: number
+  deposit_required: number
+  internal_cost_total: number | null
+  estimated_profit: number | null
+  real_margin_percent: number | null
+  status: OrderStatus
+  created_at: string
+  updated_at: string
+}
+
 export type Database = {
   public: {
     Tables: {
@@ -124,9 +154,18 @@ export type Database = {
         Update: Partial<Omit<QuoteCostItem, 'id' | 'quote_id' | 'business_id' | 'created_at'>>
         Relationships: []
       }
+      arpe_orders: {
+        Row: Order
+        Insert: never
+        Update: never
+        Relationships: []
+      }
     }
     Views: { [_ in never]: never }
-    Functions: { [_ in never]: never }
+    Functions: {
+      arpe_convert_quote_to_order: { Args: { p_quote_id: string }; Returns: Order[] }
+      arpe_update_order_status: { Args: { p_order_id: string; p_status: OrderStatus }; Returns: Order[] }
+    }
     Enums: { [_ in never]: never }
     CompositeTypes: { [_ in never]: never }
   }
