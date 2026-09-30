@@ -1,0 +1,87 @@
+import { renderToStaticMarkup } from 'react-dom/server'
+import { describe, expect, it } from 'vitest'
+import { ClientDocument } from '../components/documents/ClientDocument'
+import type { Business, Order, Payment, Quote } from './database.types'
+import { createOrderDocumentModel, createQuoteDocumentModel, createWhatsAppMessage, createWhatsAppUrl, getDocumentFilename } from './documents'
+
+const business: Business = {
+  id: 'business-1', owner_id: 'owner-1', name: 'Dulce Hogar', logo_path: null, slogan: 'Hecho con cariño',
+  description: '', whatsapp: '+505 8888-1234', email: 'hola@example.com', address: 'Managua', currency: 'NIO',
+  created_at: '2026-01-01T10:00:00Z', updated_at: '2026-01-01T10:00:00Z',
+}
+
+const quote: Quote = {
+  id: 'quote-1', business_id: business.id, quote_number: 'ARPE-COT-2026-0001', customer_name: 'Ana Pérez', customer_phone: '88881234',
+  product: 'Pastel de vainilla', portions: 12, flavor: 'Vainilla', filling: '', decoration: '', extras: '',
+  delivery_date: '2026-10-05', delivery_time: '17:00', notes: 'Texto de entrega', total_amount: 1800, deposit_type: 'percentage',
+  deposit_value: 30, deposit_required: 540, status: 'sent', created_at: '2026-09-30T12:00:00Z', updated_at: '2026-09-30T12:00:00Z',
+}
+
+const order: Order = {
+  id: 'order-1', business_id: business.id, quote_id: quote.id, order_number: 'ARPE-PED-2026-0001', source_quote_number: quote.quote_number,
+  customer_name: quote.customer_name, customer_phone: quote.customer_phone, product: quote.product, portions: quote.portions,
+  flavor: quote.flavor, filling: '', decoration: '', extras: '', delivery_date: quote.delivery_date, delivery_time: quote.delivery_time,
+  notes: quote.notes, total_amount: quote.total_amount, deposit_type: quote.deposit_type, deposit_value: quote.deposit_value,
+  deposit_required: quote.deposit_required, internal_cost_total: 950, estimated_profit: 850, real_margin_percent: 47.22,
+  status: 'confirmed', created_at: quote.created_at, updated_at: quote.updated_at,
+}
+
+const payment: Payment = {
+  id: 'payment-1', business_id: business.id, order_id: order.id, payment_number: 'ARPE-PAG-2026-0001', request_id: 'request-1',
+  amount: 500, method: 'cash', reference: '', notes: '', paid_at: '2026-09-30T12:00:00Z', status: 'posted',
+  created_at: '2026-09-30T12:00:00Z', updated_at: '2026-09-30T12:00:00Z', voided_at: null, void_reason: null,
+}
+
+const formatAmount = (amount: number) => `C$ ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+describe('customer documents', () => {
+  it('projects quotations without internal costing and renders only customer-facing details', () => {
+    const model = createQuoteDocumentModel(business, quote)
+    const html = renderToStaticMarkup(<ClientDocument model={model} formatAmount={formatAmount} />)
+
+    expect(model.remainingAfterDeposit).toBe(1260)
+    expect(html).toContain('Anticipo requerido para confirmar')
+    expect(html).toContain('Saldo restante después de recibir el anticipo')
+    expect(html).toContain('5:00 p. m.')
+    expect(html).not.toMatch(/Costo real|Costo interno|Ganancia estimada|Merma|Margen real|Gastos indirectos|950|850/)
+    expect(Object.keys(model.quote)).not.toContain('internal_cost_total')
+  })
+
+  it('projects order payment totals while excluding private profit and internal cost', () => {
+    const model = createOrderDocumentModel(business, order, [payment])
+    const html = renderToStaticMarkup(<ClientDocument model={model} formatAmount={formatAmount} />)
+
+    expect(model.finances).toEqual({ totalPaid: 500, realBalance: 1300 })
+    expect(html).toContain('Pagado hasta ahora')
+    expect(html).toContain('C$ 500.00')
+    expect(html).toContain('C$ 1,300.00')
+    expect(html).toContain('5:00 p. m.')
+    expect(html).not.toMatch(/Costo real|Costo interno|Ganancia estimada|Merma|Margen real|Gastos indirectos|950|850|47\.22/)
+    expect(Object.keys(model.order)).not.toContain('estimated_profit')
+  })
+
+  it('shows the complete-payment callout and the canceled state clearly', () => {
+    const paid = createOrderDocumentModel(business, order, [{ ...payment, amount: order.total_amount }])
+    const canceled = createOrderDocumentModel(business, { ...order, status: 'cancelled' }, [payment])
+
+    expect(renderToStaticMarkup(<ClientDocument model={paid} formatAmount={formatAmount} />)).toContain('PAGADO EN SU TOTALIDAD')
+    expect(renderToStaticMarkup(<ClientDocument model={canceled} formatAmount={formatAmount} />)).toContain('PEDIDO CANCELADO')
+  })
+
+  it('creates safe filenames and WhatsApp messages without changing the saved phone number', () => {
+    const model = createQuoteDocumentModel(business, quote)
+    const message = createWhatsAppMessage(model, formatAmount)
+
+    expect(getDocumentFilename(model, 'pdf')).toBe('Cotizacion-ARPE-COT-2026-0001.pdf')
+    expect(getDocumentFilename(model, 'png')).toBe('Cotizacion-ARPE-COT-2026-0001-Ana-Perez.png')
+    expect(createWhatsAppUrl(model, message)).toContain('https://wa.me/88881234?text=')
+    expect(message).toContain('Anticipo requerido para confirmar: C$ 540.00')
+    expect(message).not.toMatch(/Costo real|Ganancia|Merma|Margen|Gastos indirectos/)
+    expect(business.whatsapp).toBe('+505 8888-1234')
+  })
+
+  it('handles a customer with no phone number for manual WhatsApp sharing', () => {
+    const model = createQuoteDocumentModel(business, { ...quote, customer_phone: '' })
+    expect(createWhatsAppUrl(model, 'Hola')).toBe('https://wa.me/?text=Hola')
+  })
+})
