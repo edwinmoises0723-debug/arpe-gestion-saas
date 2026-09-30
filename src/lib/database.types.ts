@@ -3,6 +3,8 @@ export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'rejected'
 export type DepositType = 'percentage' | 'fixed'
 export type CostItemCategory = 'packaging' | 'topper' | 'decoration' | 'supplies' | 'other'
 export type OrderStatus = 'confirmed' | 'in_preparation' | 'ready' | 'delivered' | 'cancelled'
+export type PaymentMethod = 'cash' | 'bank_transfer' | 'bank_deposit' | 'card' | 'mobile_payment' | 'other'
+export type PaymentStatus = 'posted' | 'voided'
 
 export type Business = {
   id: string
@@ -121,6 +123,24 @@ export type Order = {
   updated_at: string
 }
 
+export type Payment = {
+  id: string
+  business_id: string
+  order_id: string
+  payment_number: string
+  request_id: string
+  amount: number
+  method: PaymentMethod
+  reference: string
+  notes: string
+  paid_at: string
+  status: PaymentStatus
+  created_at: string
+  updated_at: string
+  voided_at: string | null
+  void_reason: string | null
+}
+
 export type Database = {
   public: {
     Tables: {
@@ -160,11 +180,19 @@ export type Database = {
         Update: never
         Relationships: []
       }
+      arpe_payments: {
+        Row: Payment
+        Insert: never
+        Update: never
+        Relationships: []
+      }
     }
     Views: { [_ in never]: never }
     Functions: {
       arpe_convert_quote_to_order: { Args: { p_quote_id: string }; Returns: Order[] }
       arpe_update_order_status: { Args: { p_order_id: string; p_status: OrderStatus }; Returns: Order[] }
+      arpe_register_payment: { Args: { p_order_id: string; p_request_id: string; p_amount: number; p_method: PaymentMethod; p_reference: string; p_notes: string; p_paid_at: string }; Returns: Payment[] }
+      arpe_void_payment: { Args: { p_payment_id: string; p_void_reason: string }; Returns: Payment[] }
     }
     Enums: { [_ in never]: never }
     CompositeTypes: { [_ in never]: never }

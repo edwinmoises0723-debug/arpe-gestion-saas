@@ -11,3 +11,4 @@ ARPE se construye para personas que no necesitan conocimientos técnicos. Cada f
 - En Supabase, no usar `service_role` ni secretos en frontend; aplicar RLS por negocio y validar también en el servidor.
 - En ARPE el usuario introduce datos; el sistema realiza las matemáticas. Los módulos financieros deben explicar claramente qué representa cada valor y evitar exigir cálculos manuales al usuario.
 - En ARPE, un anticipo requerido es una condición comercial, no un pago recibido. Solo los pagos realmente registrados en el módulo Pagos deben contabilizarse como dinero cobrado y reducir el saldo real por cobrar.
+- Los pagos registrados son la única fuente de verdad del dinero realmente recibido en ARPE. Los montos derivados, anticipos requeridos, cotizaciones o pedidos nunca deben contabilizarse automáticamente como dinero cobrado. Los registros financieros no se eliminan silenciosamente; las correcciones se realizan mediante anulación auditable.

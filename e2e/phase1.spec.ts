@@ -5,10 +5,18 @@ const user = { id: userId, aud: 'authenticated', role: 'authenticated', email: '
 const session = { access_token: 'test-token', refresh_token: 'test-refresh', token_type: 'bearer', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, user }
 const business = { id: '22222222-2222-4222-8222-222222222222', owner_id: userId, name: 'Dulce Encanto', slogan: 'Hecho con amor', logo_path: null, description: '', whatsapp: '', email: '', address: '', currency: 'NIO', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
 
-async function mockBackend(page: Page, existing = false) {
+async function mockBackend(page: Page, existing = false, seedOrder = false) {
   let profile: Record<string, unknown> | null = existing ? { ...business } : null
   let quote: Record<string, unknown> | null = null
-  let order: Record<string, unknown> | null = null
+  let order: Record<string, unknown> | null = seedOrder ? {
+    id: '44444444-4444-4444-8444-444444444444', business_id: business.id, quote_id: '33333333-3333-4333-8333-333333333333',
+    order_number: 'ARPE-PED-2026-0001', source_quote_number: 'ARPE-COT-2026-0001', customer_name: 'Ana Pérez',
+    customer_phone: '', product: 'Pastel de vainilla', portions: 20, flavor: 'Vainilla', filling: '', decoration: '',
+    extras: '', delivery_date: null, delivery_time: null, notes: '', total_amount: 1800, deposit_type: 'fixed',
+    deposit_value: 500, deposit_required: 500, internal_cost_total: null, estimated_profit: null, real_margin_percent: null,
+    status: 'delivered', created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+  } : null
+  const payments: Record<string, unknown>[] = []
   await page.route('**/auth/v1/**', async route => {
     const url = route.request().url()
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(url.includes('/user') ? user : url.includes('/logout') || url.includes('/recover') ? {} : session) })
@@ -28,6 +36,11 @@ async function mockBackend(page: Page, existing = false) {
     await route.fulfill({ status: method === 'POST' ? 201 : 200, contentType: 'application/json', body: JSON.stringify(body) })
   })
   await page.route('**/rest/v1/arpe_orders*', async route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(order ? [order] : []) }))
+  await page.route('**/rest/v1/arpe_payments*', async route => {
+    const orderId = new URL(route.request().url()).searchParams.get('order_id')?.replace('eq.', '')
+    const rows = payments.filter(payment => !orderId || payment.order_id === orderId)
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(rows) })
+  })
   await page.route('**/rest/v1/rpc/arpe_convert_quote_to_order', async route => {
     order = { id: '44444444-4444-4444-8444-444444444444', business_id: business.id, quote_id: quote?.id, order_number: 'ARPE-PED-2026-0001', source_quote_number: quote?.quote_number, customer_name: quote?.customer_name, customer_phone: quote?.customer_phone, product: quote?.product, portions: quote?.portions, flavor: quote?.flavor, filling: quote?.filling, decoration: quote?.decoration, extras: quote?.extras, delivery_date: quote?.delivery_date, delivery_time: quote?.delivery_time, notes: quote?.notes, total_amount: quote?.total_amount, deposit_type: quote?.deposit_type, deposit_value: quote?.deposit_value, deposit_required: quote?.deposit_required, internal_cost_total: null, estimated_profit: null, real_margin_percent: null, status: 'confirmed', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([order]) })
@@ -35,6 +48,27 @@ async function mockBackend(page: Page, existing = false) {
   await page.route('**/rest/v1/rpc/arpe_update_order_status', async route => {
     if (order) order = { ...order, status: route.request().postDataJSON().p_status, updated_at: new Date().toISOString() }
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(order ? [order] : []) })
+  })
+  await page.route('**/rest/v1/rpc/arpe_register_payment', async route => {
+    const input = route.request().postDataJSON()
+    const duplicate = payments.find(payment => payment.request_id === input.p_request_id)
+    if (duplicate) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([duplicate]) })
+    const paid = payments.filter(payment => payment.order_id === input.p_order_id && payment.status === 'posted').reduce((sum, payment) => sum + Number(payment.amount), 0)
+    const balance = Number(order?.total_amount) - paid
+    if (order?.status === 'cancelled') return route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ message: 'Payments cannot be registered for cancelled orders' }) })
+    if (Number(input.p_amount) <= 0) return route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ message: 'Payment amount must be greater than zero' }) })
+    if (Number(input.p_amount) > balance) return route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ message: 'Payment exceeds remaining balance: ' + balance.toFixed(2) }) })
+    const number = payments.length + 1
+    const payment = { id: '55555555-5555-4555-8555-' + String(number).padStart(12, '0'), business_id: business.id, order_id: input.p_order_id, payment_number: 'ARPE-PAG-2026-' + String(number).padStart(4, '0'), request_id: input.p_request_id, amount: input.p_amount, method: input.p_method, reference: input.p_reference, notes: input.p_notes, paid_at: input.p_paid_at, status: 'posted', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), voided_at: null, void_reason: null }
+    payments.push(payment)
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([payment]) })
+  })
+  await page.route('**/rest/v1/rpc/arpe_void_payment', async route => {
+    const input = route.request().postDataJSON()
+    const payment = payments.find(row => row.id === input.p_payment_id)
+    if (!payment || payment.status !== 'posted') return route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ message: 'Only posted payments can be voided' }) })
+    Object.assign(payment, { status: 'voided', voided_at: new Date().toISOString(), void_reason: input.p_void_reason, updated_at: new Date().toISOString() })
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([payment]) })
   })
 }
 
@@ -64,7 +98,7 @@ test('onboarding, persistence, settings, navigation and logout', async ({ page }
   await expect(page.getByText('CRC', { exact: false }).first()).toBeVisible()
   for (const name of ['Cotizar', 'Pedidos', 'Pagos', 'Agenda']) {
     await page.getByRole('navigation').getByRole('link', { name, exact: true }).click()
-    if (name === 'Pedidos') await expect(page.getByRole('heading', { name: 'Tus pedidos aparecerán aquí' })).toBeVisible()
+    if (name === 'Pedidos' || name === 'Pagos') await expect(page.getByRole('heading', { name: 'Aún no tienes pedidos' })).toBeVisible()
     else await expect(page.getByRole('heading', { name: 'Estamos preparando este espacio' })).toBeVisible()
   }
   await page.getByRole('link', { name: 'Configuración', exact: true }).click()
@@ -173,7 +207,7 @@ test('quotes: create, accept, convert once and track order snapshot/status', asy
   await page.getByRole('button', { name: 'Ver pedido' }).click()
   await expect(page.getByRole('heading', { name: 'ARPE-PED-2026-0001' })).toBeVisible()
   await expect(page.getByText('Pastel de chocolate premium')).toBeVisible()
-  await expect(page.getByText('Anticipo requerido')).toBeVisible()
+  await expect(page.getByText('Anticipo requerido', { exact: true })).toBeVisible()
   await expect(page.getByText(/no registra pagos recibidos/)).toBeVisible()
   await page.getByLabel('Estado').selectOption('in_preparation')
   await expect(page.getByLabel('Estado')).toHaveValue('in_preparation')
@@ -187,4 +221,71 @@ test('quotes: create, accept, convert once and track order snapshot/status', asy
   await expect(page.getByText('Esta cotización ya generó un pedido.')).toBeVisible()
   await expect(page.getByRole('button', { name: /Convertir en pedido/ })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Eliminar ARPE-COT-2026-0001' })).toHaveCount(0)
+})
+
+test('payments: received money, running balance, void audit and cancelled warning', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 900 })
+  await mockBackend(page, true, true)
+  await login(page)
+  await page.getByRole('navigation').getByRole('link', { name: 'Pagos', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Pagos.' })).toBeVisible()
+  await expect(page.getByText('Dinero recibido', { exact: true })).toBeVisible()
+  await expect(page.locator('.payment-overview-card').first()).toContainText('C$')
+  await page.getByRole('button', { name: /ARPE-PED-2026-0001/ }).click()
+  await expect(page.getByRole('heading', { name: 'ARPE-PED-2026-0001' })).toBeVisible()
+  await expect(page.getByText('Saldo real pendiente')).toBeVisible()
+  await expect(page.getByText('Anticipo requerido', { exact: true })).toBeVisible()
+  await expect(page.getByText(/Faltan.*500/)).toBeVisible()
+
+  await page.getByRole('button', { name: 'Registrar pago' }).click()
+  await page.getByRole('button', { name: 'Completar anticipo' }).click()
+  await expect(page.getByLabel('Monto recibido *')).toHaveValue('500.00')
+  await page.getByRole('button', { name: 'Continuar' }).click()
+  await page.getByRole('button', { name: 'Confirmar pago' }).click()
+  await expect(page.getByRole('heading', { name: 'ARPE-PAG-2026-0001' })).toBeVisible()
+  await page.getByRole('button', { name: 'Listo' }).click()
+  await expect(page.getByText('Anticipo cubierto')).toBeVisible()
+  await expect(page.getByText('Pagado realmente').locator('..')).toContainText('C$')
+  await expect(page.getByText('Saldo real pendiente').locator('..')).toContainText('C$')
+
+  await page.getByRole('button', { name: 'Registrar pago' }).click()
+  await page.getByLabel('Monto recibido *').fill('1000')
+  await page.getByRole('button', { name: 'Continuar' }).click()
+  await page.getByRole('button', { name: 'Confirmar pago' }).click()
+  await expect(page.getByRole('heading', { name: 'ARPE-PAG-2026-0002' })).toBeVisible()
+  await page.getByRole('button', { name: 'Listo' }).click()
+  await page.getByRole('button', { name: 'Registrar pago' }).click()
+  await page.getByLabel('Monto recibido *').fill('400')
+  await expect(page.getByText('Este pago supera el saldo pendiente')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Continuar' })).toBeDisabled()
+  await page.getByLabel('Monto recibido *').fill('300')
+  await page.getByRole('button', { name: 'Continuar' }).click()
+  await page.getByRole('button', { name: 'Confirmar pago' }).click()
+  await expect(page.getByRole('heading', { name: 'ARPE-PAG-2026-0003' })).toBeVisible()
+  await page.getByRole('button', { name: 'Listo' }).click()
+  await expect(page.getByText('Pagado', { exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Registrar pago' })).toHaveCount(0)
+
+  const thirdPayment = page.locator('.payment-record').filter({ hasText: 'ARPE-PAG-2026-0003' })
+  await thirdPayment.getByRole('button', { name: 'Anular pago' }).click()
+  await expect(page.getByRole('button', { name: 'Confirmar anulación' })).toBeDisabled()
+  await page.getByLabel('Motivo de anulación').fill('Monto ingresado por error')
+  await page.getByRole('button', { name: 'Confirmar anulación' }).click()
+  await expect(page.getByText('El pago ARPE-PAG-2026-0003 fue anulado')).toBeVisible()
+  await expect(page.getByText('Pagado realmente').locator('..')).toContainText('C$')
+  await expect(page.getByText('Saldo real pendiente').locator('..')).toContainText('C$')
+  await expect(thirdPayment.getByText('Anulado')).toBeVisible()
+  await expect(thirdPayment.getByText('Motivo: Monto ingresado por error')).toBeVisible()
+  await page.reload()
+  await expect(page.getByText('Pagado realmente').locator('..')).toContainText('C$')
+
+  await page.getByRole('navigation').getByRole('link', { name: 'Pedidos', exact: true }).click()
+  await page.getByRole('button', { name: /ARPE-PED-2026-0001/ }).click()
+  await page.getByLabel('Estado').selectOption('cancelled')
+  await expect(page.getByRole('alertdialog')).toContainText('Cancelarlo no anulará ni devolverá automáticamente esos pagos')
+  await page.getByRole('button', { name: 'Confirmar' }).click()
+  await page.getByRole('navigation').getByRole('link', { name: 'Pagos', exact: true }).click()
+  await page.getByRole('button', { name: /ARPE-PED-2026-0001/ }).click()
+  await expect(page.getByText('Este pedido está cancelado y tiene pagos registrados')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Registrar pago' })).toHaveCount(0)
 })
