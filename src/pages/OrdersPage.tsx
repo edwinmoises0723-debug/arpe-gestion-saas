@@ -7,18 +7,12 @@ import { listPayments, summarizePayments } from '../lib/payments'
 import { formatCurrency } from '../lib/quotes'
 import { errorMessage } from '../lib/supabase'
 import { Loading, Notice } from '../components/Feedback'
+import { deliveryTimeFromParts, deliveryTimeToParts, formatDeliveryTime, type DeliveryTimeParts } from '../lib/delivery-time'
 
 const statusLabel = (status: OrderStatus) => orderStatuses.find(option => option.value === status)?.label ?? status
 const deliveryDate = (value: string | null) => value ? new Intl.DateTimeFormat('es', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(value + 'T12:00:00')) : 'Por definir'
 const localDateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-const currentDeliveryTime = (value: string | null) => value?.slice(0, 5) ?? ''
-const deliveryTimeLabel = (value: string | null) => {
-  if (!value) return 'Hora por definir'
-  const [hourText, minute = '00'] = value.slice(0, 5).split(':')
-  const hour = Number(hourText)
-  return Number.isFinite(hour) ? `${hour % 12 || 12}:${minute} ${hour < 12 ? 'a. m.' : 'p. m.'}` : 'Hora por definir'
-}
-const deliveryMoment = (date: string | null, time: string | null) => `${deliveryDate(date)}${time ? ` a las ${deliveryTimeLabel(time)}` : ' · Hora por definir'}`
+const deliveryMoment = (date: string | null, time: string | null) => `${deliveryDate(date)}${time ? ` a las ${formatDeliveryTime(time)}` : ' · Hora por definir'}`
 
 export function OrdersPage({ business }: { business: Business }) {
   const [orders, setOrders] = useState<Order[]>([])
@@ -99,7 +93,7 @@ export function OrdersPage({ business }: { business: Business }) {
       <section className="order-detail-grid">
         <article className="panel order-detail-card"><div className="section-title"><span className="section-icon"><UserRound size={19} /></span><div><h2>Información del cliente</h2><p>Datos guardados desde la cotización original.</p></div></div><dl className="order-fields"><div><dt>Cliente</dt><dd>{order.customer_name}</dd></div><div><dt>Teléfono</dt><dd>{order.customer_phone || 'No indicado'}</dd></div></dl></article>
         <article className="panel order-detail-card"><div className="section-title"><span className="section-icon"><ClipboardList size={19} /></span><div><h2>Pedido</h2><p>{order.product}</p></div></div><dl className="order-fields"><div><dt>Porciones</dt><dd>{order.portions ?? 'No indicado'}</dd></div><div><dt>Sabor</dt><dd>{order.flavor || 'No indicado'}</dd></div><div><dt>Relleno</dt><dd>{order.filling || 'No indicado'}</dd></div><div><dt>Decoración</dt><dd>{order.decoration || 'No indicado'}</dd></div><div><dt>Extras</dt><dd>{order.extras || 'No indicado'}</dd></div><div><dt>Observaciones</dt><dd>{order.notes || 'Sin observaciones'}</dd></div></dl></article>
-        <article className="panel order-detail-card order-delivery-card"><div className="section-title"><span className="section-icon"><CalendarDays size={19} /></span><div><h2>Entrega</h2><p>Fecha y hora del pedido.</p></div></div><dl className="order-fields"><div><dt>Fecha</dt><dd>{deliveryDate(order.delivery_date)}</dd></div><div><dt>Hora</dt><dd>{order.delivery_time?.slice(0, 5) || 'Hora por definir'}</dd></div></dl>{order.status === 'confirmed' || order.status === 'in_preparation' || order.status === 'ready' ? <button type="button" className="text-button reschedule-delivery-button" onClick={() => { setError(''); setRescheduleOpen(true) }}><RotateCcw size={15} /> Reprogramar entrega</button> : <p className="delivery-reschedule-disabled">Este pedido ya está {statusLabel(order.status)} y no puede reprogramarse.</p>}{deliveryHistory.length > 0 && <details className="delivery-history"><summary>Ver historial de entrega</summary><ol>{deliveryHistory.map(entry => <li key={entry.id}><p>{deliveryMoment(entry.previous_delivery_date, entry.previous_delivery_time)} <span aria-hidden="true">→</span> {deliveryMoment(entry.new_delivery_date, entry.new_delivery_time)}</p>{entry.reason && <small>Motivo: {entry.reason}</small>}</li>)}</ol></details>}</article>
+        <article className="panel order-detail-card order-delivery-card"><div className="section-title"><span className="section-icon"><CalendarDays size={19} /></span><div><h2>Entrega</h2><p>Fecha y hora del pedido.</p></div></div><dl className="order-fields"><div><dt>Fecha</dt><dd>{deliveryDate(order.delivery_date)}</dd></div><div><dt>Hora</dt><dd>{formatDeliveryTime(order.delivery_time)}</dd></div></dl>{order.status === 'confirmed' || order.status === 'in_preparation' || order.status === 'ready' ? <button type="button" className="text-button reschedule-delivery-button" onClick={() => { setError(''); setRescheduleOpen(true) }}><RotateCcw size={15} /> Reprogramar entrega</button> : <p className="delivery-reschedule-disabled">Este pedido ya está {statusLabel(order.status)} y no puede reprogramarse.</p>}{deliveryHistory.length > 0 && <details className="delivery-history"><summary>Ver historial de entrega</summary><ol>{deliveryHistory.map(entry => <li key={entry.id}><p>{deliveryMoment(entry.previous_delivery_date, entry.previous_delivery_time)} <span aria-hidden="true">→</span> {deliveryMoment(entry.new_delivery_date, entry.new_delivery_time)}</p>{entry.reason && <small>Motivo: {entry.reason}</small>}</li>)}</ol></details>}</article>
         <article className="panel order-detail-card order-money-card"><div className="section-title"><span className="section-icon"><ClipboardList size={19} /></span><div><h2>Información comercial</h2><p>Solo los pagos registrados cuentan como dinero recibido.</p></div></div><dl className="order-fields"><div><dt>Precio total</dt><dd>{formatCurrency(Number(order.total_amount), business)}</dd></div><div><dt>Anticipo requerido</dt><dd>{formatCurrency(Number(order.deposit_required), business)}</dd></div><div><dt>Pagado realmente</dt><dd>{formatCurrency(summary.totalPaid, business)}</dd></div><div><dt>Saldo real por cobrar</dt><dd>{formatCurrency(summary.realBalance, business)}</dd></div><div><dt>Estado financiero</dt><dd>{summary.financialStatus}</dd></div></dl>{summary.depositShortfall > 0 && <p className="order-deposit-shortfall">Faltan {formatCurrency(summary.depositShortfall, business)} para cubrir el anticipo.</p>}{order.status !== 'cancelled' && summary.realBalance > 0 && <Link className="primary order-payment-link" to={'/pagos?order=' + encodeURIComponent(order.id)}>Registrar pago</Link>}{order.status === 'cancelled' && hasPaymentHistory && <p className="order-cancelled-money">Este pedido está cancelado y tiene pagos registrados. La gestión de devoluciones se incorporará posteriormente.</p>}</article>
       </section>
       <section className="panel order-status-panel"><div><h2>Estado del pedido</h2><p className="muted">Actualiza el avance para mantener tu seguimiento al día.</p></div><label>Estado<select value={order.status} disabled={busy} onChange={e => { const next = e.target.value as OrderStatus; if (next === 'delivered' || next === 'cancelled') setPendingStatus(next); else void saveStatus(next) }}>{orderStatuses.map(status => <option key={status.value} value={status.value}>{status.label}</option>)}</select></label></section>
@@ -111,7 +105,7 @@ export function OrdersPage({ business }: { business: Business }) {
 
   return <div className="orders-page"><div className="page-heading"><div><span className="eyebrow accent">TU ESPACIO DE TRABAJO</span><h1>Pedidos<span className="heading-dot">.</span></h1><p className="muted">Dale seguimiento a los trabajos confirmados de tu negocio.</p></div></div>{error && <Notice error>{error}</Notice>}{notice && <div className="quote-notice"><Check size={17} /> {notice}</div>}{orders.length === 0 ? <section className="panel quote-empty"><span className="empty-quote-icon"><ClipboardList size={35} /></span><span className="subtle-badge">PEDIDOS DE TU NEGOCIO</span><h2>Tus pedidos aparecerán aquí</h2><p>Cuando una cotización sea aceptada, podrás convertirla en pedido y darle seguimiento desde este espacio.</p><Link to="/cotizar" className="primary">Ir a Cotizaciones <ChevronRight size={17} /></Link></section> : <section className="orders-list" aria-label="Listado de pedidos">{orders.map(order => {
     const summary = summarizePayments(order, payments)
-    return <button type="button" className="order-list-card" key={order.id} onClick={() => openOrder(order)}><div className="order-card-top"><span className="quote-number">{order.order_number}</span><span className={'status-badge order-status status-' + order.status}>{statusLabel(order.status)}</span></div><div className="order-card-main"><div><h2>{order.customer_name}</h2><p>{order.product}</p></div><strong>{formatCurrency(Number(order.total_amount), business)}</strong></div><div className="order-card-bottom"><span>Pagado {formatCurrency(summary.totalPaid, business)}</span><span>Saldo {formatCurrency(summary.realBalance, business)}</span><span>{summary.financialStatus}</span><span>Origen: {order.source_quote_number}</span><span><CalendarDays size={14} /> {deliveryDate(order.delivery_date)}</span>{order.delivery_time && <span><Clock3 size={14} /> {order.delivery_time.slice(0, 5)}</span>}</div></button>
+    return <button type="button" className="order-list-card" key={order.id} onClick={() => openOrder(order)}><div className="order-card-top"><span className="quote-number">{order.order_number}</span><span className={'status-badge order-status status-' + order.status}>{statusLabel(order.status)}</span></div><div className="order-card-main"><div><h2>{order.customer_name}</h2><p>{order.product}</p></div><strong>{formatCurrency(Number(order.total_amount), business)}</strong></div><div className="order-card-bottom"><span>Pagado {formatCurrency(summary.totalPaid, business)}</span><span>Saldo {formatCurrency(summary.realBalance, business)}</span><span>{summary.financialStatus}</span><span>Origen: {order.source_quote_number}</span><span><CalendarDays size={14} /> {deliveryDate(order.delivery_date)}</span><span><Clock3 size={14} /> {formatDeliveryTime(order.delivery_time)}</span></div></button>
   })}</section>}</div>
 }
 
@@ -124,15 +118,15 @@ function RescheduleDeliveryDialog({ order, busy, error, onClose, onConfirm }: {
 }) {
   const [step, setStep] = useState<'edit' | 'confirm'>('edit')
   const [date, setDate] = useState(order.delivery_date ?? '')
-  const [time, setTime] = useState(currentDeliveryTime(order.delivery_time))
+  const [time, setTime] = useState<DeliveryTimeParts | null>(() => deliveryTimeToParts(order.delivery_time))
   const [reason, setReason] = useState('')
   const [message, setMessage] = useState('')
-  const newTime = time || null
+  const newTime = deliveryTimeFromParts(time)
   const isPast = Boolean(date && date < localDateKey(new Date()))
 
   function continueToConfirmation() {
     if (!date) { setMessage('Selecciona una fecha para la entrega.'); return }
-    if (date === order.delivery_date && newTime === (currentDeliveryTime(order.delivery_time) || null)) {
+    if (date === order.delivery_date && newTime === (order.delivery_time?.slice(0, 5) || null)) {
       setMessage('La fecha y hora no han cambiado.')
       return
     }
@@ -146,7 +140,12 @@ function RescheduleDeliveryDialog({ order, busy, error, onClose, onConfirm }: {
       <span className="eyebrow accent">REPROGRAMAR ENTREGA</span><h2 id="delivery-reschedule-title">Elige una nueva fecha</h2>
       <p className="delivery-current-value"><strong>Entrega actual:</strong> {deliveryMoment(order.delivery_date, order.delivery_time)}</p>
       <label>Nueva fecha de entrega *<input type="date" value={date} onChange={event => { setDate(event.target.value); setMessage('') }} required /></label>
-      <label>Nueva hora — opcional<input type="time" value={time} onChange={event => setTime(event.target.value)} /></label>
+      <label>Hora de entrega<select value={time ? 'defined' : 'undefined'} onChange={event => setTime(event.target.value === 'undefined' ? null : time ?? { hour: '12', minute: '00', period: 'PM' })}><option value="undefined">Hora por definir</option><option value="defined">Seleccionar hora</option></select></label>
+      {time && <div className="delivery-time-picker" aria-label="Selecciona la hora de entrega">
+        <label>Hora<select value={time.hour} onChange={event => setTime(current => current ? { ...current, hour: event.target.value } : current)}>{Array.from({ length: 12 }, (_, index) => String(index + 1)).map(hour => <option key={hour} value={hour}>{hour}</option>)}</select></label>
+        <label>Minutos<select value={time.minute} onChange={event => setTime(current => current ? { ...current, minute: event.target.value } : current)}>{Array.from({ length: 60 }, (_, minute) => String(minute).padStart(2, '0')).map(minute => <option key={minute} value={minute}>{minute}</option>)}</select></label>
+        <label>AM / PM<select value={time.period} onChange={event => setTime(current => current ? { ...current, period: event.target.value as DeliveryTimeParts['period'] } : current)}><option value="AM">AM</option><option value="PM">PM</option></select></label>
+      </div>}
       <label>Motivo del cambio — opcional<textarea value={reason} onChange={event => setReason(event.target.value)} maxLength={500} rows={2} placeholder="Ej. El cliente solicitó otra fecha" /></label>
       {date && <p className="delivery-preview"><strong>Nueva entrega:</strong> {deliveryMoment(date, newTime)}</p>}
       {isPast && <p className="delivery-date-warning" role="status"><CircleAlert size={17} /> La nueva fecha de entrega está en el pasado. Confirma el cambio en el siguiente paso.</p>}

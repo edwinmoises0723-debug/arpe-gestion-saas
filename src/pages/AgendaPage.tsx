@@ -8,6 +8,7 @@ import { listOrders } from '../lib/orders'
 import { listPayments } from '../lib/payments'
 import { formatCurrency } from '../lib/quotes'
 import { errorMessage } from '../lib/supabase'
+import { formatDeliveryTime } from '../lib/delivery-time'
 
 const statusLabels: Record<OrderStatus, string> = {
   confirmed: 'Confirmado', in_preparation: 'En preparación', ready: 'Listo', delivered: 'Entregado', cancelled: 'Cancelado',
@@ -18,14 +19,6 @@ const filterOptions: { value: AgendaFilter; label: string }[] = [
 ]
 const listGroupOrder: AgendaGroupKey[] = ['overdue', 'today', 'tomorrow', 'nextSevenDays', 'later', 'undated', 'delivered', 'cancelled']
 const weekdays = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
-
-function formatTime(value: string | null) {
-  if (!value) return 'Hora por definir'
-  const [hourText, minute = '00'] = value.slice(0, 5).split(':')
-  const hour = Number(hourText)
-  if (!Number.isFinite(hour)) return 'Hora por definir'
-  return `${String(hour % 12 || 12).padStart(2, '0')}:${minute} ${hour < 12 ? 'a. m.' : 'p. m.'}`
-}
 
 function formatLongDate(value: string) {
   return new Intl.DateTimeFormat('es', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(localCalendarDate(value))
@@ -47,7 +40,7 @@ function OrderDeliveryCard({ order, payments, business }: { order: Order; paymen
   const financeText = finance.status === 'Saldo pendiente' ? `${finance.status} ${formatCurrency(finance.balance, business)}` : finance.status
 
   return <article className={`agenda-order-card${order.status === 'cancelled' ? ' is-cancelled' : ''}`}>
-    <div className="agenda-order-time"><Clock3 size={16} /><span>{formatTime(order.delivery_time)}</span></div>
+    <div className="agenda-order-time"><Clock3 size={16} /><span>{formatDeliveryTime(order.delivery_time)}</span></div>
     <div className="agenda-order-content">
       <div className="agenda-order-top"><span className="quote-number">{order.order_number}</span><span className={`status-badge order-status status-${order.status}`}>{statusLabels[order.status]}</span></div>
       <h3>{order.customer_name}</h3>
