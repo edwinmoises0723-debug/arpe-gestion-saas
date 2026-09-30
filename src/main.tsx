@@ -7,5 +7,6 @@ import './styles-orders.css'
 import './styles-payments.css'
 import './styles-agenda.css'
 import './styles-delivery.css'
+import './styles-dashboard.css'
 
 createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>)
