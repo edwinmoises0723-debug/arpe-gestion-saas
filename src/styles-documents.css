@@ -11,7 +11,7 @@
 .document-feedback .primary { display: inline-flex; align-items: center; min-height: 40px; padding: 0 1rem; color: #fff; text-decoration: none; }
 .document-preview-stage { display: grid; justify-items: center; gap: .9rem; padding: clamp(.75rem, 3vw, 2rem); overflow: auto; border: 1px solid #e7e4db; border-radius: 1.25rem; background: linear-gradient(145deg, #f1eee5, #f8f7f2); }
 .document-preview-caption { display: flex; align-items: center; gap: .45rem; width: min(100%, 794px); color: #73766f; font-size: .83rem; font-weight: 650; }
-.client-document { --document-ink: #27352d; --document-muted: #68746b; --document-line: #e7e9e1; --document-accent: #53775c; box-sizing: border-box; width: min(794px, 100%); padding: clamp(1.25rem, 5vw, 3.1rem); overflow-wrap: anywhere; color: var(--document-ink); background: #fff; border-radius: .45rem; box-shadow: 0 16px 48px #252b2018; font-family: 'DM Sans', sans-serif; font-size: 14px; line-height: 1.5; }
+.client-document { --document-ink: #27352d; --document-muted: #68746b; --document-line: #e7e9e1; --document-accent: #53775c; box-sizing: border-box; width: min(794px, 100%); padding: clamp(1.25rem, 5vw, 3.1rem); overflow-wrap: break-word; word-break: normal; color: var(--document-ink); background: #fff; border-radius: .45rem; box-shadow: 0 16px 48px #252b2018; font-family: 'DM Sans', sans-serif; font-size: 14px; line-height: 1.5; }
 .client-document *, .client-document *::before, .client-document *::after { box-sizing: border-box; }
 .document-brand-row { display: flex; align-items: center; gap: 1rem; min-height: 72px; }
 .document-business-logo { flex: 0 0 auto; width: 72px; height: 72px; border-radius: 1rem; object-fit: contain; }
@@ -23,24 +23,27 @@
 .document-title-row h2 { margin: .25rem 0 0; font-family: Manrope, sans-serif; font-size: clamp(1.45rem, 5vw, 2rem); line-height: 1.2; }
 .document-kicker { color: var(--document-accent); font-size: .68rem; font-weight: 750; letter-spacing: .12em; }
 .document-number { display: grid; gap: .2rem; text-align: right; }
-.document-number strong { font-size: .94rem; }
+.document-number strong { white-space: nowrap; word-break: keep-all; overflow-wrap: normal; font-size: .94rem; }
 .document-number span { color: var(--document-muted); font-size: .8rem; }
 .document-status { display: inline-flex; align-items: center; min-height: 27px; margin-top: .85rem; padding: .2rem .7rem; border-radius: 999px; background: #edf3e9; color: #426448; font-size: .69rem; font-weight: 750; letter-spacing: .04em; }
 .document-status.is-paid { background: #e8f3e9; color: #24613d; }
 .document-status.is-cancelled { background: #f8e9e5; color: #983e32; }
 .document-source-quote { margin: .55rem 0 0; color: var(--document-muted); font-size: .8rem; }
+.document-source-quote strong { white-space: nowrap; word-break: keep-all; overflow-wrap: normal; }
 .document-section { margin-top: 1.45rem; break-inside: avoid; page-break-inside: avoid; }
 .document-section-title { display: flex; align-items: center; gap: .65rem; margin-bottom: .7rem; }
 .document-section-title > span { display: grid; place-items: center; flex: 0 0 25px; width: 25px; height: 25px; border-radius: 50%; background: #eff2e9; color: var(--document-accent); font-size: .66rem; font-weight: 750; }
 .document-section-title h3 { margin: 0; font-family: Manrope, sans-serif; font-size: .96rem; }
 .document-customer { display: grid; gap: .15rem; padding-left: 2.4rem; }
-.document-customer strong, .document-product-title { font-size: 1rem; }
+.document-customer strong { font-size: 1.06rem; }
+.document-product-title { font-size: 1rem; }
 .document-customer span { color: var(--document-muted); }
 .document-product-title { margin-left: 2.4rem; font-weight: 700; }
 .document-detail-list, .document-financial-list { display: grid; gap: .48rem; margin: .6rem 0 0 2.4rem; }
 .document-detail-list > div, .document-financial-list > div { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
-.document-detail-list dt, .document-financial-list dt { color: var(--document-muted); }
-.document-detail-list dd, .document-financial-list dd { margin: 0; text-align: right; font-weight: 600; white-space: pre-wrap; }
+.document-detail-list dt, .document-financial-list dt { color: var(--document-muted); overflow-wrap: break-word; word-break: normal; }
+.document-detail-list dd, .document-financial-list dd { margin: 0; text-align: right; font-weight: 600; white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; }
+.document-financial-list dd { white-space: nowrap; overflow-wrap: normal; word-break: keep-all; }
 .document-notes { margin: 0 0 0 2.4rem; padding: .8rem 1rem; border-left: 3px solid #dce7d7; border-radius: 0 .45rem .45rem 0; background: #f8faf6; white-space: pre-wrap; }
 .document-financial-section { margin-top: 1.6rem; padding: 1rem 1.05rem; border: 1px solid #e4e9de; border-radius: .8rem; background: #fafbf8; }
 .document-financial-section .document-section-title { margin-bottom: .6rem; }
@@ -90,8 +93,13 @@
 .document-format-thermal-80 .document-financial-section, .document-format-thermal-58 .document-financial-section { padding: .65rem; }
 .document-format-thermal-80 .document-detail-list > div, .document-format-thermal-58 .document-detail-list > div, .document-format-thermal-80 .document-financial-list > div, .document-format-thermal-58 .document-financial-list > div { gap: .45rem; }
 .document-format-thermal-80 .document-detail-list dd, .document-format-thermal-58 .document-detail-list dd, .document-format-thermal-80 .document-financial-list dd, .document-format-thermal-58 .document-financial-list dd { max-width: 58%; }
+.document-format-thermal-80 .document-number, .document-format-thermal-58 .document-number { max-width: 100%; }
+.document-format-thermal-80 .document-number strong, .document-format-thermal-58 .document-number strong { max-width: 100%; }
 .document-format-thermal-58 .document-business-name h1 { font-size: 1.2rem; }
 .document-format-thermal-58 .document-kicker { font-size: .58rem; }
+.document-format-thermal-58 .document-financial-list > div { display: grid; grid-template-columns: minmax(0, 1fr); gap: .05rem; }
+.document-format-thermal-58 .document-financial-list dd { max-width: none; text-align: left; }
+.document-format-thermal-58 .document-source-quote { display: grid; }
 
 @media (max-width: 600px) {
   .document-workspace { padding: 1rem .75rem 2.5rem; }

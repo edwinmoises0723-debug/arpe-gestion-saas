@@ -68,6 +68,41 @@ describe('customer documents', () => {
     expect(renderToStaticMarkup(<ClientDocument model={canceled} formatAmount={formatAmount} />)).toContain('PEDIDO CANCELADO')
   })
 
+  it('places Cliente, Entrega, product, optional notes and the commercial summary in the required order', () => {
+    const html = renderToStaticMarkup(<ClientDocument model={createQuoteDocumentModel(business, quote)} formatAmount={formatAmount} />)
+    const customer = html.indexOf('data-document-section="customer"')
+    const delivery = html.indexOf('data-document-section="delivery"')
+    const product = html.indexOf('data-document-section="product"')
+    const notes = html.indexOf('data-document-section="notes"')
+    const summary = html.indexOf('data-document-section="summary"')
+    const thanks = html.indexOf('document-thanks')
+
+    expect(customer).toBeLessThan(delivery)
+    expect(delivery).toBeLessThan(product)
+    expect(product).toBeLessThan(notes)
+    expect(notes).toBeLessThan(summary)
+    expect(summary).toBeLessThan(thanks)
+  })
+
+  it('keeps the summary as section 04 when there are no observations and always renders delivery', () => {
+    const html = renderToStaticMarkup(<ClientDocument model={createQuoteDocumentModel(business, { ...quote, notes: '', delivery_date: null, delivery_time: null })} formatAmount={formatAmount} />)
+    expect(html).toContain('Hora por definir')
+    expect(html).toContain('<span>04</span><h3>Resumen comercial</h3>')
+    expect(html).not.toContain('data-document-section="notes"')
+  })
+
+  it('keeps the document number and monetary values intact in PNG/thermal document markup', () => {
+    for (const format of ['thermal-58', 'thermal-80'] as const) {
+      const html = renderToStaticMarkup(<ClientDocument model={createQuoteDocumentModel(business, quote)} formatAmount={formatAmount} printFormat={format} />)
+      expect(html).toContain(`document-format-${format}`)
+      expect(html).toContain('ARPE-COT-2026-0001')
+      expect(html).toContain('C$ 1,800.00')
+      expect(html).toContain('C$ 540.00')
+      expect(html).not.toContain('<wbr')
+      expect(html).not.toContain('\u00ad')
+    }
+  })
+
   it('creates safe filenames and WhatsApp messages without changing the saved phone number', () => {
     const model = createQuoteDocumentModel(business, quote)
     const message = createWhatsAppMessage(model, formatAmount)

@@ -1,0 +1,30 @@
+.quote-list-tools { display: grid; gap: .8rem; margin: 0 0 1rem; padding: .95rem; border: 1px solid var(--line, #e7e9e1); border-radius: 15px; background: #fffefa; }
+.quote-search-field { display: flex; align-items: center; gap: .65rem; min-width: 0; min-height: 48px; padding: 0 .8rem; border: 1px solid #dfe4d9; border-radius: 11px; background: #fff; color: #72806f; }
+.quote-search-field:focus-within { border-color: #829577; box-shadow: 0 0 0 3px #82957720; }
+.quote-search-field input { flex: 1; min-width: 0; min-height: 44px; padding: 0; border: 0; outline: 0; background: transparent; color: var(--ink, #29382f); font: inherit; }
+.quote-search-field input::-webkit-search-cancel-button { display: none; }
+.quote-search-field input::placeholder { color: #858d81; }
+.quote-search-field button { display: grid; place-items: center; flex: 0 0 36px; width: 36px; height: 36px; border: 0; border-radius: 9px; background: transparent; color: #6e7d69; }
+.quote-search-field button:disabled { opacity: 0; pointer-events: none; }
+.quote-tools-bottom { display: flex; align-items: center; justify-content: space-between; gap: .8rem; }
+.quote-status-filters { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem; }
+.quote-status-filters button { min-height: 37px; padding: .4rem .7rem; border: 1px solid transparent; border-radius: 999px; background: #f4f5ef; color: #687366; font-size: .77rem; font-weight: 650; white-space: nowrap; }
+.quote-status-filters button.is-active { border-color: #d4dfd1; background: #eaf1e7; color: #345744; }
+.quote-status-filters button:focus-visible, .quote-search-field button:focus-visible { outline: 3px solid #73936d55; outline-offset: 2px; }
+.quote-sort-field { position: relative; display: flex; align-items: center; gap: .4rem; flex: 0 0 auto; min-height: 40px; color: #6f796d; font-size: .77rem; }
+.quote-sort-field select { max-width: 205px; min-height: 40px; margin: 0; padding: .4rem 1.8rem .4rem .55rem; border: 1px solid #e1e5dc; border-radius: 9px; appearance: none; background: #fff; color: #435248; font: inherit; font-weight: 650; }
+.quote-sort-field > svg:last-child { position: absolute; right: .5rem; pointer-events: none; }
+.quote-search-empty { display: grid; justify-items: start; gap: .6rem; padding: 1.2rem; }
+.quote-search-empty h2, .quote-search-empty p { margin: 0; }
+.quote-search-empty h2 { font-size: 1.02rem; }
+.quote-search-empty p { color: var(--muted, #73766f); font-size: .86rem; }
+.quote-search-empty button { margin-top: .3rem; }
+
+@media (max-width: 680px) {
+  .quote-list-tools { padding: .75rem; }
+  .quote-tools-bottom { align-items: stretch; flex-direction: column; }
+  .quote-status-filters { flex-wrap: nowrap; width: 100%; overflow-x: auto; padding-bottom: .2rem; scrollbar-width: thin; }
+  .quote-status-filters button { flex: 0 0 auto; }
+  .quote-sort-field { justify-content: flex-start; }
+  .quote-sort-field select { flex: 1; max-width: none; }
+}

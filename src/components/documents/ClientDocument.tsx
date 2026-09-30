@@ -34,8 +34,16 @@ export function ClientDocument({ model, formatAmount, printFormat = 'a4', docume
       <div className="document-customer"><strong>{record.customer_name}</strong>{record.customer_phone.trim() && <span>{record.customer_phone}</span>}</div>
     </section>
 
+    <section className="document-section" data-document-section="delivery">
+      <SectionTitle number="02" title="Entrega" />
+      <dl className="document-detail-list">
+        <Detail label="Fecha" value={formatClientDate(record.delivery_date)} />
+        <Detail label="Hora" value={formatDeliveryTime(record.delivery_time)} />
+      </dl>
+    </section>
+
     <section className="document-section" data-document-section="product">
-      <SectionTitle number="02" title="Detalle del producto" />
+      <SectionTitle number="03" title="Detalle del producto" />
       <div className="document-product-title">{record.product}</div>
       <dl className="document-detail-list">
         {record.portions !== null && <Detail label="Porciones" value={String(record.portions)} />}
@@ -45,14 +53,6 @@ export function ClientDocument({ model, formatAmount, printFormat = 'a4', docume
         {record.extras.trim() && <Detail label="Extras" value={record.extras} />}
       </dl>
     </section>
-
-    {(isQuote ? Boolean(model.quote.delivery_date || model.quote.delivery_time) : true) && <section className="document-section" data-document-section="delivery">
-      <SectionTitle number="03" title="Entrega" />
-      <dl className="document-detail-list">
-        <Detail label="Fecha" value={formatClientDate(record.delivery_date)} />
-        <Detail label="Hora" value={formatDeliveryTime(record.delivery_time)} />
-      </dl>
-    </section>}
 
     {record.notes.trim() && <section className="document-section" data-document-section="notes">
       <SectionTitle number="04" title="Observaciones" />

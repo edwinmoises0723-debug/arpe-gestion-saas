@@ -1,5 +1,6 @@
 import { getDocumentFilename } from './documents'
 import type { ClientDocumentModel } from './documents'
+import { planDocumentPages } from './document-pagination'
 
 const exportWidth = 794
 const exportPixelRatio = 1.8
@@ -72,20 +73,15 @@ export async function saveDocumentPdf(element: HTMLElement, model: ClientDocumen
     const contentWidthMm = pageWidthMm - marginMm * 2
     const contentHeightMm = pageHeightMm - marginMm * 2
     const pixelsPerMm = canvas.width / contentWidthMm
-    const pageHeightPx = contentHeightMm * pixelsPerMm
     const rootTop = clone.getBoundingClientRect().top
     const safeCuts = [...clone.querySelectorAll<HTMLElement>('[data-document-section]')]
       .map(section => (section.getBoundingClientRect().top - rootTop) * (canvas.width / clone.getBoundingClientRect().width))
       .filter(position => position > 0 && position < canvas.height)
       .sort((a, b) => a - b)
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true })
-    let startPx = 0
-    let page = 0
+    const pages = planDocumentPages(canvas.width, canvas.height, safeCuts, contentHeightMm)
 
-    while (startPx < canvas.height) {
-      const idealEnd = Math.min(startPx + pageHeightPx, canvas.height)
-      const safeEnd = safeCuts.filter(position => position > startPx + pageHeightPx * 0.42 && position <= idealEnd).at(-1)
-      const endPx = safeEnd ?? idealEnd
+    pages.forEach(({ startPx, endPx, fitToPage }, pageIndex) => {
       const sliceHeight = Math.max(1, Math.ceil(endPx - startPx))
       const pageCanvas = document.createElement('canvas')
       pageCanvas.width = canvas.width
@@ -95,14 +91,16 @@ export async function saveDocumentPdf(element: HTMLElement, model: ClientDocumen
       context.fillStyle = '#ffffff'
       context.fillRect(0, 0, pageCanvas.width, pageCanvas.height)
       context.drawImage(canvas, 0, startPx, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight)
-      if (page > 0) pdf.addPage('a4', 'portrait')
-      const cropHeightMm = sliceHeight / pixelsPerMm
-      pdf.addImage(pageCanvas, 'PNG', marginMm, marginMm, contentWidthMm, cropHeightMm, undefined, 'FAST')
+      if (pageIndex > 0) pdf.addPage('a4', 'portrait')
+      const naturalHeightMm = sliceHeight / pixelsPerMm
+      const fitScale = fitToPage ? Math.min(1, contentHeightMm / naturalHeightMm) : 1
+      const renderedWidthMm = contentWidthMm * fitScale
+      const renderedHeightMm = naturalHeightMm * fitScale
+      const leftMm = marginMm + (contentWidthMm - renderedWidthMm) / 2
+      pdf.addImage(pageCanvas, 'PNG', leftMm, marginMm, renderedWidthMm, renderedHeightMm, undefined, 'FAST')
       pageCanvas.width = 0
       pageCanvas.height = 0
-      startPx = endPx
-      page += 1
-    }
+    })
 
     pdf.save(getDocumentFilename(model, 'pdf'))
   } finally {
