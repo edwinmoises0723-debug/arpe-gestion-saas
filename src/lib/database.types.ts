@@ -141,6 +141,19 @@ export type Payment = {
   void_reason: string | null
 }
 
+export type OrderDeliveryHistory = {
+  id: string
+  business_id: string
+  order_id: string
+  previous_delivery_date: string | null
+  previous_delivery_time: string | null
+  new_delivery_date: string
+  new_delivery_time: string | null
+  reason: string
+  changed_at: string
+  changed_by: string
+}
+
 export type Database = {
   public: {
     Tables: {
@@ -186,11 +199,18 @@ export type Database = {
         Update: never
         Relationships: []
       }
+      arpe_order_delivery_history: {
+        Row: OrderDeliveryHistory
+        Insert: never
+        Update: never
+        Relationships: []
+      }
     }
     Views: { [_ in never]: never }
     Functions: {
       arpe_convert_quote_to_order: { Args: { p_quote_id: string }; Returns: Order[] }
       arpe_update_order_status: { Args: { p_order_id: string; p_status: OrderStatus }; Returns: Order[] }
+      arpe_reschedule_order_delivery: { Args: { p_order_id: string; p_new_delivery_date: string; p_new_delivery_time: string | null; p_reason: string }; Returns: Order[] }
       arpe_register_payment: { Args: { p_order_id: string; p_request_id: string; p_amount: number; p_method: PaymentMethod; p_reference: string; p_notes: string; p_paid_at: string }; Returns: Payment[] }
       arpe_void_payment: { Args: { p_payment_id: string; p_void_reason: string }; Returns: Payment[] }
     }

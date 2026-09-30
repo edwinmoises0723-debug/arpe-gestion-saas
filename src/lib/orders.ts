@@ -1,4 +1,4 @@
-import type { Order, OrderStatus } from './database.types'
+import type { Order, OrderDeliveryHistory, OrderStatus } from './database.types'
 import { client } from './supabase'
 
 export const orderStatuses: { value: OrderStatus; label: string }[] = [
@@ -29,4 +29,33 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus) {
   const order = Array.isArray(data) ? data[0] : data
   if (!order) throw new Error('No se recibió la actualización del pedido.')
   return order as Order
+}
+
+export async function rescheduleOrderDelivery(input: {
+  orderId: string
+  deliveryDate: string
+  deliveryTime: string | null
+  reason: string
+}) {
+  const { data, error } = await client().rpc('arpe_reschedule_order_delivery', {
+    p_order_id: input.orderId,
+    p_new_delivery_date: input.deliveryDate,
+    p_new_delivery_time: input.deliveryTime,
+    p_reason: input.reason,
+  })
+  if (error) throw error
+  const order = Array.isArray(data) ? data[0] : data
+  if (!order) throw new Error('No se recibió el pedido reprogramado.')
+  return order as Order
+}
+
+export async function listOrderDeliveryHistory(orderId: string, businessId: string) {
+  const { data, error } = await client()
+    .from('arpe_order_delivery_history')
+    .select('*')
+    .eq('order_id', orderId)
+    .eq('business_id', businessId)
+    .order('changed_at', { ascending: true })
+  if (error) throw error
+  return (data ?? []) as OrderDeliveryHistory[]
 }

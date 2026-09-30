@@ -89,6 +89,15 @@ describe('agenda classification and calendar helpers', () => {
     ], '2026-09-29')).toBe(2)
   })
 
+  it('moves an order from its previous agenda date to the date stored on the updated order', () => {
+    const order = makeOrder({ delivery_date: '2026-09-29' })
+    const rescheduled = { ...order, delivery_date: '2026-10-02', delivery_time: '15:00:00' }
+
+    expect(groupAgendaOrders([order], '2026-09-29').today).toHaveLength(1)
+    expect(groupAgendaOrders([rescheduled], '2026-09-29').today).toHaveLength(0)
+    expect(groupAgendaOrders([rescheduled], '2026-09-29').nextSevenDays).toEqual([rescheduled])
+  })
+
   it('uses the existing payment summary to show the real outstanding balance', () => {
     expect(getAgendaPaymentStatus(makeOrder(), [])).toEqual({ status: 'Sin pagos', balance: 1800 })
     expect(getAgendaPaymentStatus(makeOrder(), [makePayment(500)])).toEqual({ status: 'Saldo pendiente', balance: 1300 })
