@@ -43,6 +43,12 @@ export function summarizePayments(order: Order, payments: Payment[]): PaymentSum
   }
 }
 
+export function summarizePaymentsAfterSave(order: Order, currentPayments: Payment[], saved: Payment): PaymentSummary {
+  const paymentsById = new Map<string, Payment>(currentPayments.map(payment => [payment.id, payment]))
+  paymentsById.set(saved.id, saved)
+  return summarizePayments(order, [...paymentsById.values()])
+}
+
 export async function listPayments(businessId: string) {
   const { data, error } = await client()
     .from('arpe_payments')

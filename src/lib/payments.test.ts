@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Order, Payment } from './database.types'
-import { summarizePayments } from './payments'
+import { summarizePayments, summarizePaymentsAfterSave } from './payments'
 
 const order: Order = {
   id: 'order-1', business_id: 'business-1', quote_id: 'quote-1', order_number: 'ARPE-PED-2026-0001',
@@ -33,6 +33,14 @@ describe('payment summaries use only posted money', () => {
     expect(summarizePayments(order, [payment(500), payment(1000)]).realBalance).toBe(300)
     expect(summarizePayments(order, [payment(500), payment(1000), payment(300)]))
       .toMatchObject({ totalPaid: 1800, realBalance: 0, depositShortfall: 0, financialStatus: 'Pagado' })
+  })
+
+  it('shows the first saved payment once when the refreshed list already contains it', () => {
+    const firstPayment = payment(500)
+
+    expect(summarizePaymentsAfterSave(order, [firstPayment], firstPayment)).toEqual({
+      totalPaid: 500, realBalance: 1300, depositShortfall: 0, financialStatus: 'Anticipo cubierto',
+    })
   })
 
   it('ignores voided payments and isolates orders', () => {

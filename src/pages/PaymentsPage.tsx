@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Loading, Notice } from '../components/Feedback'
 import type { Business, Order, Payment, PaymentMethod } from '../lib/database.types'
 import { listOrders } from '../lib/orders'
-import { listPayments, paymentMethods, registerPayment, summarizePayments, voidPayment } from '../lib/payments'
+import { listPayments, paymentMethods, registerPayment, summarizePayments, summarizePaymentsAfterSave, voidPayment } from '../lib/payments'
 import { formatCurrency } from '../lib/quotes'
 import { errorMessage } from '../lib/supabase'
 
@@ -191,7 +191,7 @@ function RegisterPaymentDialog({ order, business, currentPayments, onClose, onCo
     finally { setBusy(false) }
   }
 
-  const summaryAfter = saved ? summarizePayments(order, [...currentPayments, saved]) : null
+  const summaryAfter = saved ? summarizePaymentsAfterSave(order, currentPayments, saved) : null
   return <div className="modal-backdrop" role="presentation"><section className="confirm-modal payment-entry-modal" role={saved ? 'dialog' : confirming ? 'alertdialog' : 'dialog'} aria-modal="true" aria-labelledby="payment-entry-title">
     {saved ? <>
       <span className="payment-success-icon"><Check size={23} /></span><span className="eyebrow accent">PAGO REGISTRADO CORRECTAMENTE</span><h2 id="payment-entry-title">{saved.payment_number}</h2>
