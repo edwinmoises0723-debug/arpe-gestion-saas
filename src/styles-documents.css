@@ -137,3 +137,46 @@
 .document-format-thermal-58 .document-detail-list .document-numeric-row{grid-template-columns:minmax(0,1fr);gap:.05rem}
 .document-format-thermal-58 .document-detail-list .document-numeric-row dd{text-align:left}
 @media print{.document-section[data-document-section="product"]{break-inside:auto;page-break-inside:auto}.document-section-title{break-after:avoid;page-break-after:avoid}}
+
+/* Thermal layouts use the paper width as the source of truth. Long labels and
+   values get their own line; A4 keeps the two-column document grid above. */
+.document-format-thermal-80 .document-detail-list > div,
+.document-format-thermal-58 .document-detail-list > div {
+  grid-template-columns: minmax(0, 1fr);
+  gap: .08rem;
+  min-width: 0;
+}
+.document-format-thermal-80 .document-detail-list dd,
+.document-format-thermal-58 .document-detail-list dd {
+  max-width: none;
+  text-align: left;
+  overflow-wrap: normal;
+  word-break: normal;
+  white-space: pre-wrap;
+}
+.document-format-thermal-80 .document-detail-list .document-numeric-row dd,
+.document-format-thermal-58 .document-detail-list .document-numeric-row dd,
+.document-format-thermal-80 .document-financial-list dd,
+.document-format-thermal-58 .document-financial-list dd {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: keep-all;
+}
+.document-format-thermal-80 .document-financial-list > div {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: .4rem;
+}
+.document-format-thermal-80 .document-financial-list dd {
+  text-align: right;
+}
+.document-format-thermal-80 .document-product-item,
+.document-format-thermal-58 .document-product-item {
+  min-width: 0;
+  overflow-wrap: normal;
+}
+.document-format-thermal-80 .document-product-item + .document-product-item,
+.document-format-thermal-58 .document-product-item + .document-product-item {
+  margin-top: 1.2rem;
+  padding-top: 1.2rem;
+}
