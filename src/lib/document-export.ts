@@ -5,6 +5,31 @@ import { planDocumentPages } from './document-pagination'
 const exportWidth = 794
 const exportPixelRatio = 1.8
 
+async function waitForDocumentAssets(element: HTMLElement) {
+  if (document.fonts) {
+    await Promise.all([
+      document.fonts.load('400 14px "DM Sans"'),
+      document.fonts.load('600 14px "DM Sans"'),
+      document.fonts.load('700 24px Manrope'),
+    ])
+    await document.fonts.ready
+  }
+
+  await Promise.all([...element.querySelectorAll('img')].map(async image => {
+    if (!image.complete) {
+      await new Promise<void>(resolve => {
+        image.addEventListener('load', () => resolve(), { once: true })
+        image.addEventListener('error', () => resolve(), { once: true })
+      })
+    }
+    if (image.complete && image.naturalWidth > 0 && typeof image.decode === 'function') {
+      await image.decode().catch(() => undefined)
+    }
+  }))
+
+  await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+}
+
 function createExportClone(element: HTMLElement) {
   const wrapper = document.createElement('div')
   wrapper.setAttribute('aria-hidden', 'true')
@@ -15,6 +40,7 @@ function createExportClone(element: HTMLElement) {
   clone.style.width = `${exportWidth}px`
   clone.style.maxWidth = 'none'
   clone.style.minWidth = `${exportWidth}px`
+  clone.style.boxSizing = 'border-box'
   clone.style.margin = '0'
   wrapper.append(clone)
   document.body.append(wrapper)
@@ -25,8 +51,10 @@ async function renderDocumentCanvas(element: HTMLElement) {
   const { toCanvas } = await import('html-to-image')
   const { wrapper, clone } = createExportClone(element)
   try {
-    await document.fonts?.ready
-    const canvas = await toCanvas(clone, { pixelRatio: exportPixelRatio, backgroundColor: '#ffffff', cacheBust: true })
+    await waitForDocumentAssets(clone)
+    const width = exportWidth
+    const height = Math.max(clone.scrollHeight, Math.ceil(clone.getBoundingClientRect().height))
+    const canvas = await toCanvas(clone, { width, height, pixelRatio: exportPixelRatio, backgroundColor: '#ffffff', cacheBust: true })
     return { canvas, clone, wrapper }
   } catch (error) {
     wrapper.remove()

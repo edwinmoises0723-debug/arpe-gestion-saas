@@ -35,9 +35,9 @@
 .document-section-title > span { display: grid; place-items: center; flex: 0 0 25px; width: 25px; height: 25px; border-radius: 50%; background: #eff2e9; color: var(--document-accent); font-size: .66rem; font-weight: 750; }
 .document-section-title h3 { margin: 0; font-family: Manrope, sans-serif; font-size: .96rem; }
 .document-detail-list, .document-financial-list { display: grid; gap: .48rem; margin: .6rem 0 0 2.4rem; }
-.document-detail-list > div, .document-financial-list > div { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
-.document-detail-list dt, .document-financial-list dt { color: var(--document-muted); overflow-wrap: break-word; word-break: normal; }
-.document-detail-list dd, .document-financial-list dd { margin: 0; text-align: right; font-weight: 600; white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; }
+.document-detail-list > div, .document-financial-list > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: start; gap: 1rem; }
+.document-detail-list dt, .document-financial-list dt { min-width: 0; color: var(--document-muted); overflow-wrap: break-word; word-break: normal; }
+.document-detail-list dd, .document-financial-list dd { min-width: 0; margin: 0; text-align: right; font-weight: 600; white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; }
 .document-detail-list .document-normal-value-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: start; gap: 1rem; }
 .document-detail-list .document-normal-value-row dd { font-weight: 400; }
 .document-financial-list dd { white-space: nowrap; overflow-wrap: normal; word-break: keep-all; }
@@ -119,7 +119,7 @@
   .client-document, .client-document * { visibility: visible !important; }
   .app-header, .bottom-nav, .credit, .skip-link, .document-screen-heading, .document-actions, .document-feedback, .document-modal-backdrop, .document-print-help, .document-preview-caption, .document-print-preview-actions { display: none !important; }
   .app-shell, .main-content, .document-workspace, .document-preview-stage { display: block !important; width: auto !important; max-width: none !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; overflow: visible !important; border: 0 !important; border-radius: 0 !important; background: #fff !important; box-shadow: none !important; }
-  .client-document { position: absolute !important; top: 0 !important; left: 0 !important; width: 186mm !important; max-width: 186mm !important; min-width: 0 !important; margin: 0 12mm !important; padding: 8mm 0 !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; color: #27352d !important; font-size: 10pt !important; }
+  .client-document { position: static !important; display: block !important; width: 186mm !important; max-width: 186mm !important; min-width: 0 !important; margin: 0 auto !important; padding: 8mm 0 !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; color: #27352d !important; font-size: 10pt !important; }
   .client-document.document-format-thermal-80 { width: 80mm !important; max-width: 80mm !important; margin: 0 !important; padding: 4mm !important; }
   .client-document.document-format-thermal-58 { width: 58mm !important; max-width: 58mm !important; margin: 0 !important; padding: 3mm !important; }
   .client-document { -webkit-print-color-adjust: exact; print-color-adjust: exact; }

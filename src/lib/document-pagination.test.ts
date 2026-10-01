@@ -23,5 +23,8 @@ describe('A4 document page planning', () => {
     expect(pages.length).toBeGreaterThan(1)
     expect(pages.at(-1)?.endPx).toBe(capacity + pixelsPerMm * 3)
     expect(pages.at(-1)?.fitToPage).toBe(true)
+    expect(pages.every(page => page.endPx > page.startPx)).toBe(true)
+    expect(pages[0].startPx).toBe(0)
+    expect(pages.slice(1).every((page, index) => page.startPx === pages[index].endPx)).toBe(true)
   })
 })
