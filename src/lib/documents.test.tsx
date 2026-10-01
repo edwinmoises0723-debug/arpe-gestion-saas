@@ -84,6 +84,35 @@ describe('customer documents', () => {
     expect(summary).toBeLessThan(thanks)
   })
 
+  it('renders client and product values as normal-weight detail rows', () => {
+    for (const model of [createQuoteDocumentModel(business, quote), createOrderDocumentModel(business, order, [])]) {
+      const html = renderToStaticMarkup(<ClientDocument model={model} formatAmount={formatAmount} />)
+      const customerStart = html.indexOf('data-document-section="customer"')
+      const deliveryStart = html.indexOf('data-document-section="delivery"')
+      const productStart = html.indexOf('data-document-section="product"')
+      const summaryStart = html.indexOf('data-document-section="summary"')
+      const customerSection = html.slice(customerStart, deliveryStart)
+      const section = html.slice(productStart, summaryStart)
+
+      expect(customerSection).toContain('<div class="document-normal-value-row"><dt>Nombre</dt><dd>Ana Pérez</dd></div>')
+      expect(customerSection).toContain('<div class="document-normal-value-row"><dt>Teléfono</dt><dd>88881234</dd></div>')
+      expect(customerSection).not.toContain('<strong>Ana Pérez</strong>')
+      expect(section).toContain('<div class="document-normal-value-row"><dt>Producto</dt><dd>Pastel de vainilla</dd></div>')
+      expect(section.indexOf('document-normal-value-row')).toBeLessThan(section.indexOf('<dt>Porciones</dt>'))
+      expect(section).not.toContain('document-product-title')
+    }
+  })
+
+  it('does not render an empty phone row when the customer has no phone', () => {
+    const html = renderToStaticMarkup(<ClientDocument model={createQuoteDocumentModel(business, { ...quote, customer_phone: '' })} formatAmount={formatAmount} />)
+    const customerStart = html.indexOf('data-document-section="customer"')
+    const deliveryStart = html.indexOf('data-document-section="delivery"')
+    const customerSection = html.slice(customerStart, deliveryStart)
+
+    expect(customerSection).toContain('<dt>Nombre</dt><dd>Ana Pérez</dd>')
+    expect(customerSection).not.toContain('Teléfono')
+  })
+
   it('keeps the summary as section 04 when there are no observations and always renders delivery', () => {
     const html = renderToStaticMarkup(<ClientDocument model={createQuoteDocumentModel(business, { ...quote, notes: '', delivery_date: null, delivery_time: null })} formatAmount={formatAmount} />)
     expect(html).toContain('Hora por definir')

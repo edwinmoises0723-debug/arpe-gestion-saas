@@ -34,15 +34,12 @@
 .document-section-title { display: flex; align-items: center; gap: .65rem; margin-bottom: .7rem; }
 .document-section-title > span { display: grid; place-items: center; flex: 0 0 25px; width: 25px; height: 25px; border-radius: 50%; background: #eff2e9; color: var(--document-accent); font-size: .66rem; font-weight: 750; }
 .document-section-title h3 { margin: 0; font-family: Manrope, sans-serif; font-size: .96rem; }
-.document-customer { display: grid; gap: .15rem; padding-left: 2.4rem; }
-.document-customer strong { font-size: 1.06rem; }
-.document-product-title { font-size: 1rem; }
-.document-customer span { color: var(--document-muted); }
-.document-product-title { margin-left: 2.4rem; font-weight: 700; }
 .document-detail-list, .document-financial-list { display: grid; gap: .48rem; margin: .6rem 0 0 2.4rem; }
 .document-detail-list > div, .document-financial-list > div { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .document-detail-list dt, .document-financial-list dt { color: var(--document-muted); overflow-wrap: break-word; word-break: normal; }
 .document-detail-list dd, .document-financial-list dd { margin: 0; text-align: right; font-weight: 600; white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; }
+.document-detail-list .document-normal-value-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: start; gap: 1rem; }
+.document-detail-list .document-normal-value-row dd { font-weight: 400; }
 .document-financial-list dd { white-space: nowrap; overflow-wrap: normal; word-break: keep-all; }
 .document-notes { margin: 0 0 0 2.4rem; padding: .8rem 1rem; border-left: 3px solid #dce7d7; border-radius: 0 .45rem .45rem 0; background: #f8faf6; white-space: pre-wrap; }
 .document-financial-section { margin-top: 1.6rem; padding: 1rem 1.05rem; border: 1px solid #e4e9de; border-radius: .8rem; background: #fafbf8; }
@@ -89,7 +86,7 @@
 .document-format-thermal-80 .document-number, .document-format-thermal-58 .document-number { text-align: left; }
 .document-format-thermal-80 .document-section, .document-format-thermal-58 .document-section { margin-top: 1rem; }
 .document-format-thermal-80 .document-section-title > span, .document-format-thermal-58 .document-section-title > span { width: 21px; height: 21px; flex-basis: 21px; }
-.document-format-thermal-80 .document-customer, .document-format-thermal-58 .document-customer, .document-format-thermal-80 .document-product-title, .document-format-thermal-58 .document-product-title, .document-format-thermal-80 .document-detail-list, .document-format-thermal-58 .document-detail-list, .document-format-thermal-80 .document-financial-list, .document-format-thermal-58 .document-financial-list, .document-format-thermal-80 .document-notes, .document-format-thermal-58 .document-notes { margin-left: 0; }
+.document-format-thermal-80 .document-detail-list, .document-format-thermal-58 .document-detail-list, .document-format-thermal-80 .document-financial-list, .document-format-thermal-58 .document-financial-list, .document-format-thermal-80 .document-notes, .document-format-thermal-58 .document-notes { margin-left: 0; }
 .document-format-thermal-80 .document-financial-section, .document-format-thermal-58 .document-financial-section { padding: .65rem; }
 .document-format-thermal-80 .document-detail-list > div, .document-format-thermal-58 .document-detail-list > div, .document-format-thermal-80 .document-financial-list > div, .document-format-thermal-58 .document-financial-list > div { gap: .45rem; }
 .document-format-thermal-80 .document-detail-list dd, .document-format-thermal-58 .document-detail-list dd, .document-format-thermal-80 .document-financial-list dd, .document-format-thermal-58 .document-financial-list dd { max-width: 58%; }
@@ -99,6 +96,8 @@
 .document-format-thermal-58 .document-kicker { font-size: .58rem; }
 .document-format-thermal-58 .document-financial-list > div { display: grid; grid-template-columns: minmax(0, 1fr); gap: .05rem; }
 .document-format-thermal-58 .document-financial-list dd { max-width: none; text-align: left; }
+.document-format-thermal-58 .document-detail-list .document-normal-value-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: .05rem; }
+.document-format-thermal-58 .document-detail-list .document-normal-value-row dd { max-width: none; text-align: left; }
 .document-format-thermal-58 .document-source-quote { display: grid; }
 
 @media (max-width: 600px) {

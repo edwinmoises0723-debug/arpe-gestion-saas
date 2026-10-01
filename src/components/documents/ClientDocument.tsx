@@ -31,7 +31,10 @@ export function ClientDocument({ model, formatAmount, printFormat = 'a4', docume
 
     <section className="document-section" data-document-section="customer">
       <SectionTitle number="01" title="Cliente" />
-      <div className="document-customer"><strong>{record.customer_name}</strong>{record.customer_phone.trim() && <span>{record.customer_phone}</span>}</div>
+      <dl className="document-detail-list">
+        <div className="document-normal-value-row"><dt>Nombre</dt><dd>{record.customer_name}</dd></div>
+        {record.customer_phone.trim() && <div className="document-normal-value-row"><dt>Teléfono</dt><dd>{record.customer_phone}</dd></div>}
+      </dl>
     </section>
 
     <section className="document-section" data-document-section="delivery">
@@ -44,8 +47,8 @@ export function ClientDocument({ model, formatAmount, printFormat = 'a4', docume
 
     <section className="document-section" data-document-section="product">
       <SectionTitle number="03" title="Detalle del producto" />
-      <div className="document-product-title">{record.product}</div>
       <dl className="document-detail-list">
+        <div className="document-normal-value-row"><dt>Producto</dt><dd>{record.product}</dd></div>
         {record.portions !== null && <Detail label="Porciones" value={String(record.portions)} />}
         {record.flavor.trim() && <Detail label="Sabor" value={record.flavor} />}
         {record.filling.trim() && <Detail label="Relleno" value={record.filling} />}
