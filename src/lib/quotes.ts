@@ -1,4 +1,5 @@
 import type { Business, QuoteInput, QuoteStatus } from './database.types'
+import { groupQuoteItemsByQuote, listQuoteItemsForBusiness } from './products'
 import { client } from './supabase'
 
 export const quoteStatuses: { value: QuoteStatus; label: string }[] = [
@@ -20,9 +21,13 @@ export function formatCurrency(amount: number, business: Business) {
 }
 
 export async function listQuotes(businessId: string) {
-  const { data, error } = await client().from('arpe_quotes').select('*').eq('business_id', businessId).order('created_at', { ascending: false })
+  const [{ data, error }, items] = await Promise.all([
+    client().from('arpe_quotes').select('*').eq('business_id', businessId).order('created_at', { ascending: false }),
+    listQuoteItemsForBusiness(businessId),
+  ])
   if (error) throw error
-  return data ?? []
+  const grouped = groupQuoteItemsByQuote(items)
+  return (data ?? []).map(quote => ({ ...quote, items: grouped[quote.id] ?? [] }))
 }
 
 export async function createQuote(input: QuoteInput) {

@@ -1,4 +1,5 @@
 import type { Order, OrderDeliveryHistory, OrderStatus } from './database.types'
+import { groupOrderItemsByOrder, listOrderItemsForBusiness } from './products'
 import { client } from './supabase'
 
 export const orderStatuses: { value: OrderStatus; label: string }[] = [
@@ -10,9 +11,13 @@ export const orderStatuses: { value: OrderStatus; label: string }[] = [
 ]
 
 export async function listOrders(businessId: string) {
-  const { data, error } = await client().from('arpe_orders').select('*').eq('business_id', businessId).order('created_at', { ascending: false })
+  const [{ data, error }, items] = await Promise.all([
+    client().from('arpe_orders').select('*').eq('business_id', businessId).order('created_at', { ascending: false }),
+    listOrderItemsForBusiness(businessId),
+  ])
   if (error) throw error
-  return data ?? []
+  const grouped = groupOrderItemsByOrder(items)
+  return (data ?? []).map(order => ({ ...order, items: grouped[order.id] ?? [] }))
 }
 
 export async function convertQuoteToOrder(quoteId: string) {

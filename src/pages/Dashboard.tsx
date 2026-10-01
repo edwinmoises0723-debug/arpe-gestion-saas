@@ -1,3 +1,4 @@
+import { summarizeOrderProducts } from '../lib/products'
 import { useEffect, useState } from 'react'
 import { Activity, AlertTriangle, ArrowRight, Banknote, CalendarDays, Check, ClipboardList, Clock3, FilePenLine, PackageCheck, RefreshCw, Settings, ShoppingBag, Wallet } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -117,7 +118,7 @@ export function Dashboard({ business }: { business: Business }) {
         <SectionHeading icon={<CalendarDays size={18} />} eyebrow="ORGANIZA TU DÍA" title="Próximas entregas" action={<Link to="/agenda" className="dashboard-section-link">Ver Agenda <ArrowRight size={15} /></Link>} />
         {upcoming.length === 0 ? <DashboardEmpty title="No hay entregas próximas" text="Cuando un pedido activo tenga fecha de entrega, aparecerá aquí." /> : <ul className="dashboard-delivery-list">{upcoming.map(({ order, balance }) => <li key={order.id}>
           <div className="dashboard-delivery-date"><strong>{new Intl.DateTimeFormat('es', { day: 'numeric' }).format(localCalendarDate(order.delivery_date!))}</strong><span>{new Intl.DateTimeFormat('es', { month: 'short' }).format(localCalendarDate(order.delivery_date!))}</span></div>
-          <div className="dashboard-delivery-info"><Link to={`/pedidos?order=${encodeURIComponent(order.id)}`} className="dashboard-delivery-customer">{order.customer_name}</Link><span>{order.product} · {order.order_number}</span><span>{localDateLabel(order.delivery_date!)}{order.delivery_time ? ` · ${formatDeliveryTime(order.delivery_time)}` : ' · Hora por definir'}</span></div>
+          <div className="dashboard-delivery-info"><Link to={`/pedidos?order=${encodeURIComponent(order.id)}`} className="dashboard-delivery-customer">{order.customer_name}</Link><span>{summarizeOrderProducts(order.items ?? [], order.product)} · {order.order_number}</span><span>{localDateLabel(order.delivery_date!)}{order.delivery_time ? ` · ${formatDeliveryTime(order.delivery_time)}` : ' · Hora por definir'}</span></div>
           <div className="dashboard-delivery-side"><span className={`dashboard-status-pill status-${order.status}`}>{orderStatusLabels[order.status]}</span><span className="dashboard-delivery-balance">Saldo {formatCurrency(balance, business)}</span><Link to={`/pedidos?order=${encodeURIComponent(order.id)}`}>Ver pedido</Link></div>
         </li>)}</ul>}
       </section>

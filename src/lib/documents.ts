@@ -1,4 +1,4 @@
-import type { Business, Order, Payment, Quote } from './database.types'
+import type { Business, Order, Payment, Quote, ProductFields } from './database.types'
 import { summarizePayments } from './payments'
 import { formatDeliveryTime } from './delivery-time'
 import { localCalendarDate } from './agenda'
@@ -13,7 +13,15 @@ export type ClientOrder = Pick<Order,
   'order_number' | 'source_quote_number' | 'created_at' | 'customer_name' | 'customer_phone' | 'product' | 'portions' | 'flavor' | 'filling' | 'decoration' | 'extras' | 'delivery_date' | 'delivery_time' | 'notes' | 'total_amount' | 'deposit_required' | 'status'
 >
 
+export type ClientProduct = ProductFields & { line_total: number }
+
+function clientProducts(record: Quote | Order): ClientProduct[] {
+  return (record.items?.length ? record.items : [{ ...record, quantity: 1, unit_label: 'unidad', notes: '', unit_price: record.total_amount, line_total: record.total_amount }]).map(item => ({ product: item.product, quantity: Number(item.quantity), unit_label: item.unit_label, portions: item.portions, flavor: item.flavor, filling: item.filling, decoration: item.decoration, extras: item.extras, notes: item.notes, unit_price: Number(item.unit_price), line_total: Number(item.line_total) }))
+}
+
 export type QuoteDocumentModel = {
+  products: ClientProduct[]
+  deliveryCharge: number | null
   type: 'quote'
   business: ClientBusiness
   quote: ClientQuote
@@ -21,6 +29,8 @@ export type QuoteDocumentModel = {
 }
 
 export type OrderDocumentModel = {
+  products: ClientProduct[]
+  deliveryCharge: number | null
   type: 'order'
   business: ClientBusiness
   order: ClientOrder
@@ -46,6 +56,8 @@ export function createQuoteDocumentModel(business: Business, quote: Quote, logoD
   const deposit = Math.round(Number(quote.deposit_required) * 100)
   return {
     type: 'quote',
+    products: clientProducts(quote),
+    deliveryCharge: quote.delivery_customer_charge ?? null,
     business: clientBusiness(business, logoDataUrl),
     quote: {
       quote_number: quote.quote_number,
@@ -73,6 +85,8 @@ export function createOrderDocumentModel(business: Business, order: Order, payme
   const summary = summarizePayments(order, payments)
   return {
     type: 'order',
+    products: clientProducts(order),
+    deliveryCharge: order.delivery_customer_charge ?? null,
     business: clientBusiness(business, logoDataUrl),
     order: {
       order_number: order.order_number,
@@ -135,7 +149,7 @@ export function createWhatsAppMessage(model: ClientDocumentModel, formatAmount: 
     const delivery = quote.delivery_date || quote.delivery_time
       ? `\n\nEntrega: ${quote.delivery_date ? formatClientDate(quote.delivery_date) : 'Fecha por definir'} · ${formatDeliveryTime(quote.delivery_time)}`
       : ''
-    return `Hola, ${quote.customer_name} 👋\n\nTe compartimos la cotización ${quote.quote_number} de ${model.business.name}.\n\nProducto: ${quote.product}\nTotal: ${formatAmount(quote.total_amount)}\nAnticipo requerido para confirmar: ${formatAmount(quote.deposit_required)}${delivery}\n\nSi tienes alguna consulta o deseas confirmar tu pedido, estamos a tu disposición.\n\n${model.business.name}`
+    return `Hola, ${quote.customer_name} 👋\n\nTe compartimos la cotización ${quote.quote_number} de ${model.business.name}.\n\nProducto: ${model.products.map(item => `${item.quantity} ${item.unit_label} · ${item.product}`).join('; ')}\nTotal: ${formatAmount(quote.total_amount)}\nAnticipo requerido para confirmar: ${formatAmount(quote.deposit_required)}${delivery}\n\nSi tienes alguna consulta o deseas confirmar tu pedido, estamos a tu disposición.\n\n${model.business.name}`
   }
 
   const order = model.order

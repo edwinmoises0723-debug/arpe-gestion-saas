@@ -16,7 +16,7 @@ const order = (overrides: Partial<Order> = {}): Order => ({
   source_quote_number: '0001', customer_name: 'Ana Pérez', customer_phone: '', product: 'Pastel', portions: null,
   flavor: '', filling: '', decoration: '', extras: '', delivery_date: '2026-10-08', delivery_time: '17:00', notes: '',
   total_amount: 1800, deposit_type: 'percentage', deposit_value: 50, deposit_required: 900,
-  internal_cost_total: null, estimated_profit: null, real_margin_percent: null, status: 'confirmed',
+  delivery_internal_cost: null, delivery_customer_charge: null, internal_cost_total: null, estimated_profit: null, real_margin_percent: null, status: 'confirmed',
   created_at: '2026-10-01T12:00:00Z', updated_at: '2026-10-01T12:00:00Z', ...overrides,
 })
 
@@ -28,7 +28,7 @@ const payment = (overrides: Partial<Payment> = {}): Payment => ({
 })
 
 const quote = (overrides: Partial<Quote> = {}): Quote => ({
-  id: 'quote-1', business_id: 'business-1', quote_number: '0001', customer_name: 'Ana Pérez', customer_phone: '',
+  id: 'quote-1', business_id: 'business-1', delivery_internal_cost: 0, delivery_customer_charge: 0, quote_number: '0001', customer_name: 'Ana Pérez', customer_phone: '',
   product: 'Pastel', portions: null, flavor: '', filling: '', decoration: '', extras: '', delivery_date: null,
   delivery_time: null, notes: '', total_amount: 1800, deposit_type: 'percentage', deposit_value: 50, deposit_required: 900,
   status: 'draft', created_at: '2026-10-01T12:00:00Z', updated_at: '2026-10-01T12:00:00Z', ...overrides,

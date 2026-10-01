@@ -7,7 +7,7 @@ const order: Order = {
   source_quote_number: 'ARPE-COT-2026-0001', customer_name: 'Ana Pérez', customer_phone: '',
   product: 'Pastel', portions: 12, flavor: '', filling: '', decoration: '', extras: '',
   delivery_date: null, delivery_time: null, notes: '', total_amount: 1800, deposit_type: 'fixed',
-  deposit_value: 500, deposit_required: 500, internal_cost_total: null, estimated_profit: null,
+  deposit_value: 500, deposit_required: 500, delivery_internal_cost: null, delivery_customer_charge: null, internal_cost_total: null, estimated_profit: null,
   real_margin_percent: null, status: 'delivered', created_at: '', updated_at: '',
 }
 

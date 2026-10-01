@@ -8,7 +8,7 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
     source_quote_number: 'ARPE-COT-2026-0001', customer_name: 'Ana Pérez', customer_phone: '', product: 'Pastel',
     portions: 12, flavor: '', filling: '', decoration: '', extras: '', delivery_date: '2026-09-29', delivery_time: null,
     notes: '', total_amount: 1800, deposit_type: 'fixed', deposit_value: 500, deposit_required: 500,
-    internal_cost_total: null, estimated_profit: null, real_margin_percent: null, status: 'confirmed', created_at: '', updated_at: '',
+    delivery_internal_cost: null, delivery_customer_charge: null, internal_cost_total: null, estimated_profit: null, real_margin_percent: null, status: 'confirmed', created_at: '', updated_at: '',
     ...overrides,
   }
 }

@@ -24,6 +24,9 @@ export type Business = {
 export type BusinessInput = Pick<Business, 'name' | 'slogan' | 'description' | 'whatsapp' | 'email' | 'address' | 'currency'>
 
 export type Quote = {
+  delivery_internal_cost: number
+  delivery_customer_charge: number
+  items?: QuoteItem[]
   id: string
   business_id: string
   quote_number: string
@@ -95,6 +98,9 @@ export type QuoteCostItem = {
 }
 
 export type Order = {
+  delivery_internal_cost: number | null
+  delivery_customer_charge: number | null
+  items?: OrderItem[]
   id: string
   business_id: string
   quote_id: string
@@ -154,9 +160,51 @@ export type OrderDeliveryHistory = {
   changed_by: string
 }
 
+export type CatalogProduct = {
+  id: string; business_id: string; name: string; category: string; description: string
+  unit_label: string; default_unit_price: number; default_portions: number | null
+  default_flavor: string; default_filling: string; default_decoration: string; default_extras: string
+  is_active: boolean; created_at: string; updated_at: string
+}
+export type CatalogProductInput = Omit<CatalogProduct, 'id' | 'created_at' | 'updated_at'>
+export type ProductFields = {
+  product: string; quantity: number; unit_label: string; portions: number | null
+  flavor: string; filling: string; decoration: string; extras: string; notes: string
+  unit_price: number
+}
+export type QuoteItem = ProductFields & {
+  id: string; business_id: string; quote_id: string; catalog_product_id: string | null
+  position: number; line_total: number; created_at: string; updated_at: string
+}
+export type ItemCostInput = Pick<QuoteCost, 'ingredients_cost' | 'waste_percent' | 'labor_hours' | 'labor_hourly_rate' | 'indirect_percent' | 'markup_percent'>
+export type DirectCostInput = Pick<QuoteCostItem, 'category' | 'name' | 'cost'>
+export type QuoteItemCost = ItemCostInput & {
+  quote_item_id: string; business_id: string; waste_amount: number; labor_cost: number
+  indirect_amount: number; production_subtotal: number; production_cost: number
+  total_internal_cost: number; suggested_line_price: number; created_at: string; updated_at: string
+}
+export type QuoteItemCostItem = DirectCostInput & {
+  id: string; business_id: string; quote_item_id: string; created_at: string
+}
+export type OrderItem = ProductFields & {
+  id: string; business_id: string; order_id: string; source_quote_item_id: string | null
+  position: number; line_total: number; internal_cost_total: number | null
+  estimated_profit: number | null; real_margin_percent: number | null; created_at: string
+}
+export type QuoteBundleItem = ProductFields & {
+  catalog_product_id: string | null; cost: ItemCostInput | null; direct_costs: DirectCostInput[]
+}
+export type QuoteBundleHeader = Pick<Quote, 'customer_name' | 'customer_phone' | 'delivery_date' | 'delivery_time' | 'notes' | 'status' | 'deposit_type' | 'deposit_value' | 'delivery_internal_cost' | 'delivery_customer_charge'>
+type ReadOnlyTable<T> = { Row: T; Insert: never; Update: never; Relationships: [] }
+
 export type Database = {
   public: {
     Tables: {
+      arpe_catalog_products: { Row: CatalogProduct; Insert: CatalogProductInput; Update: Partial<CatalogProductInput>; Relationships: [] }
+      arpe_quote_items: ReadOnlyTable<QuoteItem>
+      arpe_quote_item_costs: ReadOnlyTable<QuoteItemCost>
+      arpe_quote_item_cost_items: ReadOnlyTable<QuoteItemCostItem>
+      arpe_order_items: ReadOnlyTable<OrderItem>
       arpe_businesses: {
         Row: Business
         Insert: BusinessInput & { owner_id: string; id?: string; logo_path?: string | null }
@@ -208,6 +256,7 @@ export type Database = {
     }
     Views: { [_ in never]: never }
     Functions: {
+      arpe_save_quote_bundle: { Args: { p_quote_id: string | null; p_header: QuoteBundleHeader; p_items: QuoteBundleItem[] }; Returns: Quote[] }
       arpe_convert_quote_to_order: { Args: { p_quote_id: string }; Returns: Order[] }
       arpe_update_order_status: { Args: { p_order_id: string; p_status: OrderStatus }; Returns: Order[] }
       arpe_reschedule_order_delivery: { Args: { p_order_id: string; p_new_delivery_date: string; p_new_delivery_time: string | null; p_reason: string }; Returns: Order[] }

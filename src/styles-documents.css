@@ -129,3 +129,11 @@
   .document-financial-section, .document-status, .document-section-title > span { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   .document-section, .document-footer { break-inside: avoid; page-break-inside: avoid; }
 }
+
+/* Each independent product is a natural pagination boundary. */
+.document-product-item{break-inside:avoid;page-break-inside:avoid}.document-product-item+.document-product-item{margin-top:1rem;padding-top:1rem;border-top:1px solid #e8e6e0}.document-item-number{font-weight:500;font-size:.8rem;margin:0 0 .6rem;color:#59675c}
+.document-detail-list .document-numeric-row dd{white-space:nowrap;overflow-wrap:normal;word-break:keep-all}
+.document-product-item .document-detail-list{gap:.24rem}
+.document-format-thermal-58 .document-detail-list .document-numeric-row{grid-template-columns:minmax(0,1fr);gap:.05rem}
+.document-format-thermal-58 .document-detail-list .document-numeric-row dd{text-align:left}
+@media print{.document-section[data-document-section="product"]{break-inside:auto;page-break-inside:auto}.document-section-title{break-after:avoid;page-break-after:avoid}}

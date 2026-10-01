@@ -29,7 +29,7 @@ function matchesSearch(quote: Quote, query: string) {
   const haystack = searchTokens([
     quote.customer_name,
     quote.quote_number,
-    quote.product,
+    ...(quote.items?.map(item => item.product) ?? [quote.product]),
     quote.customer_phone,
     normalizedDate,
     normalizedLocalizedDate,

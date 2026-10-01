@@ -1,3 +1,4 @@
+import { summarizeOrderProducts } from '../lib/products'
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, ArrowRight, CalendarDays, Check, Clock3, Search, UserRound } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -44,7 +45,7 @@ function OrderDeliveryCard({ order, payments, business }: { order: Order; paymen
     <div className="agenda-order-content">
       <div className="agenda-order-top"><span className="quote-number">{order.order_number}</span><span className={`status-badge order-status status-${order.status}`}>{statusLabels[order.status]}</span></div>
       <h3>{order.customer_name}</h3>
-      <p className="agenda-order-product">{order.product}</p>
+      <p className="agenda-order-product">{summarizeOrderProducts(order.items ?? [], order.product)}</p>
       <div className="agenda-order-meta"><span><UserRound size={14} /> {formatCurrency(Number(order.total_amount), business)}</span><span className={finance.balance > 0 ? 'agenda-balance-pending' : 'agenda-balance-paid'}>{financeText}</span></div>
       {order.status !== 'delivered' && order.status !== 'cancelled' && order.delivery_date && order.delivery_date < agendaDateKey(new Date()) && <p className="agenda-overdue-note"><span>Entrega atrasada</span> Revisa el seguimiento desde el pedido.</p>}
       <div className="agenda-order-actions"><Link to={`/pedidos?order=${encodeURIComponent(order.id)}`} className="text-link">Ver pedido <ArrowRight size={15} /></Link><Link to={`/pagos?order=${encodeURIComponent(order.id)}`} className="agenda-payments-link">Ver pagos</Link></div>

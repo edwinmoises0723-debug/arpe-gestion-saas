@@ -16,3 +16,7 @@ ARPE se construye para personas que no necesitan conocimientos técnicos. Cada f
 - La fecha y hora de entrega del pedido son la fuente única de verdad para Agenda. Toda reprogramación debe modificar el pedido de forma segura y conservar historial auditable sin duplicar eventos ni información.
 - Los documentos destinados al cliente nunca deben exponer costos internos, merma, gastos operativos, utilidad, margen ni información administrativa privada del negocio.
 - Los formatos A4, imagen y térmico representan la misma información comercial, pero cada uno debe diseñarse específicamente para su medio; ARPE no debe reducir simplemente un documento A4 para imprimirlo en papel térmico.
+
+- Una cotización o pedido puede contener múltiples productos. Los productos deben modelarse como ítems independientes; ARPE nunca debe concatenarlos en un único campo para simular una cotización multiproducto.
+- Los costos de producción pertenecen al producto/ítem; la entrega pertenece a la cotización/pedido completo y no debe duplicarse por cada producto.
+- Seleccionar un producto del catálogo solo precarga datos. Cotizaciones y pedidos conservan snapshots independientes y nunca deben cambiar retroactivamente cuando cambia el catálogo.

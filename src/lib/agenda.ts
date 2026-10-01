@@ -39,7 +39,7 @@ export function filterAgendaOrders(orders: Order[], filter: AgendaFilter, search
       || (filter === 'pending' && pendingStatuses.has(order.status))
       || (filter === 'ready' && order.status === 'ready')
       || (filter === 'delivered' && order.status === 'delivered')
-    const matchesSearch = !query || [order.customer_name, order.order_number, order.product]
+    const matchesSearch = !query || [order.customer_name, order.order_number, ...(order.items?.map(item => item.product) ?? [order.product])]
       .some(value => value.toLocaleLowerCase('es').includes(query))
     return matchesStatus && matchesSearch
   }).sort(compareDeliveryOrders)

@@ -1,5 +1,6 @@
 import { useState, type Ref } from 'react'
 import { formatDeliveryTime } from '../../lib/delivery-time'
+import { productsSubtotal } from '../../lib/products'
 import { formatClientDate, formatCreatedDate, type ClientDocumentModel } from '../../lib/documents'
 
 export type DocumentPrintFormat = 'a4' | 'thermal-80' | 'thermal-58'
@@ -46,15 +47,23 @@ export function ClientDocument({ model, formatAmount, printFormat = 'a4', docume
     </section>
 
     <section className="document-section" data-document-section="product">
-      <SectionTitle number="03" title="Detalle del producto" />
-      <dl className="document-detail-list">
-        <div className="document-normal-value-row"><dt>Producto</dt><dd>{record.product}</dd></div>
-        {record.portions !== null && <Detail label="Porciones" value={String(record.portions)} />}
-        {record.flavor.trim() && <Detail label="Sabor" value={record.flavor} />}
-        {record.filling.trim() && <Detail label="Relleno" value={record.filling} />}
-        {record.decoration.trim() && <Detail label="Decoración" value={record.decoration} />}
-        {record.extras.trim() && <Detail label="Extras" value={record.extras} />}
-      </dl>
+      <SectionTitle number="03" title={model.products.length > 1 ? (isQuote ? 'Productos cotizados' : 'Productos del pedido') : 'Detalle del producto'} />
+      {model.products.map((product, index) => <div className="document-product-item" data-document-section="product-item" key={index}>
+        {model.products.length > 1 && <p className="document-item-number">Producto {index + 1}</p>}
+        <dl className="document-detail-list">
+          <div className="document-normal-value-row"><dt>Producto</dt><dd>{product.product}</dd></div>
+          <Detail label="Cantidad" value={String(product.quantity)} numeric />
+          <Detail label="Unidad" value={product.unit_label} />
+          {product.portions !== null && <Detail label="Porciones" value={String(product.portions)} />}
+          {product.flavor.trim() && <Detail label="Sabor" value={product.flavor} />}
+          {product.filling.trim() && <Detail label="Relleno" value={product.filling} />}
+          {product.decoration.trim() && <Detail label="Decoración" value={product.decoration} />}
+          {product.extras.trim() && <Detail label="Extras" value={product.extras} />}
+          {product.notes.trim() && <Detail label="Notas" value={product.notes} />}
+          <Detail label="Precio unitario" value={formatAmount(product.unit_price)} numeric />
+          <Detail label="Subtotal" value={formatAmount(product.line_total)} numeric />
+        </dl>
+      </div>)}
     </section>
 
     {record.notes.trim() && <section className="document-section" data-document-section="notes">
@@ -65,6 +74,7 @@ export function ClientDocument({ model, formatAmount, printFormat = 'a4', docume
     <section className="document-section document-financial-section" data-document-section="summary">
       <SectionTitle number={record.notes.trim() ? '05' : '04'} title="Resumen comercial" />
       <dl className="document-financial-list">
+        {model.deliveryCharge !== null && <><Detail label="Subtotal productos" value={formatAmount(productsSubtotal(model.products))} /><Detail label="Entrega cobrada al cliente" value={formatAmount(model.deliveryCharge)} /></>}
         <Detail label="Precio total" value={formatAmount(record.total_amount)} emphasis />
         {isQuote ? <>
           <Detail label="Anticipo requerido para confirmar" value={formatAmount(model.quote.deposit_required)} />
@@ -94,6 +104,6 @@ function SectionTitle({ number, title }: { number: string; title: string }) {
   return <div className="document-section-title"><span>{number}</span><h3>{title}</h3></div>
 }
 
-function Detail({ label, value, emphasis = false }: { label: string; value: string; emphasis?: boolean }) {
-  return <div className={emphasis ? 'is-emphasis' : ''}><dt>{label}</dt><dd>{value}</dd></div>
+function Detail({ label, value, emphasis = false, numeric = false }: { label: string; value: string; emphasis?: boolean; numeric?: boolean }) {
+  return <div className={`${emphasis ? 'is-emphasis' : ''}${numeric ? ' document-numeric-row' : ''}`}><dt>{label}</dt><dd>{value}</dd></div>
 }

@@ -4,7 +4,7 @@ import { filterAndSortQuotes } from './quote-list'
 
 function makeQuote(overrides: Partial<Quote> = {}): Quote {
   return {
-    id: 'quote-1', business_id: 'business-1', quote_number: 'ARPE-COT-2026-0001', customer_name: 'María Gómez', customer_phone: '+505 8888 1111',
+    id: 'quote-1', business_id: 'business-1', delivery_internal_cost: 0, delivery_customer_charge: 0, quote_number: 'ARPE-COT-2026-0001', customer_name: 'María Gómez', customer_phone: '+505 8888 1111',
     product: 'Pastel de chocolate', portions: 12, flavor: '', filling: '', decoration: '', extras: '', delivery_date: '2026-10-05', delivery_time: null,
     notes: '', total_amount: 1000, deposit_type: 'percentage', deposit_value: 50, deposit_required: 500, status: 'accepted',
     created_at: '2026-09-20T12:00:00.000Z', updated_at: '2026-09-20T12:00:00.000Z', ...overrides,
