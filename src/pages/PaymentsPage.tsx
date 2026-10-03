@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, Banknote, Check, CircleAlert, Clock3, CreditCard, ReceiptText, Wallet } from 'lucide-react'
+import { ArrowLeft, Banknote, Check, CircleAlert, Clock3, CreditCard, ReceiptText, Search, Wallet, X } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Loading, Notice } from '../components/Feedback'
 import type { Business, Order, Payment, PaymentMethod } from '../lib/database.types'
 import { listOrders } from '../lib/orders'
 import { listPayments, paymentMethods, registerPayment, summarizePayments, summarizePaymentsAfterSave, voidPayment } from '../lib/payments'
 import { formatCurrency } from '../lib/quotes'
+import { searchPaymentOrders } from '../lib/order-payment-search'
 import { errorMessage } from '../lib/supabase'
 
 const methodName = (method: PaymentMethod) => paymentMethods.find(option => option.value === method)?.label ?? method
@@ -34,6 +35,7 @@ export function PaymentsPage({ business }: { business: Business }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
   const [params, setParams] = useSearchParams()
   const [registerOpen, setRegisterOpen] = useState(false)
   const [voiding, setVoiding] = useState<Payment | null>(null)
@@ -49,6 +51,8 @@ export function PaymentsPage({ business }: { business: Business }) {
   const received = payments.reduce((sum, payment) => sum + (payment.status === 'posted' ? Math.round(Number(payment.amount) * 100) : 0), 0) / 100
   const receivable = orders.reduce((sum, order) => sum + (order.status === 'cancelled' ? 0 : summarizePayments(order, payments).realBalance), 0)
   const selectedSummary = selectedOrder ? summarizePayments(selectedOrder, payments) : null
+  const visibleOrders = useMemo(() => searchPaymentOrders(orders, payments, searchQuery), [orders, payments, searchQuery])
+  const hasActiveSearch = searchQuery.trim().length > 0
 
   async function refresh() {
     const [freshOrders, freshPayments] = await Promise.all([listOrders(business.id), listPayments(business.id)])
@@ -150,8 +154,9 @@ export function PaymentsPage({ business }: { business: Business }) {
     <div className="page-heading"><div><span className="eyebrow accent">CONTROL DE DINERO RECIBIDO</span><h1>Pagos<span className="heading-dot">.</span></h1><p className="muted">Registra únicamente el dinero que ya recibiste de tus clientes.</p></div></div>
     {error && <Notice error>{error}</Notice>}{notice && <div className="quote-notice"><Check size={17} /> {notice}</div>}
     <section className="payment-overview" aria-label="Resumen de pagos"><article className="panel payment-overview-card"><span className="payment-overview-icon"><Banknote size={20} /></span><div><span>Dinero recibido</span><strong>{formatCurrency(received, business)}</strong><small>Solo pagos registrados y no anulados</small></div></article><article className="panel payment-overview-card"><span className="payment-overview-icon"><Wallet size={20} /></span><div><span>Saldo por cobrar</span><strong>{formatCurrency(receivable, business)}</strong><small>No incluye pedidos cancelados</small></div></article></section>
-    <div className="payment-list-title"><div><h2>Situación de tus pedidos</h2><p className="muted">Selecciona un pedido para consultar o registrar sus pagos.</p></div><span className="subtle-badge">{orders.length} {orders.length === 1 ? 'PEDIDO' : 'PEDIDOS'}</span></div>
-    {orders.length === 0 ? <section className="panel payment-empty-state"><span><Wallet size={30} /></span><h2>Aún no tienes pedidos</h2><p>Cuando conviertas una cotización aceptada en pedido, podrás registrar aquí el dinero recibido.</p></section> : <section className="payment-order-list">{orders.map(order => {
+    {orders.length > 0 && <label className="quote-search-field payment-search-field"><Search size={18} aria-hidden="true" /><input type="search" aria-label="Buscar pagos" placeholder="Buscar cliente, pedido, producto o pago" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} />{searchQuery && <button type="button" aria-label="Limpiar búsqueda" title="Limpiar búsqueda" onClick={() => setSearchQuery('')}><X size={17} /></button>}</label>}
+    <div className="payment-list-title"><div><h2>Situación de tus pedidos</h2><p className="muted">Selecciona un pedido para consultar o registrar sus pagos.</p></div><span className="subtle-badge">{hasActiveSearch ? `${visibleOrders.length} ${visibleOrders.length === 1 ? 'resultado' : 'resultados'}` : `${orders.length} ${orders.length === 1 ? 'PEDIDO' : 'PEDIDOS'}`}</span></div>
+    {orders.length === 0 ? <section className="panel payment-empty-state"><span><Wallet size={30} /></span><h2>Aún no tienes pedidos</h2><p>Cuando conviertas una cotización aceptada en pedido, podrás registrar aquí el dinero recibido.</p></section> : visibleOrders.length === 0 ? <section className="panel quote-search-empty payment-search-empty"><span><Wallet size={30} /></span><h2>No encontramos coincidencias</h2><p>Prueba con otro cliente, pedido, producto o número de pago.</p><button type="button" className="secondary-button" onClick={() => setSearchQuery('')}>Limpiar búsqueda</button></section> : <section className="payment-order-list">{visibleOrders.map(order => {
       const summary = summarizePayments(order, payments)
       return <button className="payment-order-card" type="button" key={order.id} onClick={() => openOrder(order)}>
         <div className="payment-order-top"><span className="quote-number">{order.order_number}</span><span className={'status-badge payment-finance-' + summary.financialStatus.replaceAll(' ', '-').toLowerCase()}>{summary.financialStatus}</span></div>

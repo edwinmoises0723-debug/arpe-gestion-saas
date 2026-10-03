@@ -4,3 +4,4 @@
 .order-payment-link{display:inline-flex;margin-top:14px;min-height:42px;align-items:center;justify-content:center}.order-deposit-shortfall,.order-cancelled-money{margin:12px 0 0;padding:10px 12px;border-radius:9px;background:#fff2dc;color:#785d2e;font-size:.72rem;line-height:1.5}.order-cancelled-money{background:#f8e9e5;color:#88574c}
 .payment-sensitive-help{display:block;margin:-3px 0 3px;color:#7e8879;font-size:.63rem;line-height:1.45}
 .payment-record-actions{display:flex;align-items:center;gap:12px}.payment-record-actions a{color:#416a4e;font-size:.68rem;font-weight:700;text-decoration:none}.payment-record-actions a:hover{text-decoration:underline}.payment-success-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:16px}.payment-success-actions>*{width:100%;justify-content:center}
+.payment-search-field{margin:0 0 1rem;background:#fffefa}.payment-search-empty{margin-top:0}

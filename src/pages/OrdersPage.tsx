@@ -1,6 +1,6 @@
 import { summarizeOrderProducts } from '../lib/products'
-import { useEffect, useState } from 'react'
-import { ArrowLeft, CalendarDays, Check, ChevronRight, CircleAlert, ClipboardList, Clock3, FileText, RotateCcw, UserRound } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { ArrowLeft, CalendarDays, Check, ChevronRight, CircleAlert, ClipboardList, Clock3, FileText, RotateCcw, Search, UserRound, X } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import type { Business, Order, OrderDeliveryHistory, OrderStatus, Payment } from '../lib/database.types'
 import { orderStatuses, listOrderDeliveryHistory, listOrders, rescheduleOrderDelivery, updateOrderStatus } from '../lib/orders'
@@ -9,6 +9,7 @@ import { formatCurrency } from '../lib/quotes'
 import { errorMessage } from '../lib/supabase'
 import { Loading, Notice } from '../components/Feedback'
 import { deliveryTimeFromParts, deliveryTimeToParts, formatDeliveryTime, type DeliveryTimeParts } from '../lib/delivery-time'
+import { searchOrders } from '../lib/order-payment-search'
 
 const statusLabel = (status: OrderStatus) => orderStatuses.find(option => option.value === status)?.label ?? status
 const deliveryDate = (value: string | null) => value ? new Intl.DateTimeFormat('es', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(value + 'T12:00:00')) : 'Por definir'
@@ -22,6 +23,7 @@ export function OrdersPage({ business }: { business: Business }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
   const [pendingStatus, setPendingStatus] = useState<OrderStatus | null>(null)
   const [busy, setBusy] = useState(false)
   const [rescheduleOpen, setRescheduleOpen] = useState(false)
@@ -31,6 +33,8 @@ export function OrdersPage({ business }: { business: Business }) {
   const activeOrder = selected ?? orders.find(order => order.id === params.get('order')) ?? null
   const activeOrderId = activeOrder?.id
   const deliveryHistory = activeOrder && deliveryHistoryState?.orderId === activeOrder.id ? deliveryHistoryState.rows : []
+  const visibleOrders = useMemo(() => searchOrders(orders, searchQuery), [orders, searchQuery])
+  const hasActiveSearch = searchQuery.trim().length > 0
 
   useEffect(() => {
     let active = true
@@ -104,7 +108,7 @@ export function OrdersPage({ business }: { business: Business }) {
     </div>
   }
 
-  return <div className="orders-page"><div className="page-heading"><div><span className="eyebrow accent">TU ESPACIO DE TRABAJO</span><h1>Pedidos<span className="heading-dot">.</span></h1><p className="muted">Dale seguimiento a los trabajos confirmados de tu negocio.</p></div></div>{error && <Notice error>{error}</Notice>}{notice && <div className="quote-notice"><Check size={17} /> {notice}</div>}{orders.length === 0 ? <section className="panel quote-empty"><span className="empty-quote-icon"><ClipboardList size={35} /></span><span className="subtle-badge">PEDIDOS DE TU NEGOCIO</span><h2>Tus pedidos aparecerán aquí</h2><p>Cuando una cotización sea aceptada, podrás convertirla en pedido y darle seguimiento desde este espacio.</p><Link to="/cotizar" className="primary">Ir a Cotizaciones <ChevronRight size={17} /></Link></section> : <section className="orders-list" aria-label="Listado de pedidos">{orders.map(order => {
+  return <div className="orders-page"><div className="page-heading"><div><span className="eyebrow accent">TU ESPACIO DE TRABAJO</span><h1>Pedidos<span className="heading-dot">.</span></h1><p className="muted">Dale seguimiento a los trabajos confirmados de tu negocio.</p></div></div>{error && <Notice error>{error}</Notice>}{notice && <div className="quote-notice"><Check size={17} /> {notice}</div>}{orders.length > 0 && <div className="order-search-tools"><label className="quote-search-field"><Search size={18} aria-hidden="true" /><input type="search" aria-label="Buscar pedidos" placeholder="Buscar cliente, pedido o producto" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} />{searchQuery && <button type="button" aria-label="Limpiar búsqueda" title="Limpiar búsqueda" onClick={() => setSearchQuery('')}><X size={17} /></button>}</label>{hasActiveSearch && <p className="order-search-count" role="status">{visibleOrders.length} {visibleOrders.length === 1 ? 'resultado' : 'resultados'}</p>}</div>}{orders.length === 0 ? <section className="panel quote-empty"><span className="empty-quote-icon"><ClipboardList size={35} /></span><span className="subtle-badge">PEDIDOS DE TU NEGOCIO</span><h2>Tus pedidos aparecerán aquí</h2><p>Cuando una cotización sea aceptada, podrás convertirla en pedido y darle seguimiento desde este espacio.</p><Link to="/cotizar" className="primary">Ir a Cotizaciones <ChevronRight size={17} /></Link></section> : visibleOrders.length === 0 ? <section className="panel quote-search-empty"><span className="empty-quote-icon"><ClipboardList size={28} /></span><h2>No encontramos pedidos</h2><p>Prueba con otro cliente, número de pedido o producto.</p><button type="button" className="secondary-button" onClick={() => setSearchQuery('')}>Limpiar búsqueda</button></section> : <section className="orders-list" aria-label="Listado de pedidos">{visibleOrders.map(order => {
     const summary = summarizePayments(order, payments)
     return <button type="button" className="order-list-card" key={order.id} onClick={() => openOrder(order)}><div className="order-card-top"><span className="quote-number">{order.order_number}</span><span className={'status-badge order-status status-' + order.status}>{statusLabel(order.status)}</span></div><div className="order-card-main"><div><h2>{order.customer_name}</h2><p>{summarizeOrderProducts(order.items ?? [], order.product)}</p></div><strong>{formatCurrency(Number(order.total_amount), business)}</strong></div><div className="order-card-bottom"><span>Pagado {formatCurrency(summary.totalPaid, business)}</span><span>Saldo {formatCurrency(summary.realBalance, business)}</span><span>{summary.financialStatus}</span><span>Origen: {order.source_quote_number}</span><span><CalendarDays size={14} /> {deliveryDate(order.delivery_date)}</span><span><Clock3 size={14} /> {formatDeliveryTime(order.delivery_time)}</span></div></button>
   })}</section>}</div>
