@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Order, OrderItem, Payment } from './database.types'
 import {
   buildCollectionSeries, buildPaymentMethodSummary, buildProductRanking, buildProfitabilitySummary,
-  buildReportCsv, buildReportSummary, buildOrderStatusSummary, filterOrdersByRange, filterPaymentsByRange,
+  buildReportCsv, buildReportSummary, buildOrderStatusSummary, createReportCsvBlob, filterOrdersByRange, filterPaymentsByRange,
   getReportRange, isValidReportRange,
 } from './reports'
 
@@ -37,7 +37,7 @@ function parseCsvRows(text: string) {
   let row: string[] = []
   let cell = ''
   let quoted = false
-  const source = text.replace(/^\uFEFFsep=;\r?\n/, '')
+  const source = text.replace(/^sep=;\r?\n/, '')
   for (let index = 0; index < source.length; index += 1) {
     const character = source[index]
     if (quoted && character === '"' && source[index + 1] === '"') { cell += '"'; index += 1 }
@@ -103,7 +103,8 @@ describe('reports helpers', () => {
   })
   it('genera CSV UTF-8 compatible con Excel en español, escapado y con importes intactos', () => {
     const csv = buildReportCsv([order({ customer_name: 'Cliente "Especial"; Norte', status: 'in_preparation' })], [payment()])
-    expect(csv.startsWith('\uFEFFsep=;\r\n')).toBe(true)
+    expect(csv.startsWith('sep=;\r\n')).toBe(true)
+    expect(csv).not.toContain('\uFEFF')
     const rows = parseCsvRows(csv)
     expect(rows[0]).toEqual(['Pedido', 'Cliente', 'Fecha creación', 'Fecha entrega', 'Productos', 'Estado', 'Total', 'Pagado', 'Saldo'])
     expect(rows).toHaveLength(2)
@@ -115,9 +116,18 @@ describe('reports helpers', () => {
   })
 
   it('conserva acentos y protege saltos de línea en campos CSV', () => {
-    const csv = buildReportCsv([order({ customer_name: 'María RAMÍREZ\nNorte' })], [payment()])
-    expect(csv).toContain('María RAMÍREZ')
-    expect(csv).toContain('"María RAMÍREZ\nNorte"')
-    expect(parseCsvRows(csv)[1]).toHaveLength(9)
+    const csv = buildReportCsv([order({ customer_name: 'MARÍA GÓMEZ\nNorte' })], [payment()])
+    const row = parseCsvRows(csv)[1]
+    expect(row[1]).toBe('MARÍA GÓMEZ\nNorte')
+    expect(csv).toContain('MARÍA GÓMEZ')
+    expect(csv).toContain('"MARÍA GÓMEZ\nNorte"')
+    expect(row).toHaveLength(9)
+  })
+
+  it('antepone el BOM UTF-8 como los bytes EF BB BF en el Blob descargable', async () => {
+    const blob = createReportCsvBlob('sep=;\r\nPedido;Cliente')
+    const bytes = new Uint8Array(await blob.slice(0, 3).arrayBuffer())
+    expect([...bytes]).toEqual([0xEF, 0xBB, 0xBF])
+    expect(blob.type).toBe('text/csv;charset=utf-8;')
   })
 })

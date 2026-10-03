@@ -211,5 +211,10 @@ export function buildReportCsv(orders: Order[], payments: Payment[]) {
     const products = order.items?.length ? order.items.map(item => item.product).join(' + ') : order.product
     return [order.order_number, order.customer_name, createdLabel, deliveryLabel, products, status, Number(order.total_amount).toFixed(2), summary.totalPaid.toFixed(2), summary.realBalance.toFixed(2)]
   })
-  return `\uFEFFsep=;\r\n${[header, ...rows].map(row => row.map(csvCell).join(';')).join('\r\n')}`
+  return `sep=;\r\n${[header, ...rows].map(row => row.map(csvCell).join(';')).join('\r\n')}`
+}
+
+export function createReportCsvBlob(csv: string) {
+  const utf8Bom = new Uint8Array([0xEF, 0xBB, 0xBF])
+  return new Blob([utf8Bom, csv], { type: 'text/csv;charset=utf-8;' })
 }
