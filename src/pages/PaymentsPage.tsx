@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, Banknote, Check, CircleAlert, Clock3, CreditCard, ReceiptText, Wallet } from 'lucide-react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Loading, Notice } from '../components/Feedback'
 import type { Business, Order, Payment, PaymentMethod } from '../lib/database.types'
 import { listOrders } from '../lib/orders'
@@ -28,6 +28,7 @@ function paymentError(error: unknown, business: Business) {
 }
 
 export function PaymentsPage({ business }: { business: Business }) {
+  const navigate = useNavigate()
   const [orders, setOrders] = useState<Order[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
   const [loading, setLoading] = useState(true)
@@ -130,10 +131,10 @@ export function PaymentsPage({ business }: { business: Business }) {
         {selectedPayments.length === 0 ? <div className="payment-empty-history"><span><Wallet size={22} /></span><strong>Aún no hay pagos registrados</strong><p>El anticipo requerido no se considera pagado hasta registrar el dinero recibido.</p></div> : <div className="payment-record-list">{selectedPayments.map(payment => <article className={'payment-record' + (payment.status === 'voided' ? ' is-voided' : '')} key={payment.id}>
           <div className="payment-record-main"><div><span className="quote-number">{payment.payment_number}</span><p><Clock3 size={14} /> {moneyDate(payment.paid_at)}</p></div><strong>{formatCurrency(Number(payment.amount), business)}</strong></div>
           <div className="payment-record-meta"><span>{methodName(payment.method)}</span>{payment.reference && <span>Referencia: {payment.reference}</span>}{payment.notes && <span>Observación: {payment.notes}</span>}</div>
-          <div className="payment-record-footer"><span className={'status-badge payment-record-status payment-status-' + payment.status}>{payment.status === 'posted' ? 'Registrado' : 'Anulado'}</span>{payment.status === 'voided' ? <p>Motivo: {payment.void_reason}</p> : <button className="text-button payment-void-button" onClick={() => { setVoiding(payment); setVoidReason(''); setVoidError('') }}>Anular pago</button>}</div>
+          <div className="payment-record-footer"><span className={'status-badge payment-record-status payment-status-' + payment.status}>{payment.status === 'posted' ? 'Registrado' : 'Anulado'}</span>{payment.status === 'voided' && <p>Motivo: {payment.void_reason}</p>}<div className="payment-record-actions"><Link className="text-button" aria-label={`Ver comprobante ${payment.payment_number}`} to={`/documento/pago/${payment.id}`}>Ver comprobante</Link>{payment.status === 'posted' && <button className="text-button payment-void-button" onClick={() => { setVoiding(payment); setVoidReason(''); setVoidError('') }}>Anular pago</button>}</div></div>
         </article>)}</div>}
       </section>
-      {registerOpen && <RegisterPaymentDialog order={selectedOrder} business={business} currentPayments={payments} onClose={closeRegister} onConfirm={submitPayment} />}
+      {registerOpen && <RegisterPaymentDialog order={selectedOrder} business={business} currentPayments={payments} onClose={closeRegister} onViewReceipt={payment => navigate(`/documento/pago/${payment.id}`)} onConfirm={submitPayment} />}
       {voiding && <div className="modal-backdrop" role="presentation"><section className="confirm-modal payment-void-modal" role="alertdialog" aria-modal="true" aria-labelledby="void-payment-title">
         <span className="delete-icon"><CircleAlert size={21} /></span><h2 id="void-payment-title">Anular pago</h2>
         <p>Este pago dejará de contar como dinero recibido y el saldo del pedido será recalculado.</p>
@@ -161,11 +162,12 @@ export function PaymentsPage({ business }: { business: Business }) {
   </div>
 }
 
-function RegisterPaymentDialog({ order, business, currentPayments, onClose, onConfirm }: {
+function RegisterPaymentDialog({ order, business, currentPayments, onClose, onViewReceipt, onConfirm }: {
   order: Order
   business: Business
   currentPayments: Payment[]
   onClose: () => void
+  onViewReceipt: (payment: Payment) => void
   onConfirm: (input: { amount: number; method: PaymentMethod; reference: string; notes: string; paidAt: string }) => Promise<Payment>
 }) {
   const currentSummary = summarizePayments(order, currentPayments)
@@ -196,7 +198,7 @@ function RegisterPaymentDialog({ order, business, currentPayments, onClose, onCo
     {saved ? <>
       <span className="payment-success-icon"><Check size={23} /></span><span className="eyebrow accent">PAGO REGISTRADO CORRECTAMENTE</span><h2 id="payment-entry-title">{saved.payment_number}</h2>
       <dl className="payment-success-summary"><div><dt>Pago recibido</dt><dd>{formatCurrency(Number(saved.amount), business)}</dd></div><div><dt>Total pagado</dt><dd>{formatCurrency(summaryAfter?.totalPaid ?? 0, business)}</dd></div><div><dt>Nuevo saldo</dt><dd>{formatCurrency(summaryAfter?.realBalance ?? 0, business)}</dd></div></dl>
-      <button className="primary" onClick={onClose}>Listo</button>
+      <div className="payment-success-actions"><button className="secondary-button" onClick={() => onViewReceipt(saved)}>Ver comprobante</button><button className="primary" onClick={onClose}>Listo</button></div>
     </> : confirming ? <>
       <span className="payment-confirm-icon"><CircleAlert size={22} /></span><h2 id="payment-entry-title">Confirmar pago</h2>
       <p>Registrarás <strong>{formatCurrency(inputAmount, business)}</strong> recibidos de <strong>{order.customer_name}</strong> para <strong>{order.order_number}</strong> mediante <strong>{methodName(method)}</strong>.</p>

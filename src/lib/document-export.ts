@@ -75,10 +75,14 @@ export function downloadBlob(blob: Blob, filename: string) {
 }
 
 export async function createDocumentPng(element: HTMLElement, model: ClientDocumentModel): Promise<File> {
+  return createPngFile(element, getDocumentFilename(model, 'png'))
+}
+
+export async function createPngFile(element: HTMLElement, filename: string): Promise<File> {
   const { canvas, wrapper } = await renderDocumentCanvas(element)
   try {
     const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('No pudimos crear la imagen.')), 'image/png'))
-    return new File([blob], getDocumentFilename(model, 'png'), { type: 'image/png' })
+    return new File([blob], filename, { type: 'image/png' })
   } finally {
     canvas.width = 0
     canvas.height = 0
@@ -92,6 +96,10 @@ export async function saveDocumentPng(element: HTMLElement, model: ClientDocumen
 }
 
 export async function saveDocumentPdf(element: HTMLElement, model: ClientDocumentModel) {
+  return savePdfFile(element, getDocumentFilename(model, 'pdf'))
+}
+
+export async function savePdfFile(element: HTMLElement, filename: string, singlePage = false) {
   const { jsPDF } = await import('jspdf')
   const { canvas, clone, wrapper } = await renderDocumentCanvas(element)
   try {
@@ -107,7 +115,9 @@ export async function saveDocumentPdf(element: HTMLElement, model: ClientDocumen
       .filter(position => position > 0 && position < canvas.height)
       .sort((a, b) => a - b)
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true })
-    const pages = planDocumentPages(canvas.width, canvas.height, safeCuts, contentHeightMm)
+    const pages = singlePage
+      ? [{ startPx: 0, endPx: canvas.height, fitToPage: true }]
+      : planDocumentPages(canvas.width, canvas.height, safeCuts, contentHeightMm)
 
     pages.forEach(({ startPx, endPx, fitToPage }, pageIndex) => {
       const sliceHeight = Math.max(1, Math.ceil(endPx - startPx))
@@ -130,7 +140,7 @@ export async function saveDocumentPdf(element: HTMLElement, model: ClientDocumen
       pageCanvas.height = 0
     })
 
-    pdf.save(getDocumentFilename(model, 'pdf'))
+    pdf.save(filename)
   } finally {
     canvas.width = 0
     canvas.height = 0

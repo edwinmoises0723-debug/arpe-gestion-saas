@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 import { inflateSync } from 'node:zlib'
-import type { Business, CatalogProduct, Quote, QuoteBundleHeader, QuoteBundleItem, QuoteItem } from '../src/lib/database.types'
+import type { Business, CatalogProduct, Payment, Quote, QuoteBundleHeader, QuoteBundleItem, QuoteItem } from '../src/lib/database.types'
 
 // Browser-only integration fixtures. Every Supabase request is intercepted, including writes.
 const business: Business = { id: '22222222-2222-4222-8222-222222222222', owner_id: '11111111-1111-4111-8111-111111111111', name: 'Negocio local de prueba', logo_path: null, slogan: '', description: '', whatsapp: '', email: '', address: '', currency: 'NIO', created_at: '', updated_at: '' }
@@ -13,6 +13,8 @@ async function backend(page: Page, seed = 0) {
   let items: QuoteItem[] = seed ? [{ ...baseQuote, id: 'item-1', quote_id: baseQuote.id, catalog_product_id: catalog.id, position: 1, quantity: 1, unit_label: 'pastel', unit_price: 2000, line_total: 2000 }] : []
   let products = [{ ...catalog }]
   let bundle: QuoteBundleItem[] = []
+  let payments: Payment[] = []
+  const paymentOrder = { ...baseQuote, id: 'order-1', quote_id: baseQuote.id, order_number: 'ARPE-PED-2026-0003', source_quote_number: baseQuote.quote_number, total_amount: 1800, deposit_required: 900, status: 'confirmed' as const, internal_cost_total: 999, estimated_profit: 801, real_margin_percent: 44.5 }
   if (seed === 3) {
     items = ['Pastel de Chocolate Premium', 'Tres Leches', 'Alfajores'].map((product, index) => ({ ...items[0], id: `item-${index}`, position: index + 1, product, quantity: index === 2 ? 24 : 1, unit_label: 'unidad', unit_price: [2000, 850, 35][index], line_total: [2000, 850, 840][index] }))
     quote = { ...baseQuote, total_amount: 3840, deposit_required: 1920, delivery_customer_charge: 150 }
@@ -33,7 +35,20 @@ async function backend(page: Page, seed = 0) {
     else if (table === 'arpe_quote_item_costs') response = bundle.flatMap((item, index) => item.cost ? [{ ...item.cost, quote_item_id: items[index].id }] : [])
     else if (table === 'arpe_quote_item_cost_items') response = bundle.flatMap((item, index) => item.direct_costs.map(d => ({ ...d, quote_item_id: items[index].id })))
     else if (table === 'arpe_orders' && seed === 3) response = [{ ...quote, id: 'order-1', quote_id: baseQuote.id, order_number: 'ARPE-PED-2026-0001', source_quote_number: baseQuote.quote_number, status: 'confirmed', internal_cost_total: 999, estimated_profit: 2841, real_margin_percent: 73.98 }]
+    else if (table === 'arpe_orders' && seed === 4) response = [paymentOrder]
     else if (table === 'arpe_order_items' && seed === 3) response = items.map(item => ({ ...item, order_id: 'order-1', source_quote_item_id: item.id, internal_cost_total: 333, estimated_profit: 100, real_margin_percent: 30 }))
+    else if (table === 'arpe_order_items' && seed === 4) response = []
+    else if (table === 'arpe_payments' && seed === 4) response = payments
+    else if (table === 'arpe_register_payment' && seed === 4) {
+      const input = request.postDataJSON() as { p_order_id: string; p_request_id: string; p_amount: number; p_method: Payment['method']; p_reference: string; p_notes: string; p_paid_at: string }
+      const created: Payment = { id: 'payment-new', business_id: business.id, order_id: input.p_order_id, payment_number: 'ARPE-PAG-2026-0001', request_id: input.p_request_id, amount: input.p_amount, method: input.p_method, reference: input.p_reference, notes: input.p_notes, paid_at: input.p_paid_at, status: 'posted', created_at: '2026-10-02T18:00:00Z', updated_at: '2026-10-02T18:00:00Z', voided_at: null, void_reason: null }
+      payments = [...payments, created]
+      response = [created]
+    } else if (table === 'arpe_void_payment' && seed === 4) {
+      const input = request.postDataJSON() as { p_payment_id: string; p_void_reason: string }
+      payments = payments.map(payment => payment.id === input.p_payment_id ? { ...payment, status: 'voided', voided_at: '2026-10-02T19:00:00Z', void_reason: input.p_void_reason } : payment)
+      response = [payments.find(payment => payment.id === input.p_payment_id)]
+    }
     else if (table === 'arpe_save_quote_bundle') {
       const input = request.postDataJSON() as { p_header: QuoteBundleHeader; p_items: QuoteBundleItem[] }
       bundle = structuredClone(input.p_items)
@@ -41,7 +56,7 @@ async function backend(page: Page, seed = 0) {
       const total = items.reduce((sum, i) => sum + i.line_total, 0) + input.p_header.delivery_customer_charge
       quote = { ...baseQuote, ...input.p_header, product: items[0].product, total_amount: total, deposit_required: input.p_header.deposit_type === 'percentage' ? total * input.p_header.deposit_value / 100 : input.p_header.deposit_value }
       response = [quote]
-    } else if (!['arpe_orders', 'arpe_order_items', 'arpe_payments', 'arpe_order_delivery_history'].includes(table ?? '')) return route.fulfill({ status: 500, body: `Unexpected mock request: ${table}` })
+    } else if (!['arpe_orders', 'arpe_order_items', 'arpe_payments', 'arpe_order_delivery_history', 'arpe_register_payment', 'arpe_void_payment'].includes(table ?? '')) return route.fulfill({ status: 500, body: `Unexpected mock request: ${table}` })
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(response) })
   })
   await page.goto('/')
@@ -181,5 +196,84 @@ test('three products stay independent in order details, documents and multipage 
     expect(await document.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
     await page.emulateMedia({ media: 'screen' })
     await page.getByRole('button', { name: 'Volver al documento', exact: true }).click()
+  }
+})
+
+test('payment history opens posted and voided receipts with exports and thermal layouts', async ({ page }) => {
+  test.setTimeout(120000)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await backend(page, 4)
+  await page.goto('/pagos?order=order-1')
+  await expect(page.getByRole('heading', { name: 'ARPE-PED-2026-0003' })).toBeVisible()
+  await page.getByRole('button', { name: 'Registrar pago' }).click()
+  await page.getByLabel(/Monto recibido/).fill('500')
+  await page.getByRole('button', { name: 'Continuar' }).click()
+  await page.getByRole('button', { name: 'Confirmar pago' }).click()
+  await expect(page.getByText('PAGO REGISTRADO CORRECTAMENTE')).toBeVisible()
+  await expect(page.locator('.payment-success-summary')).toContainText('C$ 500,00')
+  await page.getByRole('button', { name: 'Ver comprobante' }).click()
+
+  const receipt = page.locator('.payment-receipt')
+  await expect(receipt).toHaveAttribute('aria-label', 'Comprobante de pago')
+  await expect(receipt).toContainText('ARPE-PAG-2026-0001')
+  await expect(receipt).toContainText('Monto recibido')
+  await expect(receipt).toContainText('Pagado acumulado al emitir')
+  await expect(receipt).toContainText('Saldo después de este pago')
+  await expect(receipt).toContainText('C$ 1300,00')
+  await expect(receipt).toContainText('Este comprobante acredita únicamente el pago indicado. No constituye factura fiscal.')
+  await expect(receipt).not.toContainText('Costo real')
+  await expect(receipt).not.toContainText('Ganancia estimada')
+
+  const pngPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Guardar imagen' }).click()
+  const png = await pngPromise
+  await png.saveAs('test-results/payment-receipt.png')
+  expect((await readFile(await png.path())).subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a')
+  const pdfPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Descargar PDF' }).click()
+  const pdfDownload = await pdfPromise
+  await pdfDownload.saveAs('test-results/payment-receipt.pdf')
+  const pdf = (await readFile(await pdfDownload.path())).toString('latin1')
+  expect(pdf.match(/\/Type \/Page\b/g)).toHaveLength(1)
+
+  for (const format of ['Térmica 80 mm', 'Térmica 58 mm']) {
+    await page.getByRole('button', { name: 'Imprimir', exact: true }).click()
+    await page.getByRole('radio', { name: new RegExp(format) }).check()
+    await page.getByRole('button', { name: 'Vista previa de impresión', exact: true }).click()
+    await expect(receipt).toContainText('ARPE-PAG-2026-0001')
+    expect(await receipt.locator('.payment-receipt-number').first().evaluate(el => getComputedStyle(el).whiteSpace)).toBe('nowrap')
+    await page.getByRole('button', { name: 'Volver al comprobante' }).click()
+  }
+
+  await page.getByRole('link', { name: 'Volver a Pagos' }).click()
+  await expect(page.getByRole('link', { name: 'Ver comprobante ARPE-PAG-2026-0001' })).toBeVisible()
+  await page.getByRole('button', { name: 'Anular pago' }).click()
+  await page.getByLabel('Motivo de anulación').fill('Registro duplicado de prueba')
+  await page.getByRole('button', { name: 'Confirmar anulación' }).click()
+  await expect(page.locator('.payment-record-status')).toHaveText('Anulado')
+  await page.getByRole('link', { name: 'Ver comprobante ARPE-PAG-2026-0001' }).click()
+  const voidReceipt = page.locator('.payment-receipt')
+  await expect(voidReceipt).toHaveAttribute('aria-label', 'Comprobante de pago anulado')
+  await expect(voidReceipt).toContainText('COMPROBANTE ANULADO')
+  await expect(voidReceipt).toContainText('Monto original')
+  await expect(voidReceipt).toContainText('Saldo después de este pago')
+  await expect(voidReceipt).toContainText('Saldo actual después de la anulación')
+  await expect(voidReceipt).toContainText('Este pago ya no cuenta como dinero recibido.')
+  await expect(voidReceipt).toContainText('C$ 1800,00')
+  const voidPngPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Guardar imagen' }).click()
+  const voidPng = await voidPngPromise
+  await voidPng.saveAs('test-results/payment-receipt-voided.png')
+  expect((await readFile(await voidPng.path())).subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a')
+  const voidPdfPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Descargar PDF' }).click()
+  const voidPdf = await voidPdfPromise
+  expect((await readFile(await voidPdf.path())).toString('latin1').match(/\/Type \/Page\b/g)).toHaveLength(1)
+  for (const format of ['Térmica 80 mm', 'Térmica 58 mm']) {
+    await page.getByRole('button', { name: 'Imprimir', exact: true }).click()
+    await page.getByRole('radio', { name: new RegExp(format) }).check()
+    await page.getByRole('button', { name: 'Vista previa de impresión', exact: true }).click()
+    await expect(voidReceipt).toContainText('COMPROBANTE ANULADO')
+    await page.getByRole('button', { name: 'Volver al comprobante' }).click()
   }
 })
