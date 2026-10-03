@@ -214,7 +214,16 @@ export function buildReportCsv(orders: Order[], payments: Payment[]) {
   return `sep=;\r\n${[header, ...rows].map(row => row.map(csvCell).join(';')).join('\r\n')}`
 }
 
-export function createReportCsvBlob(csv: string) {
-  const utf8Bom = new Uint8Array([0xEF, 0xBB, 0xBF])
-  return new Blob([utf8Bom, csv], { type: 'text/csv;charset=utf-8;' })
+export function encodeUtf16Le(text: string): Uint8Array<ArrayBuffer> {
+  const buffer = new Uint8Array(2 + text.length * 2)
+  buffer[0] = 0xFF
+  buffer[1] = 0xFE
+
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index)
+    buffer[2 + index * 2] = code & 0xFF
+    buffer[3 + index * 2] = code >> 8
+  }
+
+  return buffer
 }

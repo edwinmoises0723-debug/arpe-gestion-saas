@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Order, OrderItem, Payment } from './database.types'
 import {
   buildCollectionSeries, buildPaymentMethodSummary, buildProductRanking, buildProfitabilitySummary,
-  buildReportCsv, buildReportSummary, buildOrderStatusSummary, createReportCsvBlob, filterOrdersByRange, filterPaymentsByRange,
+  buildReportCsv, buildReportSummary, buildOrderStatusSummary, encodeUtf16Le, filterOrdersByRange, filterPaymentsByRange,
   getReportRange, isValidReportRange,
 } from './reports'
 
@@ -101,7 +101,7 @@ describe('reports helpers', () => {
     const series = buildCollectionSeries([payment(), payment({ id: 'void', status: 'voided', amount: 999 })], { startDate: '2026-10-10', endDate: '2026-10-11' })
     expect(series).toEqual([{ date: '2026-10-10', amount: 250 }, { date: '2026-10-11', amount: 0 }])
   })
-  it('genera CSV UTF-8 compatible con Excel en español, escapado y con importes intactos', () => {
+  it('genera CSV compatible con Excel en español, escapado y con importes intactos', () => {
     const csv = buildReportCsv([order({ customer_name: 'Cliente "Especial"; Norte', status: 'in_preparation' })], [payment()])
     expect(csv.startsWith('sep=;\r\n')).toBe(true)
     expect(csv).not.toContain('\uFEFF')
@@ -124,10 +124,26 @@ describe('reports helpers', () => {
     expect(row).toHaveLength(9)
   })
 
-  it('antepone el BOM UTF-8 como los bytes EF BB BF en el Blob descargable', async () => {
-    const blob = createReportCsvBlob('sep=;\r\nPedido;Cliente')
-    const bytes = new Uint8Array(await blob.slice(0, 3).arrayBuffer())
-    expect([...bytes]).toEqual([0xEF, 0xBB, 0xBF])
-    expect(blob.type).toBe('text/csv;charset=utf-8;')
+  it('codifica el CSV como UTF-16 LE con BOM FF FE y conserva acentos', () => {
+    const text = 'sep=;\r\nCliente;Total\r\nMARÍA GÓMEZ;1000.00\r\nCARLOS RAMÍREZ;250.00'
+    const encoded = encodeUtf16Le(text)
+
+    expect([...encoded.slice(0, 2)]).toEqual([0xFF, 0xFE])
+    expect(new TextDecoder('utf-16le').decode(encoded.slice(2))).toBe(text)
+    expect([...encodeUtf16Le('MARÍA GÓMEZ').slice(8, 10)]).toEqual([0xCD, 0x00])
+    expect(new TextDecoder('utf-16le').decode(encodeUtf16Le('RAMÍREZ').slice(2))).toBe('RAMÍREZ')
+  })
+
+  it('mantiene sep=;, las columnas, los importes y los productos multiproducto', () => {
+    const csv = buildReportCsv([order({
+      items: [item('item-1', 'Alfajor', 1, 400), item('item-2', 'Tres Leches', 1, 600)],
+    })], [payment()])
+    const rows = parseCsvRows(csv)
+
+    expect(csv.startsWith('sep=;\r\n')).toBe(true)
+    expect(csv).not.toContain('\uFEFF')
+    expect(rows[0]).toEqual(['Pedido', 'Cliente', 'Fecha creación', 'Fecha entrega', 'Productos', 'Estado', 'Total', 'Pagado', 'Saldo'])
+    expect(rows[1][4]).toBe('Alfajor + Tres Leches')
+    expect(rows[1].slice(6)).toEqual(['1000.00', '250.00', '750.00'])
   })
 })

@@ -10,7 +10,7 @@ import { agendaDateKey, localCalendarDate } from '../lib/agenda'
 import { errorMessage } from '../lib/supabase'
 import { Loading, Notice } from '../components/Feedback'
 import {
-  buildReportCsv, buildReportSummary, createReportCsvBlob, formatReportRange, getReportRange,
+  buildReportCsv, buildReportSummary, encodeUtf16Le, formatReportRange, getReportRange,
   type ReportPeriod,
 } from '../lib/reports'
 
@@ -26,7 +26,9 @@ const timestampLabel = (value: string) => {
 }
 
 function downloadCsv(csv: string, filename: string) {
-  const url = URL.createObjectURL(createReportCsvBlob(csv))
+  const encoded = encodeUtf16Le(csv)
+  const blob = new Blob([encoded], { type: 'text/csv;charset=utf-16le;' })
+  const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
   anchor.download = filename
