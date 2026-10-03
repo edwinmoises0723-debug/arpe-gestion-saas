@@ -32,6 +32,24 @@ const payment = (overrides: Partial<Payment> = {}): Payment => ({
 
 const range = { startDate: '2026-10-01', endDate: '2026-10-31' }
 
+function parseCsvRows(text: string) {
+  const rows: string[][] = []
+  let row: string[] = []
+  let cell = ''
+  let quoted = false
+  const source = text.replace(/^\uFEFFsep=;\r?\n/, '')
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index]
+    if (quoted && character === '"' && source[index + 1] === '"') { cell += '"'; index += 1 }
+    else if (character === '"') quoted = !quoted
+    else if (character === ';' && !quoted) { row.push(cell); cell = '' }
+    else if (character === '\n' && !quoted) { row.push(cell.replace(/\r$/, '')); rows.push(row); row = []; cell = '' }
+    else cell += character
+  }
+  if (cell || row.length) { row.push(cell.replace(/\r$/, '')); rows.push(row) }
+  return rows
+}
+
 describe('reports helpers', () => {
   it('incluye ventas de pedidos no cancelados y excluye cancelados', () => {
     const report = buildReportSummary([order(), order({ id: 'cancelled', status: 'cancelled', total_amount: 500 })], [], range, '2026-10-15')
@@ -83,10 +101,23 @@ describe('reports helpers', () => {
     const series = buildCollectionSeries([payment(), payment({ id: 'void', status: 'voided', amount: 999 })], { startDate: '2026-10-10', endDate: '2026-10-11' })
     expect(series).toEqual([{ date: '2026-10-10', amount: 250 }, { date: '2026-10-11', amount: 0 }])
   })
-  it('escapa datos CSV y no incluye identificadores internos', () => {
-    const csv = buildReportCsv([order({ customer_name: 'María, "M" Ramírez' })], [payment()])
-    expect(csv).toContain('"María, ""M"" Ramírez"')
+  it('genera CSV UTF-8 compatible con Excel en español, escapado y con importes intactos', () => {
+    const csv = buildReportCsv([order({ customer_name: 'Cliente "Especial"; Norte', status: 'in_preparation' })], [payment()])
+    expect(csv.startsWith('\uFEFFsep=;\r\n')).toBe(true)
+    const rows = parseCsvRows(csv)
+    expect(rows[0]).toEqual(['Pedido', 'Cliente', 'Fecha creación', 'Fecha entrega', 'Productos', 'Estado', 'Total', 'Pagado', 'Saldo'])
+    expect(rows).toHaveLength(2)
+    expect(rows[1]).toHaveLength(9)
+    expect(csv).toContain('"Cliente ""Especial""; Norte"')
+    expect(csv).toContain('En preparación')
+    expect(rows[1].slice(6)).toEqual(['1000.00', '250.00', '750.00'])
     expect(csv).not.toContain('business-1')
-    expect(csv).toContain('\uFEFFPedido,Cliente')
+  })
+
+  it('conserva acentos y protege saltos de línea en campos CSV', () => {
+    const csv = buildReportCsv([order({ customer_name: 'María RAMÍREZ\nNorte' })], [payment()])
+    expect(csv).toContain('María RAMÍREZ')
+    expect(csv).toContain('"María RAMÍREZ\nNorte"')
+    expect(parseCsvRows(csv)[1]).toHaveLength(9)
   })
 })

@@ -197,7 +197,7 @@ export function formatReportRange(range: ReportRange) {
 
 function csvCell(value: string | number) {
   const text = String(value)
-  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+  return /[;"\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
 }
 
 export function buildReportCsv(orders: Order[], payments: Payment[]) {
@@ -211,5 +211,5 @@ export function buildReportCsv(orders: Order[], payments: Payment[]) {
     const products = order.items?.length ? order.items.map(item => item.product).join(' + ') : order.product
     return [order.order_number, order.customer_name, createdLabel, deliveryLabel, products, status, Number(order.total_amount).toFixed(2), summary.totalPaid.toFixed(2), summary.realBalance.toFixed(2)]
   })
-  return `\uFEFF${[header, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n')}`
+  return `\uFEFFsep=;\r\n${[header, ...rows].map(row => row.map(csvCell).join(';')).join('\r\n')}`
 }
