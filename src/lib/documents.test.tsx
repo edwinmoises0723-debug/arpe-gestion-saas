@@ -7,6 +7,9 @@ import { createOrderDocumentModel, createQuoteDocumentModel, createWhatsAppMessa
 const business: Business = {
   id: 'business-1', owner_id: 'owner-1', name: 'Dulce Hogar', logo_path: null, slogan: 'Hecho con cariño',
   description: '', whatsapp: '+505 8888-1234', email: 'hola@example.com', address: 'Managua', currency: 'NIO',
+  default_deposit_type: 'percentage', default_deposit_value: 50, default_document_format: 'a4',
+  show_slogan_on_documents: true, show_description_on_documents: true, show_whatsapp_on_documents: true,
+  show_email_on_documents: true, show_address_on_documents: true, document_footer_message: 'Gracias por confiar en nosotros.',
   created_at: '2026-01-01T10:00:00Z', updated_at: '2026-01-01T10:00:00Z',
 }
 
@@ -82,6 +85,34 @@ describe('customer documents', () => {
     expect(html).toContain('5:00 p. m.')
     expect(html).not.toMatch(/Costo real|Costo interno|Ganancia estimada|Merma|Margen real|Gastos indirectos|950|850|47\.22/)
     expect(Object.keys(model.order)).not.toContain('estimated_profit')
+  })
+
+  it('applies customer document visibility preferences without blank rows', () => {
+    const configuredBusiness = { ...business, description: 'Repostería artesanal', slogan: 'Hecho con cariño', whatsapp: '+505 8888-1234', email: 'hola@example.com', address: '', show_slogan_on_documents: true, show_description_on_documents: true, show_whatsapp_on_documents: true, show_email_on_documents: false, show_address_on_documents: true }
+    const html = renderToStaticMarkup(<ClientDocument model={createQuoteDocumentModel(configuredBusiness, quote)} formatAmount={formatAmount} />)
+
+    expect(html).toContain('Hecho con cariño')
+    expect(html).toContain('Repostería artesanal')
+    expect(html).toContain('+505 8888-1234')
+    expect(html).not.toContain('hola@example.com')
+    expect(html).not.toContain('Managua')
+
+    const hiddenBusiness = { ...configuredBusiness, show_slogan_on_documents: false, show_description_on_documents: false, show_whatsapp_on_documents: false }
+    const hiddenHtml = renderToStaticMarkup(<ClientDocument model={createQuoteDocumentModel(hiddenBusiness, quote)} formatAmount={formatAmount} />)
+    expect(hiddenHtml).not.toContain('Hecho con cariño')
+    expect(hiddenHtml).not.toContain('Repostería artesanal')
+    expect(hiddenHtml).not.toContain('+505 8888-1234')
+    expect(hiddenHtml).not.toContain('document-contact-list')
+  })
+
+  it('uses the configured footer and always keeps the system credit', () => {
+    const customBusiness = { ...business, document_footer_message: 'Con cariño, Dulce Hogar' }
+    const html = renderToStaticMarkup(<ClientDocument model={createQuoteDocumentModel(customBusiness, quote)} formatAmount={formatAmount} />)
+    expect(html).toContain('Con cariño, Dulce Hogar')
+    expect(html).toContain('Sistema diseñado por Ing. Edwin Nicaragua')
+    expect(html).toContain('Generado con ARPE Gestión SaaS')
+    const emptyFooter = renderToStaticMarkup(<ClientDocument model={createQuoteDocumentModel({ ...customBusiness, document_footer_message: '' }, quote)} formatAmount={formatAmount} />)
+    expect(emptyFooter).not.toContain('document-thanks')
   })
 
   it('shows the complete-payment callout and the canceled state clearly', () => {

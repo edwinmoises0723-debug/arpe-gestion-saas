@@ -19,7 +19,7 @@ export function PaymentReceipt({ model, formatAmount, printFormat = 'a4', docume
     <header className="document-business-header" data-document-section="brand">
       <div className="document-brand-row">
         {model.business.logoDataUrl && !logoFailed && <img className="document-business-logo" src={model.business.logoDataUrl} alt={`Logo de ${model.business.name}`} onError={() => setLogoFailed(true)} />}
-        <div className="document-business-name"><h1>{model.business.name}</h1>{model.business.slogan.trim() && <p className="document-slogan">{model.business.slogan}</p>}</div>
+        <div className="document-business-name"><h1>{model.business.name}</h1>{model.business.show_slogan_on_documents && model.business.slogan.trim() && <p className="document-slogan">{model.business.slogan}</p>}{model.business.show_description_on_documents && model.business.description.trim() && <p className="document-business-description">{model.business.description}</p>}</div>
       </div>
     </header>
 
@@ -87,12 +87,12 @@ export function PaymentReceipt({ model, formatAmount, printFormat = 'a4', docume
     </section>}
 
     <footer className="document-footer payment-receipt-footer" data-document-section="footer">
-      <p className="document-thanks">Gracias por tu pago.</p>
-      <address className="document-contact-list">
-        {model.business.whatsapp.trim() && <span>WhatsApp: {model.business.whatsapp}</span>}
-        {model.business.email.trim() && <span>{model.business.email}</span>}
-        {model.business.address.trim() && <span>{model.business.address}</span>}
-      </address>
+      {model.business.document_footer_message.trim() && <p className="document-thanks">{model.business.document_footer_message}</p>}
+      {(model.business.show_whatsapp_on_documents && model.business.whatsapp.trim() || model.business.show_email_on_documents && model.business.email.trim() || model.business.show_address_on_documents && model.business.address.trim()) && <address className="document-contact-list">
+        {model.business.show_whatsapp_on_documents && model.business.whatsapp.trim() && <span>WhatsApp: {model.business.whatsapp}</span>}
+        {model.business.show_email_on_documents && model.business.email.trim() && <span>{model.business.email}</span>}
+        {model.business.show_address_on_documents && model.business.address.trim() && <span>{model.business.address}</span>}
+      </address>}
       <p className="payment-receipt-legal">Este comprobante acredita únicamente el pago indicado. No constituye factura fiscal.</p>
       <div className="document-credit"><span>Generado con ARPE Gestión SaaS</span><span>Sistema diseñado por Ing. Edwin Nicaragua</span></div>
     </footer>

@@ -1,4 +1,4 @@
-import type { Business, QuoteInput, QuoteStatus } from './database.types'
+import type { Business, Quote, QuoteInput, QuoteStatus } from './database.types'
 import { groupQuoteItemsByQuote, listQuoteItemsForBusiness } from './products'
 import { client } from './supabase'
 
@@ -8,6 +8,12 @@ export const quoteStatuses: { value: QuoteStatus; label: string }[] = [
   { value: 'accepted', label: 'Aceptada' },
   { value: 'rejected', label: 'Rechazada' },
 ]
+
+export function getInitialQuoteDeposit(business: Business, quote: Pick<Quote, 'deposit_type' | 'deposit_value'> | null) {
+  return quote
+    ? { deposit_type: quote.deposit_type, deposit_value: Number(quote.deposit_value) }
+    : { deposit_type: business.default_deposit_type, deposit_value: Number(business.default_deposit_value) }
+}
 
 export function calculateDeposit(total: number, type: QuoteInput['deposit_type'], value: number) {
   const safeTotal = Number.isFinite(total) ? Math.max(0, total) : 0

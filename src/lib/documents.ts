@@ -3,7 +3,11 @@ import { summarizePayments } from './payments'
 import { formatDeliveryTime } from './delivery-time'
 import { localCalendarDate } from './agenda'
 
-export type ClientBusiness = Pick<Business, 'name' | 'slogan' | 'description' | 'whatsapp' | 'email' | 'address'> & { logoDataUrl: string | null }
+export type ClientBusiness = Pick<Business,
+  'name' | 'slogan' | 'description' | 'whatsapp' | 'email' | 'address' |
+  'show_slogan_on_documents' | 'show_description_on_documents' | 'show_whatsapp_on_documents' |
+  'show_email_on_documents' | 'show_address_on_documents' | 'document_footer_message'
+> & { logoDataUrl: string | null }
 
 export type ClientQuote = Pick<Quote,
   'quote_number' | 'created_at' | 'customer_name' | 'customer_phone' | 'product' | 'portions' | 'flavor' | 'filling' | 'decoration' | 'extras' | 'delivery_date' | 'delivery_time' | 'notes' | 'total_amount' | 'deposit_required' | 'status'
@@ -47,6 +51,12 @@ function clientBusiness(business: Business, logoDataUrl: string | null): ClientB
     whatsapp: business.whatsapp,
     email: business.email,
     address: business.address,
+    show_slogan_on_documents: business.show_slogan_on_documents,
+    show_description_on_documents: business.show_description_on_documents,
+    show_whatsapp_on_documents: business.show_whatsapp_on_documents,
+    show_email_on_documents: business.show_email_on_documents,
+    show_address_on_documents: business.show_address_on_documents,
+    document_footer_message: business.document_footer_message,
     logoDataUrl,
   }
 }

@@ -2,8 +2,9 @@ import { useState, type Ref } from 'react'
 import { formatDeliveryTime } from '../../lib/delivery-time'
 import { productsSubtotal } from '../../lib/products'
 import { formatClientDate, formatCreatedDate, type ClientDocumentModel } from '../../lib/documents'
+import type { DocumentPrintFormat } from '../../lib/document-format'
 
-export type DocumentPrintFormat = 'a4' | 'thermal-80' | 'thermal-58'
+export type { DocumentPrintFormat } from '../../lib/document-format'
 
 const quoteStatusLabels = { draft: 'Borrador', sent: 'Enviada', accepted: 'Aceptada', rejected: 'Rechazada' } as const
 const orderStatusLabels = { confirmed: 'Confirmado', in_preparation: 'En preparación', ready: 'Listo', delivered: 'Entregado', cancelled: 'Cancelado' } as const
@@ -20,7 +21,7 @@ export function ClientDocument({ model, formatAmount, printFormat = 'a4', docume
     <header className="document-business-header" data-document-section="brand">
       <div className="document-brand-row">
         {model.business.logoDataUrl && !logoFailed && <img className="document-business-logo" src={model.business.logoDataUrl} alt={`Logo de ${model.business.name}`} onError={() => setLogoFailed(true)} />}
-        <div className="document-business-name"><h1>{model.business.name}</h1>{model.business.slogan.trim() && <p className="document-slogan">{model.business.slogan}</p>}{model.business.description.trim() && <p className="document-business-description">{model.business.description}</p>}</div>
+        <div className="document-business-name"><h1>{model.business.name}</h1>{model.business.show_slogan_on_documents && model.business.slogan.trim() && <p className="document-slogan">{model.business.slogan}</p>}{model.business.show_description_on_documents && model.business.description.trim() && <p className="document-business-description">{model.business.description}</p>}</div>
       </div>
       <div className="document-title-row">
         <div><span className="document-kicker">{isQuote ? 'PROPUESTA COMERCIAL' : 'DETALLE DE TU ENCARGO'}</span><h2>{isQuote ? 'Cotización' : 'Confirmación de pedido'}</h2></div>
@@ -89,12 +90,12 @@ export function ClientDocument({ model, formatAmount, printFormat = 'a4', docume
     </section>
 
     <footer className="document-footer" data-document-section="contact">
-      <p className="document-thanks">{isQuote ? 'Gracias por permitirnos preparar esta propuesta.' : 'Gracias por confiar en nosotros para este momento especial.'}</p>
-      {(model.business.whatsapp.trim() || model.business.email.trim() || model.business.address.trim()) && <address className="document-contact-list">
-        {model.business.whatsapp.trim() && <span>WhatsApp: {model.business.whatsapp}</span>}
-        {model.business.email.trim() && <span>{model.business.email}</span>}
-        {model.business.address.trim() && <span>{model.business.address}</span>}
+      {(model.business.show_whatsapp_on_documents && model.business.whatsapp.trim() || model.business.show_email_on_documents && model.business.email.trim() || model.business.show_address_on_documents && model.business.address.trim()) && <address className="document-contact-list">
+        {model.business.show_whatsapp_on_documents && model.business.whatsapp.trim() && <span>WhatsApp: {model.business.whatsapp}</span>}
+        {model.business.show_email_on_documents && model.business.email.trim() && <span>{model.business.email}</span>}
+        {model.business.show_address_on_documents && model.business.address.trim() && <span>{model.business.address}</span>}
       </address>}
+      {model.business.document_footer_message.trim() && <p className="document-thanks">{model.business.document_footer_message}</p>}
       <div className="document-credit"><span>Generado con ARPE Gestión SaaS</span><span>Sistema diseñado por Ing. Edwin Nicaragua</span></div>
     </footer>
   </article>

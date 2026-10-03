@@ -1,4 +1,5 @@
 export type Currency = 'NIO' | 'USD' | 'EUR' | 'CRC'
+export type BusinessDocumentFormat = 'a4' | 'thermal80' | 'thermal58'
 export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'rejected'
 export type DepositType = 'percentage' | 'fixed'
 export type CostItemCategory = 'packaging' | 'topper' | 'decoration' | 'supplies' | 'other'
@@ -17,11 +18,25 @@ export type Business = {
   email: string
   address: string
   currency: Currency
+  default_deposit_type: DepositType
+  default_deposit_value: number
+  default_document_format: BusinessDocumentFormat
+  show_slogan_on_documents: boolean
+  show_description_on_documents: boolean
+  show_whatsapp_on_documents: boolean
+  show_email_on_documents: boolean
+  show_address_on_documents: boolean
+  document_footer_message: string
   created_at: string
   updated_at: string
 }
 
 export type BusinessInput = Pick<Business, 'name' | 'slogan' | 'description' | 'whatsapp' | 'email' | 'address' | 'currency'>
+export type BusinessPreferencesInput = Pick<Business,
+  'default_deposit_type' | 'default_deposit_value' | 'default_document_format' |
+  'show_slogan_on_documents' | 'show_description_on_documents' | 'show_whatsapp_on_documents' |
+  'show_email_on_documents' | 'show_address_on_documents' | 'document_footer_message'
+>
 
 export type Quote = {
   delivery_internal_cost: number
@@ -208,7 +223,7 @@ export type Database = {
       arpe_businesses: {
         Row: Business
         Insert: BusinessInput & { owner_id: string; id?: string; logo_path?: string | null }
-        Update: Partial<BusinessInput & { logo_path: string | null }>
+        Update: Partial<BusinessInput & BusinessPreferencesInput & { logo_path: string | null }>
         Relationships: []
       }
       arpe_quotes: {

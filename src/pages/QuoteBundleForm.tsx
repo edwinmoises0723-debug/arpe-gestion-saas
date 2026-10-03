@@ -3,14 +3,14 @@ import { ArrowLeft, Copy, Plus, Save, Trash2 } from 'lucide-react'
 import type { Business, CatalogProduct, Quote, QuoteBundleHeader, QuoteBundleItem } from '../lib/database.types'
 import { defaultCostSettings, getCostSettings } from '../lib/costs'
 import { calculateBundle, duplicateProduct, fromCatalog, lineTotal, listCatalog, loadQuoteBundle, newItemCost, newProduct, removeProduct, saveQuoteBundle } from '../lib/products'
-import { formatCurrency, quoteStatuses } from '../lib/quotes'
+import { formatCurrency, getInitialQuoteDeposit, quoteStatuses } from '../lib/quotes'
 import { errorMessage } from '../lib/supabase'
 import { deliveryTimeFromParts, deliveryTimeToParts } from '../lib/delivery-time'
 import { Loading, Notice } from '../components/Feedback'
 import { ItemCostAssistant } from '../components/ItemCostAssistant'
 
 export function QuoteForm({ business, quote, onSaved, onCancel }: { business: Business; quote: Quote | null; onSaved: (quote: Quote) => void; onCancel: () => void }) {
-  const [header, setHeader] = useState<QuoteBundleHeader>(() => ({ customer_name: quote?.customer_name ?? '', customer_phone: quote?.customer_phone ?? '', delivery_date: quote?.delivery_date ?? null, delivery_time: quote?.delivery_time ?? null, notes: quote?.notes ?? '', deposit_type: quote?.deposit_type ?? 'percentage', deposit_value: quote?.deposit_value ?? 0, status: quote?.status ?? 'draft', delivery_internal_cost: quote?.delivery_internal_cost ?? 0, delivery_customer_charge: quote?.delivery_customer_charge ?? 0 }))
+  const [header, setHeader] = useState<QuoteBundleHeader>(() => ({ customer_name: quote?.customer_name ?? '', customer_phone: quote?.customer_phone ?? '', delivery_date: quote?.delivery_date ?? null, delivery_time: quote?.delivery_time ?? null, notes: quote?.notes ?? '', ...getInitialQuoteDeposit(business, quote), status: quote?.status ?? 'draft', delivery_internal_cost: quote?.delivery_internal_cost ?? 0, delivery_customer_charge: quote?.delivery_customer_charge ?? 0 }))
   const [items, setItems] = useState(() => [{ key: crypto.randomUUID(), value: newProduct() }])
   const [catalog, setCatalog] = useState<CatalogProduct[]>([])
   const [settings, setSettings] = useState(defaultCostSettings)

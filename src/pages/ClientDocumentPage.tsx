@@ -4,8 +4,9 @@ import { Link, useParams } from 'react-router-dom'
 import { Loading, Notice } from '../components/Feedback'
 import { ClientDocument, type DocumentPrintFormat } from '../components/documents/ClientDocument'
 import { DocumentActions } from '../components/documents/DocumentActions'
-import { LOGO_BUCKET } from '../lib/business'
-import type { Business } from '../lib/database.types'
+import { LOGO_BUCKET, MAX_LOGO_SIZE } from '../lib/business'
+import type { Business, BusinessDocumentFormat } from '../lib/database.types'
+import { getInitialDocumentPrintFormat } from '../lib/document-format'
 import { listOrders } from '../lib/orders'
 import { listPayments } from '../lib/payments'
 import { listQuotes, formatCurrency } from '../lib/quotes'
@@ -15,12 +16,12 @@ import { createOrderDocumentModel, createQuoteDocumentModel, type ClientDocument
 type DocumentType = 'quote' | 'order'
 type LoadedDocument = { key: string; model?: ClientDocumentModel; error?: string }
 
-function initialPrintFormat(): DocumentPrintFormat {
+function initialPrintFormat(defaultFormat: BusinessDocumentFormat): DocumentPrintFormat {
+  let saved: string | null = null
   try {
-    const saved = sessionStorage.getItem('arpe-document-print-format')
-    if (saved === 'thermal-80' || saved === 'thermal-58') return saved
+    saved = sessionStorage.getItem('arpe-document-print-format')
   } catch { /* La preferencia es opcional. */ }
-  return 'a4'
+  return getInitialDocumentPrintFormat(defaultFormat, saved)
 }
 
 async function loadLogoDataUrl(path: string | null): Promise<string | null> {
@@ -31,7 +32,7 @@ async function loadLogoDataUrl(path: string | null): Promise<string | null> {
     const response = await fetch(data.signedUrl, { mode: 'cors' })
     if (!response.ok) return null
     const blob = await response.blob()
-    if (!blob.type.startsWith('image/') || blob.size === 0 || blob.size > 2 * 1024 * 1024) return null
+    if (!blob.type.startsWith('image/') || blob.size === 0 || blob.size > MAX_LOGO_SIZE) return null
     return await new Promise(resolve => {
       const reader = new FileReader()
       reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : null)
@@ -47,7 +48,7 @@ export function ClientDocumentPage({ business, type }: { business: Business; typ
   const { id = '' } = useParams()
   const [retry, setRetry] = useState(0)
   const [loaded, setLoaded] = useState<LoadedDocument | null>(null)
-  const [printFormat, setPrintFormat] = useState<DocumentPrintFormat>(initialPrintFormat)
+  const [printFormat, setPrintFormat] = useState<DocumentPrintFormat>(() => initialPrintFormat(business.default_document_format))
   const documentRef = useRef<HTMLElement>(null)
   const key = `${business.id}:${type}:${id}`
 

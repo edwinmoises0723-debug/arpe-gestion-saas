@@ -23,6 +23,23 @@
 @media(max-width:359px){.auth-panel{padding:24px 16px 0}.main-content{padding:24px 14px 0}.app-header{padding:12px 14px}.header-business{display:none}.bottom-nav a{font-size:.6rem}.welcome-banner{padding:24px 20px}.welcome-banner h2{font-size:1.65rem}.modules-section>.panel-heading{flex-direction:column;gap:10px}.onboarding>header{padding:20px 14px}.onboarding>main{padding:14px}.panel{padding:19px}.logo-upload{gap:10px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
+/* Preferences stay easy to scan on mobile and comfortable to edit. */
+.business-preferences-form{margin-top:18px}
+.business-preferences-form fieldset{border:0;padding:0;margin:0;display:grid;gap:18px;min-width:0}
+.business-preferences-form .field-hint{margin-top:13px;line-height:1.55}
+.business-preference-switch{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.business-preference-switch>span{display:grid;gap:4px;min-width:0}
+.business-preference-switch strong{font-size:.8rem;color:#273d35}
+.business-preference-switch small{font-size:.7rem;line-height:1.45;color:var(--muted)}
+.business-preference-switch input{appearance:none;position:relative;flex:0 0 50px;width:50px;height:29px;margin:0;border:1px solid #aab49f;border-radius:20px;background:#e8ebe3;cursor:pointer;transition:background .15s,border-color .15s}
+.business-preference-switch input::after{content:"";position:absolute;left:3px;top:3px;width:21px;height:21px;border-radius:50%;background:white;box-shadow:0 1px 3px #1d352533;transition:transform .15s}
+.business-preference-switch input:checked{background:var(--green);border-color:var(--green)}
+.business-preference-switch input:checked::after{transform:translateX(21px)}
+.business-preference-switch input:focus-visible{outline:3px solid #af873a;outline-offset:3px}
+.preference-deposit-input{position:relative;display:block}
+.preference-deposit-input input{padding-right:48px}
+.preference-deposit-input>span{position:absolute;right:14px;top:50%;transform:translateY(-50%);color:#74846a;font-size:.82rem;font-weight:650;pointer-events:none}
+
 /* Contrast remains readable on the warm surfaces and dark welcome panel. */
 :root{--muted:#59665e}
 .auth-story{color:#fff8e8}

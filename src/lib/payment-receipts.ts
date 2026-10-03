@@ -7,9 +7,16 @@ export type PaymentReceiptModel = {
   business: {
     name: string
     slogan: string
+    description: string
     whatsapp: string
     email: string
     address: string
+    show_slogan_on_documents: boolean
+    show_description_on_documents: boolean
+    show_whatsapp_on_documents: boolean
+    show_email_on_documents: boolean
+    show_address_on_documents: boolean
+    document_footer_message: string
     logoDataUrl: string | null
   }
   payment: Pick<Payment, 'payment_number' | 'amount' | 'method' | 'reference' | 'notes' | 'paid_at' | 'status' | 'voided_at' | 'void_reason'>
@@ -57,9 +64,16 @@ export function createPaymentReceiptModel(
     business: {
       name: business.name,
       slogan: business.slogan,
+      description: business.description,
       whatsapp: business.whatsapp,
       email: business.email,
       address: business.address,
+      show_slogan_on_documents: business.show_slogan_on_documents,
+      show_description_on_documents: business.show_description_on_documents,
+      show_whatsapp_on_documents: business.show_whatsapp_on_documents,
+      show_email_on_documents: business.show_email_on_documents,
+      show_address_on_documents: business.show_address_on_documents,
+      document_footer_message: business.document_footer_message,
       logoDataUrl,
     },
     payment: {
