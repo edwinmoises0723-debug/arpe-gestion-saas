@@ -14,7 +14,7 @@
 .client-document { --document-ink: #27352d; --document-muted: #68746b; --document-line: #e7e9e1; --document-accent: #53775c; box-sizing: border-box; width: min(794px, 100%); padding: clamp(1.25rem, 5vw, 3.1rem); overflow-wrap: break-word; word-break: normal; color: var(--document-ink); background: #fff; border-radius: .45rem; box-shadow: 0 16px 48px #252b2018; font-family: 'DM Sans', sans-serif; font-size: 14px; line-height: 1.5; }
 .client-document *, .client-document *::before, .client-document *::after { box-sizing: border-box; }
 .document-brand-row { display: flex; align-items: center; gap: 1rem; min-height: 72px; }
-.document-business-logo { flex: 0 0 auto; width: 72px; height: 72px; border-radius: 1rem; object-fit: contain; }
+.document-business-logo { flex: 0 0 auto; width: 90px; height: 90px; border-radius: 1rem; object-fit: contain; }
 .document-business-name { min-width: 0; }
 .document-business-name h1 { margin: 0; color: var(--document-ink); font-family: Manrope, sans-serif; font-size: clamp(1.35rem, 5vw, 1.85rem); line-height: 1.15; }
 .document-slogan, .document-business-description { margin: .35rem 0 0; color: var(--document-muted); }
@@ -82,7 +82,8 @@
 .client-document.document-format-thermal-80 { width: 80mm; max-width: 100%; padding: 7mm 6mm; border-radius: 0; box-shadow: 0 10px 32px #252b2018; font-size: 11px; }
 .client-document.document-format-thermal-58 { width: 58mm; max-width: 100%; padding: 5mm 4mm; border-radius: 0; box-shadow: 0 10px 32px #252b2018; font-size: 10px; }
 .document-format-thermal-80 .document-brand-row, .document-format-thermal-58 .document-brand-row { display: grid; justify-items: center; text-align: center; }
-.document-format-thermal-80 .document-business-logo, .document-format-thermal-58 .document-business-logo { width: 48px; height: 48px; border-radius: .5rem; }
+.document-format-thermal-80 .document-business-logo { width: 64px; height: 64px; border-radius: .5rem; }
+.document-format-thermal-58 .document-business-logo { width: 54px; height: 54px; border-radius: .5rem; }
 .document-format-thermal-80 .document-title-row, .document-format-thermal-58 .document-title-row { align-items: flex-start; flex-direction: column; gap: .5rem; margin-top: 1rem; }
 .document-format-thermal-80 .document-number, .document-format-thermal-58 .document-number { text-align: left; }
 .document-format-thermal-80 .document-section, .document-format-thermal-58 .document-section { margin-top: 1rem; }

@@ -9,11 +9,11 @@ export const currencies: { code: Currency; symbol: string; name: string }[] = [
 ]
 export const emptyBusiness: BusinessInput = { name: '', slogan: '', description: '', whatsapp: '', email: '', address: '', currency: 'NIO' }
 export const LOGO_BUCKET = 'arpe-business-logos'
-export const MAX_LOGO_SIZE = 5 * 1024 * 1024
+export const MAX_LOGO_SIZE = 10 * 1024 * 1024
 
 export function validateLogo(file: File) {
   if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) throw new Error('Selecciona una imagen PNG, JPG o WebP.')
-  if (file.size > MAX_LOGO_SIZE) throw new Error('El logo debe pesar como máximo 5 MB.')
+  if (file.size > MAX_LOGO_SIZE) throw new Error('El logo debe pesar como máximo 10 MB.')
 }
 
 export function businessPreferencesPayload(input: BusinessPreferencesInput): BusinessPreferencesInput {

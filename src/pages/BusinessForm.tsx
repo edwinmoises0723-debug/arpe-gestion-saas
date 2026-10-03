@@ -33,7 +33,7 @@ export function BusinessForm({ business, ownerId, onSaved }: { business: Busines
           <div><label className="upload-button"><ImagePlus size={16} /> {logo || business?.logo_path && !removeLogo ? 'Cambiar logo' : 'Subir logo'}<input ref={fileInput} type="file" aria-label="Logo del negocio" accept="image/png,image/jpeg,image/webp" onChange={e => {
             const file = e.target.files?.[0]; if (!file) return
             try { validateLogo(file); setLogo(file); setPreview(URL.createObjectURL(file)); setRemoveLogo(false); setError(''); setSaved(false) } catch (err) { setError(errorMessage(err)); e.target.value = '' }
-          }} /></label><small>PNG, JPG o WebP · Máximo 5 MB</small>
+          }} /></label><small>PNG, JPG o WebP · Máximo 10 MB</small>
           {(logo || business?.logo_path && !removeLogo) && <button type="button" className="text-button" onClick={() => { setLogo(null); setPreview(''); setRemoveLogo(true); setSaved(false); if (fileInput.current) fileInput.current.value = '' }}>Quitar logo</button>}</div>
         </div>
         <label>Nombre del negocio <span className="required">*</span><input required maxLength={100} autoComplete="organization" placeholder="Ej. Dulce Encanto" value={values.name} onChange={e => field('name', e.target.value)} /></label>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { businessPreferencesPayload, currencies, validateBusinessPreferences, validateLogo } from './business'
+import { businessPreferencesPayload, currencies, MAX_LOGO_SIZE, validateBusinessPreferences, validateLogo } from './business'
 import type { BusinessPreferencesInput } from './database.types'
 
 const preferences: BusinessPreferencesInput = {
@@ -13,10 +13,12 @@ describe('business assets and currencies', () => {
   it('supports the four initial currencies with explicit symbols', () => {
     expect(currencies.map(({ code, symbol }) => [code, symbol])).toEqual([['NIO', 'C$'], ['USD', '$'], ['EUR', '€'], ['CRC', '₡']])
   })
-  it('accepts a logo up to 5 MB and rejects larger files or unsupported MIME types', () => {
+  it('accepts logos up to 10 MB in PNG, JPG, and WebP and rejects larger or unsupported files', () => {
     expect(() => validateLogo(new File(['<svg/>'], 'logo.svg', { type: 'image/svg+xml' }))).toThrow('PNG, JPG o WebP')
-    expect(() => validateLogo(new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'logo.png', { type: 'image/png' }))).toThrow('5 MB')
-    expect(() => validateLogo(new File([new Uint8Array(5 * 1024 * 1024)], 'logo.png', { type: 'image/png' }))).not.toThrow()
+    expect(() => validateLogo(new File([new Uint8Array(MAX_LOGO_SIZE - 1)], 'logo.png', { type: 'image/png' }))).not.toThrow()
+    expect(() => validateLogo(new File([new Uint8Array(MAX_LOGO_SIZE)], 'logo.jpg', { type: 'image/jpeg' }))).not.toThrow()
+    expect(() => validateLogo(new File([new Uint8Array(MAX_LOGO_SIZE)], 'logo.webp', { type: 'image/webp' }))).not.toThrow()
+    expect(() => validateLogo(new File([new Uint8Array(MAX_LOGO_SIZE + 1)], 'logo.png', { type: 'image/png' }))).toThrow('10 MB')
     expect(() => validateLogo(new File(['image'], 'logo.webp', { type: 'image/webp' }))).not.toThrow()
   })
 
