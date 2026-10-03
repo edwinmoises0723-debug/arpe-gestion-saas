@@ -39,8 +39,7 @@ alter table public.arpe_quotes
 -- NULL explicitly means unknown legacy breakdown, never a known zero.
 alter table public.arpe_orders
   add column delivery_internal_cost numeric(12,2) check (delivery_internal_cost >= 0 and delivery_internal_cost < 10000000000),
-  add column delivery_customer_charge numeric(12,2) check (delivery_customer_charge >= 0 and delivery_customer_charge < 10000000000),
-  add constraint arpe_orders_id_business_unique unique(id,business_id);
+  add column delivery_customer_charge numeric(12,2) check (delivery_customer_charge >= 0 and delivery_customer_charge < 10000000000);
 
 create table public.arpe_quote_items (
   id uuid primary key default gen_random_uuid(), business_id uuid not null,
