@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { chromium } from '@playwright/test'
 const browser = await chromium.launch({ channel: process.platform === 'win32' ? 'msedge' : undefined })
 try {
@@ -7,8 +9,14 @@ try {
   await page.goto('http://localhost:4173')
   await page.getByRole('heading', { name: 'Qué gusto tenerte aquí' }).waitFor()
   const manifest = await page.evaluate(async () => (await fetch('/manifest.webmanifest')).json())
+  assert.equal(manifest.name, 'EJNEXA Business')
+  assert.equal(manifest.short_name, 'EJNEXA')
+  assert.equal(manifest.description, 'Gestión inteligente para negocios.')
+  assert.equal(manifest.theme_color, '#0A2D6B')
+  assert.equal(manifest.background_color, '#FBF7F1')
   assert.equal(manifest.display, 'standalone')
-  assert.equal(manifest.icons.length, 3)
+  const expectedIcons = ['icon-192.png', 'icon-512.png', 'maskable-512.png'].filter(name => existsSync(join(process.cwd(), 'public', 'brand/ejnexa', name)))
+  assert.deepEqual(manifest.icons.map(icon => icon.src), expectedIcons.map(name => `/brand/ejnexa/${name}`))
   await page.evaluate(async () => { await navigator.serviceWorker.ready })
   await page.reload()
   await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller))
@@ -25,5 +33,5 @@ try {
     return urls
   })
   assert(!cachedUrls.some(url => url.includes('supabase.co')), 'Private API responses must not be cached')
-  console.log('PASS: installable manifest, registered service worker, offline shell, offline notice, no Supabase data cached.')
+  console.log('PASS: EJNEXA manifest, registered service worker, offline shell, offline notice, no Supabase data cached.')
 } finally { await browser.close() }

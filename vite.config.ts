@@ -1,20 +1,35 @@
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+
+const officialBrandAssets = [
+  'brand/ejnexa/isotipo-3d.png',
+  'brand/ejnexa/isotipo-flat.png',
+  'brand/ejnexa/logo-light.png',
+  'brand/ejnexa/logo-dark.png',
+  'brand/ejnexa/icon-192.png',
+  'brand/ejnexa/icon-512.png',
+  'brand/ejnexa/maskable-512.png',
+  'brand/ejnexa/favicon.png',
+]
+const availableBrandAssets = officialBrandAssets.filter(asset => existsSync(join(process.cwd(), 'public', asset)))
+const officialPwaIcons = [
+  { asset: 'brand/ejnexa/icon-192.png', sizes: '192x192', type: 'image/png' },
+  { asset: 'brand/ejnexa/icon-512.png', sizes: '512x512', type: 'image/png' },
+  { asset: 'brand/ejnexa/maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+]
 
 export default defineConfig({
   plugins: [react(), VitePWA({
     registerType: 'prompt',
-    includeAssets: ['favicon.svg', 'icons/*.png'],
+    includeAssets: availableBrandAssets,
     manifest: {
-      name: 'ARPE Gestión SaaS', short_name: 'ARPE', lang: 'es',
-      description: 'Tu negocio, en armonía.', theme_color: '#304d43', background_color: '#f8f7f3',
+      name: 'EJNEXA Business', short_name: 'EJNEXA', lang: 'es',
+      description: 'Gestión inteligente para negocios.', theme_color: '#0A2D6B', background_color: '#FBF7F1',
       display: 'standalone', start_url: '/', scope: '/',
-      icons: [
-        { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-        { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
-        { src: '/icons/maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
-      ],
+      icons: officialPwaIcons.filter(icon => existsSync(join(process.cwd(), 'public', icon.asset))).map(({ asset, ...icon }) => ({ src: `/${asset}`, ...icon })),
     },
     workbox: {
       globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],

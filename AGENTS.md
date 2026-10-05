@@ -1,4 +1,4 @@
-# Guía permanente de ARPE Gestión SaaS
+# Guía permanente de EJNEXA Business
 
 ARPE se construye para personas que no necesitan conocimientos técnicos. Cada función debe ser fácil de descubrir, entender y usar, especialmente desde un teléfono.
 
@@ -6,7 +6,8 @@ ARPE se construye para personas que no necesitan conocimientos técnicos. Cada f
 - Priorizar claridad, fluidez, mínima fricción, estados vacíos útiles, feedback inmediato, jerarquía visual, coherencia y accesibilidad razonable.
 - Usar microinteracciones suaves cuando aporten valor sin perjudicar el rendimiento.
 - El Dashboard futuro debe usar datos reales del negocio y gráficos útiles, nunca decoración sin propósito.
-- Mantener visible de forma discreta: “Sistema diseñado por Ing. Edwin Nicaragua”.
+- La plataforma es EJNEXA Business, producto de EJNEXA AI Studio. Mantener al negocio cliente y su `business.name` como identidad comercial propia; no sustituirlo por la marca de la plataforma.
+- Mantener un crédito tecnológico discreto para EJNEXA Business y EJNEXA AI Studio, con reconocimiento visible al fundador Ing. Edwin Nicaragua.
 - Preservar autenticación, onboarding, configuración y seguridad existentes al añadir fases nuevas.
 - En Supabase, no usar `service_role` ni secretos en frontend; aplicar RLS por negocio y validar también en el servidor.
 - En ARPE el usuario introduce datos; el sistema realiza las matemáticas. Los módulos financieros deben explicar claramente qué representa cada valor y evitar exigir cálculos manuales al usuario.

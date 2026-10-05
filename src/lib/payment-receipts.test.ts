@@ -6,7 +6,7 @@ import type { Business, Order, Payment } from './database.types'
 import { calculatePaymentAtIssue, createPaymentReceiptModel, createPaymentReceiptWhatsAppMessage, getPaymentReceiptFilename } from './payment-receipts'
 
 const business: Business = {
-  id: 'business-1', owner_id: 'owner-1', name: 'Dulce Hogar', logo_path: null, slogan: 'Hecho con cariño',
+  id: 'business-1', owner_id: 'owner-1', name: 'ARPE Dulce Encanto', logo_path: null, slogan: 'Hecho con cariño',
   description: '', whatsapp: '+505 8888-1234', email: 'hola@example.com', address: 'Managua', currency: 'NIO',
   default_deposit_type: 'percentage', default_deposit_value: 50, default_document_format: 'a4',
   show_slogan_on_documents: true, show_description_on_documents: true, show_whatsapp_on_documents: true,
@@ -160,14 +160,14 @@ describe('payment receipt history', () => {
     expect(html).not.toContain('<dt>Teléfono</dt>')
   })
 
-  it('applies business document preferences and never hides the legal notice or system credit', () => {
+  it('keeps client business details, the EJNEXA signature and the legal notice', () => {
     const target = payment('payment-1', 500, '2026-09-02T10:00:00Z')
     const preferences = {
       ...business, slogan: 'Hecho con cariño', description: 'Repostería artesanal', document_footer_message: 'Gracias por tu compra.',
       show_slogan_on_documents: false, show_description_on_documents: true, show_whatsapp_on_documents: false,
       show_email_on_documents: true, show_address_on_documents: false,
     }
-    const model = createPaymentReceiptModel(preferences, target.id, [target], [order])
+    const model = createPaymentReceiptModel(preferences, target.id, [target], [order], 'data:image/png;base64,business-logo')
     const html = renderToStaticMarkup(createElement(PaymentReceipt, { model, formatAmount }))
     expect(html).not.toContain('Hecho con cariño')
     expect(html).toContain('Repostería artesanal')
@@ -175,7 +175,12 @@ describe('payment receipt history', () => {
     expect(html).toContain('hola@example.com')
     expect(html).not.toContain('Managua')
     expect(html).toContain('Gracias por tu compra.')
-    expect(html).toContain('Sistema diseñado por Ing. Edwin Nicaragua')
+    expect(html).toContain('ARPE Dulce Encanto')
+    expect(html).toContain('Carlos Ramírez')
+    expect(html).toContain('src="data:image/png;base64,business-logo" alt="Logo de ARPE Dulce Encanto"')
+    expect(html).toContain('Powered by EJNEXA Business')
+    expect(html).toContain('EJNEXA AI Studio · Ing. Edwin Nicaragua')
+    expect(html).toContain('<dt>Nombre</dt><dd>Carlos Ramírez</dd>')
     expect(html).toContain('Este comprobante acredita únicamente el pago indicado. No constituye factura fiscal.')
   })
 })

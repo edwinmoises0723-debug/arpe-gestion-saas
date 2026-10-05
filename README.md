@@ -1,8 +1,16 @@
-# ARPE Gestión SaaS
+# EJNEXA Business
 
-Sistema SaaS de gestión para pastelerías, reposterías y pequeños negocios.
+EJNEXA Business es un producto de EJNEXA AI Studio para la gestión de pastelerías, reposterías y pequeños negocios.
 
-Sistema diseñado por Ing. Edwin Nicaragua.
+**Fundador:** Ing. Edwin Nicaragua
+
+**Slogan corporativo:** Automatiza. Crea. Escala.
+
+**Descriptor:** AI · Automation · Digital Systems · Creative Content
+
+Los identificadores técnicos con prefijo `arpe_` se conservan por compatibilidad y no representan la marca visible actual.
+
+La identidad visual oficial se integrará desde `public/brand/ejnexa/`. Faltan los assets oficiales listados allí; no se usan imágenes sustitutas. La migración `20261003230928_business_logo_10mb.sql` está preparada en el repositorio y no se ha aplicado al Supabase remoto.
 
 ## Fase 1
 
@@ -18,8 +26,8 @@ Incluye:
 - NIO/C$, USD/$, EUR/€ y CRC/₡. Un negocio por propietario en esta fase.
 - Dashboard con perfil real del negocio y accesos a Inicio, Cotizar, Pedidos, Pagos y Agenda.
 - Los cuatro módulos avanzados muestran un estado «Próxima fase»; no crean cotizaciones, pedidos, pagos ni eventos todavía.
-- PWA con manifest, iconos PNG/maskable, instalación cuando el navegador la ofrece, aviso de actualización y apertura de la interfaz sin conexión.
-- Crédito del diseñador en las pantallas de acceso, onboarding y espacio de trabajo.
+- PWA con manifest EJNEXA, service worker, aviso de actualización y apertura de la interfaz sin conexión. Los iconos oficiales se habilitarán al incorporar los assets de marca.
+- Crédito discreto de EJNEXA Business, EJNEXA AI Studio y el fundador en las pantallas de acceso, onboarding y espacio de trabajo.
 
 ## Ejecutar localmente
 

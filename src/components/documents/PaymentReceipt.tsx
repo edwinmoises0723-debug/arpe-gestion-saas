@@ -94,7 +94,7 @@ export function PaymentReceipt({ model, formatAmount, printFormat = 'a4', docume
         {model.business.show_address_on_documents && model.business.address.trim() && <span>{model.business.address}</span>}
       </address>}
       <p className="payment-receipt-legal">Este comprobante acredita únicamente el pago indicado. No constituye factura fiscal.</p>
-      <div className="document-credit"><span>Generado con ARPE Gestión SaaS</span><span>Sistema diseñado por Ing. Edwin Nicaragua</span></div>
+      <div className="document-credit"><span>Powered by EJNEXA Business</span><span>EJNEXA AI Studio · Ing. Edwin Nicaragua</span></div>
     </footer>
   </article>
 }

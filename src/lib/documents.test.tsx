@@ -5,7 +5,7 @@ import type { Business, Order, Payment, Quote, QuoteItem, OrderItem } from './da
 import { createOrderDocumentModel, createQuoteDocumentModel, createWhatsAppMessage, createWhatsAppUrl, getDocumentFilename } from './documents'
 
 const business: Business = {
-  id: 'business-1', owner_id: 'owner-1', name: 'Dulce Hogar', logo_path: null, slogan: 'Hecho con cariño',
+  id: 'business-1', owner_id: 'owner-1', name: 'ARPE Dulce Encanto', logo_path: null, slogan: 'Hecho con cariño',
   description: '', whatsapp: '+505 8888-1234', email: 'hola@example.com', address: 'Managua', currency: 'NIO',
   default_deposit_type: 'percentage', default_deposit_value: 50, default_document_format: 'a4',
   show_slogan_on_documents: true, show_description_on_documents: true, show_whatsapp_on_documents: true,
@@ -105,12 +105,17 @@ describe('customer documents', () => {
     expect(hiddenHtml).not.toContain('document-contact-list')
   })
 
-  it('uses the configured footer and always keeps the system credit', () => {
-    const customBusiness = { ...business, document_footer_message: 'Con cariño, Dulce Hogar' }
-    const html = renderToStaticMarkup(<ClientDocument model={createQuoteDocumentModel(customBusiness, quote)} formatAmount={formatAmount} />)
-    expect(html).toContain('Con cariño, Dulce Hogar')
-    expect(html).toContain('Sistema diseñado por Ing. Edwin Nicaragua')
-    expect(html).toContain('Generado con ARPE Gestión SaaS')
+  it('keeps the client business identity and uses the EJNEXA technology signature', () => {
+    const customBusiness = { ...business, document_footer_message: 'Con cariño, ARPE Dulce Encanto' }
+    const html = renderToStaticMarkup(<ClientDocument model={createQuoteDocumentModel(customBusiness, quote, 'data:image/png;base64,business-logo')} formatAmount={formatAmount} />)
+    expect(html).toContain('ARPE Dulce Encanto')
+    expect(html).toContain('Ana Pérez')
+    expect(html).toContain('src="data:image/png;base64,business-logo" alt="Logo de ARPE Dulce Encanto"')
+    expect(html).toContain('Con cariño, ARPE Dulce Encanto')
+    expect(html).toContain('Powered by EJNEXA Business')
+    expect(html).toContain('EJNEXA AI Studio · Ing. Edwin Nicaragua')
+    expect(html).toContain('<dt>Nombre</dt><dd>Ana Pérez</dd>')
+    expect(html).not.toContain('Generado con ARPE Gestión SaaS')
     const emptyFooter = renderToStaticMarkup(<ClientDocument model={createQuoteDocumentModel({ ...customBusiness, document_footer_message: '' }, quote)} formatAmount={formatAmount} />)
     expect(emptyFooter).not.toContain('document-thanks')
   })
