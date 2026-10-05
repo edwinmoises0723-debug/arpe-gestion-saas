@@ -121,16 +121,56 @@ for (const width of [320, 360, 390, 768, 884, 1440]) {
     await mockBackend(page, true)
     await page.goto('/')
     await expect(page.getByRole('heading', { name: 'Qué gusto tenerte aquí' })).toBeVisible()
+    const authBrandSymbol = page.locator('.auth-page .brand-symbol:visible').first()
+    await expect(authBrandSymbol).toBeVisible()
+    expect(await authBrandSymbol.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await login(page)
     const header = page.locator('.app-header')
     await expect(header.locator('.header-business strong')).toHaveText('Dulce Encanto')
-    await expect(header.getByRole('link', { name: 'EJNEXA Business Inicio' })).toBeVisible()
+    const platformBrand = header.getByRole('link', { name: 'EJNEXA Business Inicio' })
+    await expect(platformBrand).toBeVisible()
+    await expect(platformBrand.locator('.brand-symbol')).toBeVisible()
+    await expect(platformBrand.getByText('EJNEXA')).toBeVisible()
+    await expect(platformBrand.getByText('BUSINESS')).toBeVisible()
+    expect(await platformBrand.locator('.brand-symbol').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0)
+    await expect(header.getByText('Sprout')).toHaveCount(0)
     await expect(header.locator('.header-business .business-logo')).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await page.screenshot({ path: `verification/dashboard-${width}.png`, fullPage: true })
   })
 }
+
+test('official platform and active business identities stay separate across modules', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await mockBackend(page, true)
+  await login(page)
+
+  for (const path of ['/', '/configuracion', '/cotizar', '/pedidos', '/pagos', '/reportes']) {
+    await page.goto(path)
+    const header = page.locator('.app-header')
+    const platformBrand = header.getByRole('link', { name: 'EJNEXA Business Inicio' })
+    await expect(platformBrand.locator('.brand-symbol')).toBeVisible()
+    await expect(header.locator('.header-business strong')).toHaveText('Dulce Encanto')
+    await expect(header.locator('.header-business .business-logo')).toBeVisible()
+    await expect(header.getByText('Sprout')).toHaveCount(0)
+    const headerBounds = await header.evaluate(element => {
+      const bounds = (selector: string) => {
+        const rect = element.querySelector(selector)!.getBoundingClientRect()
+        return { left: rect.left, right: rect.right }
+      }
+      return {
+        platform: bounds('a[aria-label="EJNEXA Business Inicio"]'),
+        business: bounds('.header-business'),
+        menu: bounds('.settings-button'),
+        viewportWidth: innerWidth,
+      }
+    })
+    expect(headerBounds.platform.right, `${path}: platform logo must fit before the business identity`).toBeLessThanOrEqual(headerBounds.business.left)
+    expect(headerBounds.business.right, `${path}: business identity must fit before the menu`).toBeLessThanOrEqual(headerBounds.menu.left)
+    expect(headerBounds.menu.right, `${path}: menu must stay inside the viewport`).toBeLessThanOrEqual(headerBounds.viewportWidth)
+  }
+})
 
 test('failed login and password recovery request', async ({ page }) => {
   await page.route('**/auth/v1/token*', route => route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ msg: 'Invalid login credentials', error_code: 'invalid_credentials' }) }))
