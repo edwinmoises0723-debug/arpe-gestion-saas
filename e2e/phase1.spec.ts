@@ -123,7 +123,7 @@ for (const width of [320, 360, 390, 768, 884, 1440]) {
     await expect(page.getByRole('heading', { name: 'Qué gusto tenerte aquí' })).toBeVisible()
     const authBrandSymbol = page.locator('.auth-page .brand-symbol:visible').first()
     await expect(authBrandSymbol).toBeVisible()
-    expect(await authBrandSymbol.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0)
+    await expect(authBrandSymbol).toHaveAttribute('viewBox', '0 0 256 256')
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await login(page)
     const header = page.locator('.app-header')
@@ -131,9 +131,9 @@ for (const width of [320, 360, 390, 768, 884, 1440]) {
     const platformBrand = header.getByRole('link', { name: 'EJNEXA Business Inicio' })
     await expect(platformBrand).toBeVisible()
     await expect(platformBrand.locator('.brand-symbol')).toBeVisible()
+    await expect(platformBrand.locator('.brand-symbol')).toHaveAttribute('viewBox', '0 0 256 256')
     await expect(platformBrand.getByText('EJNEXA')).toBeVisible()
     await expect(platformBrand.getByText('BUSINESS')).toBeVisible()
-    expect(await platformBrand.locator('.brand-symbol').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0)
     await expect(header.getByText('Sprout')).toHaveCount(0)
     await expect(header.locator('.header-business .business-logo')).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
@@ -151,6 +151,7 @@ test('official platform and active business identities stay separate across modu
     const header = page.locator('.app-header')
     const platformBrand = header.getByRole('link', { name: 'EJNEXA Business Inicio' })
     await expect(platformBrand.locator('.brand-symbol')).toBeVisible()
+    await expect(platformBrand.locator('.brand-symbol')).toHaveAttribute('viewBox', '0 0 256 256')
     await expect(header.locator('.header-business strong')).toHaveText('Dulce Encanto')
     await expect(header.locator('.header-business .business-logo')).toBeVisible()
     await expect(header.getByText('Sprout')).toHaveCount(0)
@@ -169,6 +170,49 @@ test('official platform and active business identities stay separate across modu
     expect(headerBounds.platform.right, `${path}: platform logo must fit before the business identity`).toBeLessThanOrEqual(headerBounds.business.left)
     expect(headerBounds.business.right, `${path}: business identity must fit before the menu`).toBeLessThanOrEqual(headerBounds.menu.left)
     expect(headerBounds.menu.right, `${path}: menu must stay inside the viewport`).toBeLessThanOrEqual(headerBounds.viewportWidth)
+  }
+})
+
+test('quote heading and new quote action fit mobile and desktop widths', async ({ page }) => {
+  await mockBackend(page, true)
+  await login(page)
+
+  for (const width of [320, 360, 390, 1440]) {
+    await page.setViewportSize({ width, height: 844 })
+    await page.goto('/cotizar')
+    const heading = page.locator('.quotes-page-heading')
+    const action = page.getByRole('button', { name: 'Nueva cotización' })
+    await expect(heading).toBeVisible()
+    await expect(action).toBeVisible()
+
+    const layout = await page.evaluate(() => {
+      const heading = document.querySelector('.quotes-page-heading')!
+      const intro = heading.firstElementChild!.getBoundingClientRect()
+      const action = heading.querySelector('.new-quote-button')!.getBoundingClientRect()
+      const main = document.querySelector('.main-content')!.getBoundingClientRect()
+      return {
+        scrollWidth: document.documentElement.scrollWidth,
+        viewportWidth: innerWidth,
+        direction: getComputedStyle(heading).flexDirection,
+        introBottom: intro.bottom,
+        actionTop: action.top,
+        actionLeft: action.left,
+        actionRight: action.right,
+        mainLeft: main.left,
+        mainRight: main.right,
+      }
+    })
+
+    expect(layout.scrollWidth, `Cotizar at ${width}px must not scroll horizontally`).toBeLessThanOrEqual(width)
+    expect(layout.actionLeft).toBeGreaterThanOrEqual(layout.mainLeft)
+    expect(layout.actionRight).toBeLessThanOrEqual(layout.mainRight)
+    if (width <= 459) {
+      expect(layout.direction).toBe('column')
+      expect(layout.actionTop).toBeGreaterThan(layout.introBottom)
+    } else {
+      expect(layout.direction).toBe('row')
+    }
+    if (width === 390 || width === 1440) await page.screenshot({ path: `verification/quotes-${width}.png`, fullPage: true })
   }
 })
 
