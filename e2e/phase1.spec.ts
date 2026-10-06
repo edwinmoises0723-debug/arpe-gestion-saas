@@ -135,6 +135,8 @@ for (const width of [320, 360, 390, 768, 884, 1440]) {
     await expect(platformBrand.locator('.brand-wordmark')).toHaveText('EJNEXA')
     await expect(platformBrand.locator('.brand-x')).toBeVisible()
     await expect(platformBrand.locator('.brand-symbol')).toHaveCSS('width', `${width <= 359 ? 38 : width < 900 ? 41 : 45}px`)
+    await expect(platformBrand.locator('.brand-wordmark')).toHaveCSS('font-size', `${width <= 359 ? 18.4 : 23.68}px`)
+    await expect(platformBrand.locator('small')).toHaveCSS('font-size', `${width <= 359 ? 7.84 : 8.8}px`)
     await expect(platformBrand.getByText('BUSINESS')).toBeVisible()
     await expect(header.getByText('Sprout')).toHaveCount(0)
     await expect(header.locator('.header-business .business-logo')).toBeVisible()
