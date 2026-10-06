@@ -150,7 +150,7 @@ test('official platform and active business identities stay separate across modu
   await mockBackend(page, true)
   await login(page)
 
-  for (const path of ['/', '/configuracion', '/cotizar', '/pedidos', '/pagos', '/reportes']) {
+  for (const path of ['/', '/configuracion', '/cotizar', '/pedidos', '/pagos', '/agenda', '/reportes']) {
     await page.goto(path)
     const header = page.locator('.app-header')
     const platformBrand = header.getByRole('link', { name: 'EJNEXA Business Inicio' })
@@ -174,6 +174,7 @@ test('official platform and active business identities stay separate across modu
     expect(headerBounds.platform.right, `${path}: platform logo must fit before the business identity`).toBeLessThanOrEqual(headerBounds.business.left)
     expect(headerBounds.business.right, `${path}: business identity must fit before the menu`).toBeLessThanOrEqual(headerBounds.menu.left)
     expect(headerBounds.menu.right, `${path}: menu must stay inside the viewport`).toBeLessThanOrEqual(headerBounds.viewportWidth)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${path}: no horizontal overflow`).toBe(true)
   }
 })
 

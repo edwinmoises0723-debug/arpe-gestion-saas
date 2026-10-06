@@ -12,5 +12,6 @@ import './styles-dashboard.css'
 import './styles-documents.css'
 import './styles-quotes-search.css'
 import './styles-reports.css'
+import './styles-system.css'
 
 createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>)

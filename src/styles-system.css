@@ -1,0 +1,280 @@
+:root {
+  --font-family-ui: 'DM Sans', system-ui, sans-serif;
+  --font-family-heading: 'Manrope', system-ui, sans-serif;
+  --font-size-body: 1rem;
+  --font-size-caption: 0.75rem;
+  --color-background: #f8f7f3;
+  --color-surface: #ffffff;
+  --color-surface-secondary: #f2f4f1;
+  --color-surface-elevated: #fffefa;
+  --color-text-primary: #1f2937;
+  --color-text-secondary: #455468;
+  --color-text-muted: #59665e;
+  --color-border: #e6e8e1;
+  --color-border-strong: #cbd3cf;
+  --color-accent-primary: #0a2d6b;
+  --color-accent-secondary: #00d9ff;
+  --color-accent-tertiary: #14e0c3;
+  --color-success: #287653;
+  --color-success-surface: #eaf5ee;
+  --color-warning: #8a5e1a;
+  --color-warning-surface: #fbf2e3;
+  --color-danger: #a6423a;
+  --color-danger-surface: #faecea;
+  --color-info: #3d628b;
+  --color-info-surface: #eaf1f8;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --shadow-sm: 0 1px 3px rgb(31 41 55 / 5%);
+  --shadow-md: 0 5px 16px rgb(31 41 55 / 8%);
+  --shadow-lg: 0 12px 32px rgb(31 41 55 / 12%);
+  --focus-ring: 0 0 0 3px rgb(0 217 255 / 22%);
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  /* Existing aliases keep the current warm-green product styling stable. */
+  --green: #304d43;
+  --muted: var(--color-text-muted);
+  --line: var(--color-border);
+  --gold: #d8bd88;
+  --surface: var(--color-surface);
+  --radius: var(--radius-xl);
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) {
+  color: var(--color-text-primary);
+  font-family: var(--font-family-ui);
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) :is(h1, h2, h3) {
+  color: var(--color-text-primary);
+  font-family: var(--font-family-heading);
+  letter-spacing: -0.025em;
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) h1 {
+  font-size: clamp(1.85rem, 4vw, 2.8rem);
+  font-weight: 700;
+  line-height: 1.16;
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) h2 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) h3 {
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) p {
+  line-height: 1.6;
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) label {
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) :is(.muted, .field-hint, .helper-text) {
+  color: var(--color-text-muted);
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal))) :is(.welcome-banner h2, .story-content h1) {
+  color: inherit;
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) :is(.primary, .light-button, .secondary-button, .danger-button) {
+  min-height: 48px;
+  border-radius: var(--radius-md);
+  font-weight: 650;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) .secondary-button {
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-secondary);
+  color: var(--color-text-primary);
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) .danger-button {
+  background: var(--color-danger);
+  color: #fff;
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) :is(.text-button, .text-link) {
+  color: var(--color-accent-primary);
+  font-weight: 600;
+  transition: color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) .icon-button {
+  border-radius: var(--radius-md);
+  transition: color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='hidden']),
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) select,
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) textarea {
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-elevated);
+  color: var(--color-text-primary);
+  transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) textarea {
+  min-height: 6rem;
+  line-height: 1.5;
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) :is(input, textarea, select)::placeholder {
+  color: var(--color-text-muted);
+  opacity: 0.78;
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) :is(input, textarea, select):hover:not(:disabled) {
+  border-color: #aab7c5;
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) :is(input, textarea, select):focus-visible {
+  border-color: var(--color-accent-primary);
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: 2px;
+  box-shadow: var(--focus-ring);
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) :is(input, textarea, select)[aria-invalid='true'] {
+  border-color: var(--color-danger);
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) :is(input, textarea, select):disabled {
+  background-color: var(--color-surface-secondary);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal))) .panel {
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal))) :is(.quote-card, .order-list-card, .agenda-order-card, .agenda-metric-card, .payment-order-card, .payment-overview-card, .payment-summary-card, .dashboard-metric-card, .report-panel, .reports-metric, .catalog-card) {
+  border-color: var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal))) :is(.module-card, .quote-card, .order-list-card, .agenda-order-card, .payment-order-card, .catalog-card):hover {
+  box-shadow: var(--shadow-md);
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal))) :is(.section-icon, .module-icon, .agenda-metric-icon, .reports-section-title > span) {
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-secondary);
+  color: var(--color-accent-primary);
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal))) .status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 999px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal))) .subtle-badge {
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal))) :is(.status-confirmed, .status-sent) {
+  background: var(--color-info-surface);
+  color: var(--color-info);
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal))) :is(.status-in_preparation, .payment-finance-anticipo-parcial, .payment-finance-pago-parcial) {
+  background: var(--color-warning-surface);
+  color: var(--color-warning);
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal))) :is(.status-ready, .status-delivered, .status-accepted, .payment-finance-pagado, .payment-finance-anticipo-cubierto) {
+  background: var(--color-success-surface);
+  color: var(--color-success);
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal))) :is(.status-cancelled, .status-rejected) {
+  background: var(--color-danger-surface);
+  color: var(--color-danger);
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal))) :is(.status-draft, .payment-finance-sin-pagos) {
+  background: var(--color-surface-secondary);
+  color: var(--color-text-secondary);
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal))) :is(.bottom-nav, .settings-button, .section-icon, .module-icon, .agenda-metric-icon, .reports-section-title, .primary, .secondary-button, .icon-button) .lucide {
+  stroke-width: 1.8;
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal))) .input-icon > svg,
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal))) .agenda-search > svg {
+  color: var(--color-accent-primary);
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal))) .bottom-nav a.active {
+  color: var(--color-accent-primary);
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal))) .bottom-nav a.active > span,
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal))) .settings-button.active {
+  background-color: var(--color-info-surface);
+  color: var(--color-accent-primary);
+}
+
+:where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) :is(button, a, input, select, textarea):focus-visible {
+  outline-color: var(--color-accent-primary);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  :where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) :is(.primary, .secondary-button, .light-button, .danger-button):hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+  }
+
+  :where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) .secondary-button:hover:not(:disabled) {
+    border-color: var(--color-accent-primary);
+    background-color: var(--color-surface-elevated);
+  }
+
+  :where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) .icon-button:hover:not(:disabled) {
+    background-color: var(--color-surface-secondary);
+    color: var(--color-accent-primary);
+  }
+
+  :where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal))) :is(.text-button, .text-link):hover {
+    color: #164b91;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) *,
+  :where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) *::before,
+  :where(.app-shell:not(:has(.document-actions, .document-print-preview-actions, .document-modal)), .auth-page, .onboarding, .center-page) *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
