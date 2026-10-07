@@ -9,6 +9,7 @@ import { searchOrders } from '../lib/order-payment-search'
 import { agendaDateKey, localCalendarDate } from '../lib/agenda'
 import { errorMessage } from '../lib/supabase'
 import { Loading, Notice } from '../components/Feedback'
+import { InlineBarChart } from '../components/InlineBarChart'
 import {
   buildReportCsv, buildReportSummary, encodeUtf16Le, formatReportRange, getReportRange,
   type ReportPeriod,
@@ -70,7 +71,8 @@ export function ReportsPage({ business }: { business: Business }) {
     return range ? buildReportSummary(orders, payments, range, today) : null
   }, [orders, payments, period, today, customFrom, customTo])
   const matchingOrders = useMemo(() => report ? searchOrders(report.periodOrders, search).sort((a, b) => b.created_at.localeCompare(a.created_at)) : [], [report, search])
-  const maxCollection = report?.collectionSeries.reduce((max, point) => Math.max(max, point.amount), 0) ?? 0
+  const maxProductRevenue = report?.products.reduce((max, product) => Math.max(max, product.revenue), 0) ?? 0
+  const maxPaymentMethodAmount = report?.paymentMethods.reduce((max, method) => Math.max(max, method.amount), 0) ?? 0
 
   function retryLoad() {
     setLoading(true)
@@ -129,25 +131,39 @@ export function ReportsPage({ business }: { business: Business }) {
 
         <section className="panel report-panel">
           <SectionTitle icon={<ShoppingBag size={18} />} title="Productos más vendidos" />
-          {report.products.length ? <ol className="reports-ranked-list">{report.products.map(product => <li key={product.name}><div><strong>{product.name}</strong><span>{quantityLabel(product.quantity, product.unit)}</span></div><b>{formatCurrency(product.revenue, business)}</b></li>)}</ol> : <EmptyReport text="Aún no hay productos vendidos en este período." />}
+          {report.products.length ? <ol className="reports-ranked-list reports-product-ranking">{report.products.map((product, index) => <li key={product.name}>
+            <span className="reports-rank-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+            <div className="reports-rank-content"><div className="reports-rank-heading"><strong>{product.name}</strong><b>{formatCurrency(product.revenue, business)}</b></div><span>{quantityLabel(product.quantity, product.unit)}</span><div className="reports-rank-track" aria-hidden="true"><span style={{ width: `${maxProductRevenue > 0 ? product.revenue / maxProductRevenue * 100 : 0}%` }} /></div></div>
+          </li>)}</ol> : <EmptyReport text="Aún no hay productos vendidos en este período." />}
         </section>
 
         <section className="panel report-panel">
           <SectionTitle icon={<Wallet size={18} />} title="Métodos de pago" />
-          {report.paymentMethods.length ? <ul className="reports-ranked-list">{report.paymentMethods.map(method => <li key={method.method}><div><strong>{method.label}</strong><span>{method.count} {method.count === 1 ? 'pago' : 'pagos'}</span></div><b>{formatCurrency(method.amount, business)}</b></li>)}</ul> : <EmptyReport text="No se recibieron pagos en este período." />}
+          {report.paymentMethods.length ? <ul className="reports-ranked-list reports-payment-ranking">{report.paymentMethods.map(method => <li key={method.method}>
+            <div className="reports-rank-content"><div className="reports-rank-heading"><strong>{method.label}</strong><b>{formatCurrency(method.amount, business)}</b></div><span>{method.count} {method.count === 1 ? 'pago' : 'pagos'}</span><div className="reports-rank-track" aria-hidden="true"><span style={{ width: `${maxPaymentMethodAmount > 0 ? method.amount / maxPaymentMethodAmount * 100 : 0}%` }} /></div></div>
+          </li>)}</ul> : <EmptyReport text="No se recibieron pagos en este período." />}
         </section>
 
         <section className="panel report-panel">
           <SectionTitle icon={<Activity size={18} />} title={report.collectionSeries.length > 31 ? 'Cobros por mes' : 'Cobros por día'} />
-          {report.collectionSeries.some(point => point.amount > 0) ? <div className="reports-chart" role="img" aria-label={`Actividad de cobros en ${formatReportRange(selectedRange)}`} style={{ gridTemplateColumns: `repeat(${report.collectionSeries.length}, minmax(0, 1fr))`, minWidth: report.collectionSeries.length > 31 ? `${report.collectionSeries.length * 24}px` : '0' }}>
-            {report.collectionSeries.map((point, index) => <div className="reports-chart-column" key={point.date} title={`${chartDateLabel(point.date, report.collectionSeries.length > 31)}: ${formatCurrency(point.amount, business)}`}><span style={{ height: `${point.amount ? Math.max(5, point.amount / (maxCollection || 1) * 100) : 0}%` }} />{chartTick(index, report.collectionSeries.length) && <small>{chartDateLabel(point.date, report.collectionSeries.length > 31)}</small>}</div>)}
-          </div> : <EmptyReport text="No se registraron cobros en este período." />}
+          {report.collectionSeries.some(point => point.amount > 0) ? <InlineBarChart
+            trackClassName="reports-chart"
+            ariaLabel={`Cobros por ${report.collectionSeries.length > 31 ? 'mes' : 'día'}: ${formatReportRange(selectedRange)}`}
+            emptySelectionText="Selecciona o enfoca una barra para consultar la fecha y el monto cobrado."
+            formatAmount={amount => formatCurrency(amount, business)}
+            points={report.collectionSeries.map((point, index) => {
+              const monthly = report.collectionSeries.length > 31
+              const date = monthly ? localCalendarDate(`${point.date}-01`) : localCalendarDate(point.date)
+              const label = new Intl.DateTimeFormat('es', monthly ? { month: 'long', year: 'numeric' } : { dateStyle: 'long' }).format(date)
+              return { key: point.date, label, amount: point.amount, tick: chartTick(index, report.collectionSeries.length) ? chartDateLabel(point.date, monthly) : undefined }
+            })}
+          /> : <EmptyReport text="No se registraron cobros en este período." />}
           <p className="reports-panel-note">Solo pagos registrados; los pagos anulados no se incluyen.</p>
         </section>
 
         <section className="panel report-panel">
           <SectionTitle icon={<CalendarDays size={18} />} title="Entregas" />
-          <ul className="reports-delivery-list"><li><span>Programadas en el período</span><strong>{report.deliveries.scheduled}</strong></li><li><span>Entregadas en el período</span><strong>{report.deliveries.delivered}</strong></li><li><span>Atrasadas antes de hoy</span><strong>{report.deliveries.overdue}</strong></li></ul>
+          <ul className="reports-delivery-list"><li className="is-scheduled"><span>Programadas en el período</span><strong>{report.deliveries.scheduled}</strong></li><li className="is-delivered"><span>Entregadas en el período</span><strong>{report.deliveries.delivered}</strong></li><li className="is-overdue"><span>Atrasadas antes de hoy</span><strong>{report.deliveries.overdue}</strong></li></ul>
           <p className="reports-panel-note">Las entregas canceladas no cuentan como activas.</p>
         </section>
 
@@ -156,6 +172,7 @@ export function ReportsPage({ business }: { business: Business }) {
           {report.profitability.profit === null ? <><EmptyReport text="Sin datos de costos suficientes todavía." /><p className="reports-panel-note">Completa el Motor de Costos de tus cotizaciones para analizar rentabilidad.</p></> : <>
             <strong className="reports-profit-value">{formatCurrency(report.profitability.profit, business)}</strong>
             <p className="reports-panel-note">Utilidad conocida de pedidos no cancelados con costeo completo.</p>
+            <div className="reports-cost-coverage"><progress max={report.profitability.billableOrderCount || 1} value={report.profitability.costedOrderCount} aria-label={`Costeo completo en ${report.profitability.costedOrderCount} de ${report.profitability.billableOrderCount} pedidos`} /><span>Cobertura de costos</span></div>
             <span className="reports-coverage">{report.profitability.costedOrderCount} de {report.profitability.billableOrderCount} pedidos con costeo completo</span>
             {report.profitability.uncostedOrderCount > 0 && <p className="reports-uncosted">{report.profitability.uncostedOrderCount} {report.profitability.uncostedOrderCount === 1 ? 'pedido sin información de costos' : 'pedidos sin información de costos'}</p>}
             {report.profitability.consolidatedMargin !== null && <div className="reports-profit-margin"><span>Margen sobre ventas costeadas</span><strong>{new Intl.NumberFormat('es', { maximumFractionDigits: 2 }).format(report.profitability.consolidatedMargin)}%</strong></div>}

@@ -28,7 +28,7 @@ const business: Business = {
   updated_at: new Date().toISOString(),
 }
 
-async function mockBackend(page: Page, existing = false, seedOrder = false) {
+async function mockBackend(page: Page, existing = false, seedOrder = false, seedAnalytics = false) {
   let profile: Record<string, unknown> | null = existing ? { ...business } : null
   let quote: Record<string, unknown> | null = null
   let order: Record<string, unknown> | null = seedOrder ? {
@@ -39,9 +39,19 @@ async function mockBackend(page: Page, existing = false, seedOrder = false) {
     deposit_value: 500, deposit_required: 500, internal_cost_total: null, estimated_profit: null, real_margin_percent: null,
     status: 'delivered', created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
   } : null
-  const payments: Record<string, unknown>[] = []
+  const payments: Record<string, unknown>[] = seedAnalytics && order ? [{
+    id: '55555555-5555-4555-8555-555555555555', business_id: business.id, order_id: order.id,
+    payment_number: 'ARPE-PAG-2026-0001', request_id: 'phase3-dashboard-fixture', amount: 500, method: 'cash',
+    reference: null, notes: null, paid_at: new Date().toISOString(), status: 'posted', created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(), voided_at: null, void_reason: null,
+  }] : []
   let quoteItems: Record<string, unknown>[] = []
-  let orderItems: Record<string, unknown>[] = []
+  let orderItems: Record<string, unknown>[] = seedAnalytics && order ? [{
+    id: '66666666-6666-4666-8666-666666666666', business_id: business.id, order_id: order.id, source_quote_item_id: null,
+    product: 'Pastel de vainilla', quantity: 1, unit_label: 'unidad', portions: 20, flavor: 'Vainilla', filling: '',
+    decoration: '', extras: '', notes: '', unit_price: 1800, position: 1, line_total: 1800, internal_cost_total: null,
+    estimated_profit: null, real_margin_percent: null, created_at: new Date().toISOString(),
+  }] : []
   const costSettings = { business_id: business.id, waste_percent: 12, indirect_percent: 12, labor_hourly_rate: 100, markup_percent: 60 }
   await page.route('**/auth/v1/**', async route => {
     const url = route.request().url()
@@ -211,6 +221,55 @@ for (const width of [320, 360, 390, 768, 884, 1440]) {
     await page.screenshot({ path: `verification/dashboard-${width}.png`, fullPage: true })
   })
 }
+
+test('dashboard and reports charts stay accessible and responsive', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await mockBackend(page, true, true, true)
+  await login(page)
+  await expectDashboardLoaded(page, 'Dulce Encanto')
+  const dashboardChart = page.locator('.dashboard-bar-chart')
+  await expect(dashboardChart).toBeVisible()
+  await expect(dashboardChart.getByRole('button')).toHaveCount(30)
+  await dashboardChart.getByRole('button').last().click()
+  await expect(page.locator('.dashboard-page .inline-chart-selection')).toContainText('C$')
+  await expect(page.locator('.dashboard-status-counts')).toContainText('Entregados')
+  await page.screenshot({ path: testInfo.outputPath('dashboard-390.png'), fullPage: true })
+
+  for (const width of [320, 360, 390, 768, 884, 1440]) {
+    await page.setViewportSize({ width, height: 900 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Dashboard overflow at ${width}px`).toBe(true)
+    await expect(dashboardChart).toBeVisible()
+  }
+  await page.screenshot({ path: testInfo.outputPath('dashboard-1440.png'), fullPage: true })
+
+  await page.goto('/reportes')
+  await expect(page.getByRole('heading', { name: 'Reportes.' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Indicadores del período' }).getByRole('article')).toHaveCount(4)
+  const reportChart = page.locator('.reports-chart')
+  await expect(reportChart).toBeVisible()
+  await expect(reportChart.getByRole('button')).toHaveCount(30)
+  await expect(page.locator('.reports-product-ranking .reports-rank-track')).toHaveCount(1)
+  await expect(page.locator('.reports-payment-ranking .reports-rank-track')).toHaveCount(1)
+  await expect(page.locator('.reports-delivery-list li')).toHaveCount(3)
+  await reportChart.getByRole('button').last().click()
+  await expect(page.locator('.reports-page .inline-chart-selection')).toContainText('C$')
+  await page.locator('.reports-filter select').selectOption('last7')
+  await expect(page.locator('.reports-heading-range')).toBeVisible()
+  await page.locator('.reports-filter select').selectOption('custom')
+  await expect(page.getByLabel('Fecha desde')).toBeVisible()
+  await expect(page.getByLabel('Fecha hasta')).toBeVisible()
+  await page.locator('.reports-filter select').selectOption('last30')
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Reports overflow at 390px').toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('reports-390.png'), fullPage: true })
+  for (const width of [320, 360, 390, 768, 884, 1440]) {
+    await page.setViewportSize({ width, height: 900 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Reports overflow at ${width}px`).toBe(true)
+    await expect(reportChart).toBeVisible()
+  }
+  await page.screenshot({ path: testInfo.outputPath('reports-1440.png'), fullPage: true })
+})
 
 test('official platform and active business identities stay separate across modules', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
