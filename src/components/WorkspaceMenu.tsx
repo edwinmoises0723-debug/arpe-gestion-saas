@@ -18,7 +18,7 @@ export function WorkspaceMenu({ business, logout }: { business: Business; logout
   }, [open])
   return <><button className="settings-button" aria-label="Abrir menú" aria-expanded={open} aria-controls="workspace-menu" onClick={() => setOpen(true)}><Menu size={22} /></button>
     <dialog id="workspace-menu" ref={dialog} className="workspace-menu" aria-label="Menú del negocio" onCancel={() => setOpen(false)} onClick={e => { if (e.target === dialog.current) { const bounds = dialog.current.getBoundingClientRect(); if (e.clientX < bounds.left || e.clientX > bounds.right || e.clientY < bounds.top || e.clientY > bounds.bottom) setOpen(false) } }}>
-      <div className="menu-heading"><BusinessLogo path={business.logo_path} name={business.name} /><strong>{business.name}</strong><button className="icon-button" aria-label="Cerrar menú" onClick={() => setOpen(false)}><X size={20} /></button></div>
+      <div className="menu-heading"><BusinessLogo path={business.logo_path} name={business.name} /><div className="menu-business-copy"><strong>{business.name}</strong><small>Negocio activo</small></div><button className="icon-button" aria-label="Cerrar menú" onClick={() => setOpen(false)}><X size={20} /></button></div>
       <nav aria-label="Módulos complementarios"><NavLink to="/catalogo" onClick={() => setOpen(false)}><ShoppingBag size={20} /> Catálogo</NavLink><NavLink to="/reportes" onClick={() => setOpen(false)}><BarChart3 size={20} /> Reportes</NavLink><NavLink to="/configuracion" onClick={() => setOpen(false)}><Settings size={20} /> Configuración</NavLink></nav>{logout}
     </dialog></>
 }

@@ -190,6 +190,7 @@ for (const width of [320, 360, 390, 768, 884, 1440]) {
     await login(page)
     const header = page.locator('.app-header')
     await expect(header.locator('.header-business strong')).toHaveText('Dulce Encanto')
+    await expect(header.locator('.header-business strong')).toBeVisible()
     const platformBrand = header.getByRole('link', { name: 'EJNEXA Business Inicio' })
     await expect(platformBrand).toBeVisible()
     await expect(platformBrand.locator('.brand-symbol')).toBeVisible()
@@ -203,6 +204,10 @@ for (const width of [320, 360, 390, 768, 884, 1440]) {
     await expect(header.getByText('Sprout')).toHaveCount(0)
     await expect(header.locator('.header-business .business-logo')).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    const navigation = page.getByRole('navigation', { name: 'Navegación principal' })
+    await expect(navigation.getByRole('link')).toHaveCount(5)
+    await expect(navigation.getByRole('link', { name: 'Inicio', exact: true })).toHaveClass(/active/)
+    await expect(navigation.getByRole('link', { name: 'Inicio', exact: true })).toHaveCSS('color', 'rgb(10, 45, 107)')
     await page.screenshot({ path: `verification/dashboard-${width}.png`, fullPage: true })
   })
 }
@@ -219,6 +224,7 @@ test('official platform and active business identities stay separate across modu
     await expect(platformBrand.locator('.brand-symbol')).toBeVisible()
     await expect(platformBrand.locator('.brand-symbol')).toHaveAttribute('viewBox', '0 0 256 256')
     await expect(header.locator('.header-business strong')).toHaveText('Dulce Encanto')
+    await expect(header.locator('.header-business strong')).toBeVisible()
     await expect(header.locator('.header-business .business-logo')).toBeVisible()
     await expect(header.getByText('Sprout')).toHaveCount(0)
     const headerBounds = await header.evaluate(element => {
@@ -236,6 +242,13 @@ test('official platform and active business identities stay separate across modu
     expect(headerBounds.platform.right, `${path}: platform logo must fit before the business identity`).toBeLessThanOrEqual(headerBounds.business.left)
     expect(headerBounds.business.right, `${path}: business identity must fit before the menu`).toBeLessThanOrEqual(headerBounds.menu.left)
     expect(headerBounds.menu.right, `${path}: menu must stay inside the viewport`).toBeLessThanOrEqual(headerBounds.viewportWidth)
+    const navigation = page.getByRole('navigation', { name: 'Navegación principal' })
+    await expect(navigation.getByRole('link')).toHaveCount(5)
+    const activeLink = navigation.locator('a.active')
+    if (['/', '/cotizar', '/pedidos', '/pagos', '/agenda'].includes(path)) {
+      await expect(activeLink).toHaveCount(1)
+      await expect(activeLink).toHaveAttribute('href', path)
+    } else await expect(activeLink).toHaveCount(0)
     const layout = await page.evaluate(() => ({
       scrollWidth: document.documentElement.scrollWidth,
       viewportWidth: innerWidth,
