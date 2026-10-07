@@ -4,7 +4,29 @@ import { inflateSync } from 'node:zlib'
 import type { Business, CatalogProduct, Payment, Quote, QuoteBundleHeader, QuoteBundleItem, QuoteItem } from '../src/lib/database.types'
 
 // Browser-only integration fixtures. Every Supabase request is intercepted, including writes.
-const business: Business = { id: '22222222-2222-4222-8222-222222222222', owner_id: '11111111-1111-4111-8111-111111111111', name: 'Negocio local de prueba', logo_path: null, slogan: '', description: '', whatsapp: '', email: '', address: '', currency: 'NIO', created_at: '', updated_at: '' }
+const business: Business = {
+  id: '22222222-2222-4222-8222-222222222222',
+  owner_id: '11111111-1111-4111-8111-111111111111',
+  name: 'Negocio local de prueba',
+  logo_path: null,
+  slogan: 'Hecho con amor',
+  description: 'Repostería artesanal',
+  whatsapp: '+505 8888 1234',
+  email: 'hola@example.com',
+  address: 'Managua',
+  currency: 'NIO',
+  default_deposit_type: 'percentage',
+  default_deposit_value: 50,
+  default_document_format: 'a4',
+  show_slogan_on_documents: true,
+  show_description_on_documents: true,
+  show_whatsapp_on_documents: true,
+  show_email_on_documents: true,
+  show_address_on_documents: true,
+  document_footer_message: 'Gracias por elegirnos.',
+  created_at: '',
+  updated_at: '',
+}
 const catalog: CatalogProduct = { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', business_id: business.id, name: 'Pastel de Chocolate Premium', category: 'Pasteles', description: '', unit_label: 'pastel', default_unit_price: 2000, default_portions: 20, default_flavor: 'Chocolate', default_filling: 'Ganache', default_decoration: 'Floral', default_extras: '', is_active: true, created_at: '', updated_at: '' }
 const baseQuote: Quote = { id: '33333333-3333-4333-8333-333333333333', business_id: business.id, quote_number: 'ARPE-COT-2026-0001', customer_name: 'Cliente local', customer_phone: '', product: catalog.name, portions: 20, flavor: 'Chocolate', filling: 'Ganache', decoration: 'Floral', extras: '', delivery_date: null, delivery_time: null, notes: '', total_amount: 2000, deposit_type: 'percentage', deposit_value: 50, deposit_required: 1000, status: 'sent', delivery_internal_cost: 0, delivery_customer_charge: 0, created_at: '2026-10-01T12:00:00Z', updated_at: '2026-10-01T12:00:00Z' }
 

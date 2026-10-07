@@ -1,9 +1,32 @@
 import { expect, test, type Page } from '@playwright/test'
+import type { Business } from '../src/lib/database.types'
 
 const userId = '11111111-1111-4111-8111-111111111111'
 const user = { id: userId, aud: 'authenticated', role: 'authenticated', email: 'arpe-test@example.com', app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() }
 const session = { access_token: 'test-token', refresh_token: 'test-refresh', token_type: 'bearer', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, user }
-const business = { id: '22222222-2222-4222-8222-222222222222', owner_id: userId, name: 'Dulce Encanto', slogan: 'Hecho con amor', logo_path: null, description: '', whatsapp: '', email: '', address: '', currency: 'NIO', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+const business: Business = {
+  id: '22222222-2222-4222-8222-222222222222',
+  owner_id: userId,
+  name: 'Dulce Encanto',
+  slogan: 'Hecho con amor',
+  logo_path: null,
+  description: '',
+  whatsapp: '',
+  email: '',
+  address: '',
+  currency: 'NIO',
+  default_deposit_type: 'percentage',
+  default_deposit_value: 50,
+  default_document_format: 'a4',
+  show_slogan_on_documents: true,
+  show_description_on_documents: true,
+  show_whatsapp_on_documents: true,
+  show_email_on_documents: true,
+  show_address_on_documents: true,
+  document_footer_message: 'Gracias por elegirnos.',
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+}
 
 async function mockBackend(page: Page, existing = false, seedOrder = false) {
   let profile: Record<string, unknown> | null = existing ? { ...business } : null
