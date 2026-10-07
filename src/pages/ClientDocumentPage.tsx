@@ -97,6 +97,6 @@ export function ClientDocumentPage({ business, type }: { business: Business; typ
       <div className="document-preview-caption"><FileText size={16} /><span>{type === 'quote' ? 'Cotización original' : 'Datos actuales del pedido'}</span></div>
       <ClientDocument model={model} formatAmount={amount => formatCurrency(amount, business)} printFormat={printFormat} documentRef={documentRef} />
     </main>
-    <p className="document-print-help">ARPE prepara el formato elegido y abre el diálogo estándar de impresión. La disponibilidad depende de tu dispositivo, impresora y controlador.</p>
+    <p className="document-print-help">EJNEXA Business prepara el formato elegido y abre el diálogo estándar de impresión. La disponibilidad depende de tu dispositivo, impresora y controlador.</p>
   </div>
 }

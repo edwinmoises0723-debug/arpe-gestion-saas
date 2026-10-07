@@ -61,7 +61,7 @@ export function BusinessPreferencesForm({ business, ownerId, onSaved }: { busine
   return <form className="business-preferences-form" onSubmit={submit}>
     <fieldset disabled={busy}>
       <section className="panel form-section">
-        <div className="section-title"><span className="section-icon"><BadgePercent size={20} /></span><div><h2>Ventas y cotizaciones</h2><p>Define valores que ARPE utilizará como punto de partida al crear nuevas propuestas.</p></div></div>
+        <div className="section-title"><span className="section-icon"><BadgePercent size={20} /></span><div><h2>Ventas y cotizaciones</h2><p>Define valores que EJNEXA Business utilizará como punto de partida al crear nuevas propuestas.</p></div></div>
         <div className="form-grid">
           <label>Tipo de anticipo predeterminado
             <select value={values.default_deposit_type} onChange={event => update('default_deposit_type', event.target.value as BusinessPreferencesInput['default_deposit_type'])}>
@@ -94,7 +94,7 @@ export function BusinessPreferencesForm({ business, ownerId, onSaved }: { busine
         <label>Mensaje de agradecimiento <span className="optional">Máximo 300 caracteres</span>
           <textarea maxLength={300} rows={3} value={values.document_footer_message} onChange={event => update('document_footer_message', event.target.value)} />
         </label>
-        <p className="field-hint">Se mostrará al final de los documentos para clientes. El crédito de ARPE y el aviso legal de comprobantes siempre permanecen visibles.</p>
+        <p className="field-hint">Se mostrará al final de los documentos para clientes. El crédito de EJNEXA Business y el aviso legal de comprobantes siempre permanecen visibles.</p>
       </section>
     </fieldset>
     <div className="form-actions">

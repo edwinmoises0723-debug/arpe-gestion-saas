@@ -10,10 +10,10 @@ export function ItemCostAssistant({ item, business, onChange }: { item: QuoteBun
   const amount = (n: number) => formatCurrency(n, business)
   const field = (key: keyof ItemCostInput, label: string, help: string, step = '0.01', max?: number) => <label>{label}<small className="field-hint">{help}</small><input type="number" min="0" max={max} step={step} required value={cost[key]} onChange={e => onChange({ ...item, cost: { ...cost, [key]: Number(e.target.value) } })} /></label>
   return <section className="cost-assistant item-cost-assistant" aria-label={`Costos de ${item.product || 'producto'}`}>
-    <h3>Asistente de costos</h3><p className="field-hint">Introduce los costos de toda esta línea: {item.quantity} {item.unit_label}. ARPE hace las matemáticas. La entrega se agrega una sola vez al final.</p>
+    <h3>Asistente de costos</h3><p className="field-hint">Introduce los costos de toda esta línea: {item.quantity} {item.unit_label}. EJNEXA hace las matemáticas. La entrega se agrega una sola vez al final.</p>
     <div className="form-grid">{field('ingredients_cost', `Costo de ingredientes para ${item.quantity} ${item.unit_label}`, 'Incluye todos los ingredientes que utilizarás para esta cantidad.')}{field('waste_percent', 'Merma (%)', 'Cubre sobrantes y pequeñas pérdidas.', '0.01', 100)}</div>
     <div className="calculated-row"><span>Merma estimada</span><strong>{amount(calculated.waste_amount)}</strong></div>
-    <h4>Gastos directos</h4><p className="field-hint">Por ejemplo: caja, base, topper o flores. ARPE suma cada gasto.</p>
+    <h4>Gastos directos</h4><p className="field-hint">Por ejemplo: caja, base, topper o flores. EJNEXA suma cada gasto.</p>
     {item.direct_costs.map((direct, index) => <div className="cost-item" key={index}>
       <select aria-label="Categoría del gasto" value={direct.category} onChange={e => onChange({ ...item, direct_costs: item.direct_costs.map((d, n) => n === index ? { ...d, category: e.target.value as typeof direct.category } : d) })}>{costItemCategories.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}</select>
       <input aria-label="Descripción del gasto" required maxLength={160} value={direct.name} onChange={e => onChange({ ...item, direct_costs: item.direct_costs.map((d, n) => n === index ? { ...d, name: e.target.value } : d) })} />

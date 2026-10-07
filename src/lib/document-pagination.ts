@@ -1,6 +1,6 @@
 export type DocumentPageSlice = { startPx: number; endPx: number; fitToPage: boolean }
 
-export function planDocumentPages(canvasWidthPx: number, canvasHeightPx: number, sectionCuts: number[], contentHeightMm = 269, toleranceMm = 2): DocumentPageSlice[] {
+export function planDocumentPages(canvasWidthPx: number, canvasHeightPx: number, sectionCuts: number[], contentHeightMm = 269, toleranceMm = 2, keepTogetherFromPx?: number): DocumentPageSlice[] {
   if (canvasWidthPx <= 0 || canvasHeightPx <= 0) return []
   const contentWidthMm = 182
   const pixelsPerMm = canvasWidthPx / contentWidthMm
@@ -19,7 +19,7 @@ export function planDocumentPages(canvasWidthPx: number, canvasHeightPx: number,
     const idealEnd = Math.min(startPx + capacityPx, canvasHeightPx)
     const safeEnd = fitsFinalPage
       ? undefined
-      : sectionCuts.filter(position => position > startPx + capacityPx * 0.42 && position <= idealEnd).at(-1)
+      : sectionCuts.filter(position => position > startPx + capacityPx * 0.42 && position <= idealEnd && (keepTogetherFromPx === undefined || position < keepTogetherFromPx)).at(-1)
     const endPx = fitsFinalPage ? canvasHeightPx : safeEnd ?? idealEnd
     pages.push({ startPx, endPx, fitToPage: fitsFinalPage })
     startPx = endPx

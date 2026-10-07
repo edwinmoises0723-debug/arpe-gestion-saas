@@ -86,6 +86,6 @@ export function PaymentReceiptPage({ business }: { business: Business }) {
       <div className="document-preview-caption"><FileText size={16} /><span>Comprobante original · {result.model.payment.payment_number}</span></div>
       <PaymentReceipt model={result.model} formatAmount={amount => formatCurrency(amount, business)} printFormat={printFormat} documentRef={documentRef} />
     </main>
-    <p className="document-print-help">ARPE prepara el formato elegido y abre el diálogo estándar de impresión. La disponibilidad depende de tu dispositivo, impresora y controlador.</p>
+    <p className="document-print-help">EJNEXA Business prepara el formato elegido y abre el diálogo estándar de impresión. La disponibilidad depende de tu dispositivo, impresora y controlador.</p>
   </div>
 }

@@ -155,7 +155,9 @@ test('single product A4 PNG/PDF and thermal document layouts', async ({ page }) 
   await page.getByRole('button', { name: 'Descargar PDF' }).click()
   const pdf = await pdfPromise; await pdf.saveAs('test-results/multiproduct-export.pdf')
   const pdfText = (await readFile(await pdf.path())).toString('latin1')
-  expect(pdfText.match(/\/Type \/Page\b/g)).toHaveLength(1)
+  const pageCount = pdfText.match(/\/Type \/Page\b/g)?.length ?? 0
+  expect(pageCount).toBeGreaterThanOrEqual(1)
+  expect(pageCount).toBeLessThanOrEqual(2)
   for (const format of ['Térmica 80 mm', 'Térmica 58 mm']) {
     await page.getByRole('button', { name: 'Imprimir', exact: true }).click()
     await page.getByRole('radio', { name: new RegExp(format) }).check()

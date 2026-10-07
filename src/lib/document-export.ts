@@ -114,10 +114,14 @@ export async function savePdfFile(element: HTMLElement, filename: string, single
       .map(section => (section.getBoundingClientRect().top - rootTop) * (canvas.width / clone.getBoundingClientRect().width))
       .filter(position => position > 0 && position < canvas.height)
       .sort((a, b) => a - b)
+    const summary = clone.querySelector<HTMLElement>('[data-document-section="summary"]')
+    const keepTogetherFrom = summary
+      ? (summary.getBoundingClientRect().top - rootTop) * (canvas.width / clone.getBoundingClientRect().width)
+      : undefined
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true })
     const pages = singlePage
       ? [{ startPx: 0, endPx: canvas.height, fitToPage: true }]
-      : planDocumentPages(canvas.width, canvas.height, safeCuts, contentHeightMm)
+      : planDocumentPages(canvas.width, canvas.height, safeCuts, contentHeightMm, 2, keepTogetherFrom)
 
     pages.forEach(({ startPx, endPx, fitToPage }, pageIndex) => {
       const sliceHeight = Math.max(1, Math.ceil(endPx - startPx))

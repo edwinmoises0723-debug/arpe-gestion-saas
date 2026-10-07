@@ -27,4 +27,17 @@ describe('A4 document page planning', () => {
     expect(pages[0].startPx).toBe(0)
     expect(pages.slice(1).every((page, index) => page.startPx === pages[index].endPx)).toBe(true)
   })
+
+  it('keeps the commercial summary and footer together instead of isolating the footer', () => {
+    const summaryStart = capacity * 0.82
+    const footerStart = capacity + pixelsPerMm * 4
+    const documentEnd = capacity + pixelsPerMm * 26
+    const pages = planDocumentPages(width, documentEnd, [capacity * 0.55, summaryStart, footerStart], 269, 2, summaryStart)
+
+    expect(pages).toHaveLength(2)
+    expect(pages[0].endPx).toBeLessThan(summaryStart)
+    expect(pages[1].startPx).toBeLessThan(summaryStart)
+    expect(pages[1].endPx).toBe(documentEnd)
+    expect(pages.every(page => page.endPx > page.startPx)).toBe(true)
+  })
 })

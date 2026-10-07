@@ -39,7 +39,7 @@ export function AuthPage({ recovery = false }: { recovery?: boolean }) {
     <section className="auth-story">
       <Brand light />
       <div className="story-content"><span className="eyebrow"><span className="tiny-dot" /> HECHO PARA TU NEGOCIO</span>
-        <h1>Tu talento crea.<br />ARPE <em>organiza.</em></h1>
+        <h1>Tu talento crea.<br />EJNEXA <em>organiza.</em></h1>
         <p>Un espacio para cuidar cada detalle de tu negocio y darle más tiempo a lo que amas hacer.</p>
         <div className="story-art" aria-hidden="true"><div className="art-orbit" /><div className="art-card"><span className="art-leaf"><Leaf size={36} /></span><span className="art-line" /><span className="art-line short" /><div className="art-check"><Check size={18} /> Todo comienza con una idea</div></div><span className="art-spark"><Sparkles size={28} /></span></div>
         <div className="story-bottom"><span>PASTELERÍAS</span><i /><span>REPOSTERÍAS</span><i /><span>PEQUEÑOS NEGOCIOS</span></div>

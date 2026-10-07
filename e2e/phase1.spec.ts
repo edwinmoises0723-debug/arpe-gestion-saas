@@ -40,6 +40,9 @@ async function mockBackend(page: Page, existing = false, seedOrder = false) {
     status: 'delivered', created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
   } : null
   const payments: Record<string, unknown>[] = []
+  let quoteItems: Record<string, unknown>[] = []
+  let orderItems: Record<string, unknown>[] = []
+  const costSettings = { business_id: business.id, waste_percent: 12, indirect_percent: 12, labor_hourly_rate: 100, markup_percent: 60 }
   await page.route('**/auth/v1/**', async route => {
     const url = route.request().url()
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(url.includes('/user') ? user : url.includes('/logout') || url.includes('/recover') ? {} : session) })
@@ -58,6 +61,12 @@ async function mockBackend(page: Page, existing = false, seedOrder = false) {
     const body = method === 'GET' ? quote ? [quote] : [] : method === 'DELETE' ? '' : quote
     await route.fulfill({ status: method === 'POST' ? 201 : 200, contentType: 'application/json', body: JSON.stringify(body) })
   })
+  await page.route('**/rest/v1/arpe_quote_items*', async route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(quoteItems) }))
+  await page.route('**/rest/v1/arpe_order_items*', async route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(orderItems) }))
+  await page.route('**/rest/v1/arpe_quote_item_costs*', async route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }))
+  await page.route('**/rest/v1/arpe_quote_item_cost_items*', async route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }))
+  await page.route('**/rest/v1/arpe_catalog_products*', async route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }))
+  await page.route('**/rest/v1/arpe_cost_settings*', async route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(costSettings) }))
   await page.route('**/rest/v1/arpe_orders*', async route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(order ? [order] : []) }))
   await page.route('**/rest/v1/arpe_payments*', async route => {
     const orderId = new URL(route.request().url()).searchParams.get('order_id')?.replace('eq.', '')
@@ -66,7 +75,19 @@ async function mockBackend(page: Page, existing = false, seedOrder = false) {
   })
   await page.route('**/rest/v1/rpc/arpe_convert_quote_to_order', async route => {
     order = { id: '44444444-4444-4444-8444-444444444444', business_id: business.id, quote_id: quote?.id, order_number: 'ARPE-PED-2026-0001', source_quote_number: quote?.quote_number, customer_name: quote?.customer_name, customer_phone: quote?.customer_phone, product: quote?.product, portions: quote?.portions, flavor: quote?.flavor, filling: quote?.filling, decoration: quote?.decoration, extras: quote?.extras, delivery_date: quote?.delivery_date, delivery_time: quote?.delivery_time, notes: quote?.notes, total_amount: quote?.total_amount, deposit_type: quote?.deposit_type, deposit_value: quote?.deposit_value, deposit_required: quote?.deposit_required, internal_cost_total: null, estimated_profit: null, real_margin_percent: null, status: 'confirmed', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+    orderItems = quoteItems.map((item, index) => ({ ...item, id: `order-item-${index + 1}`, order_id: order!.id, source_quote_item_id: item.id, internal_cost_total: null, estimated_profit: null, real_margin_percent: null }))
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([order]) })
+  })
+  await page.route('**/rest/v1/rpc/arpe_save_quote_bundle', async route => {
+    const { p_quote_id, p_header, p_items } = route.request().postDataJSON() as { p_quote_id: string | null; p_header: Record<string, unknown>; p_items: Record<string, unknown>[] }
+    const now = new Date().toISOString()
+    const lines = p_items.map((item, index) => ({ ...item, id: `quote-item-${index + 1}`, business_id: business.id, quote_id: p_quote_id ?? '33333333-3333-4333-8333-333333333333', position: index + 1, line_total: Math.round(Number(item.quantity) * Number(item.unit_price) * 100) / 100, created_at: now, updated_at: now }))
+    quoteItems = lines
+    const subtotal = lines.reduce((sum, item) => sum + Number(item.line_total), 0)
+    const total = subtotal + Number(p_header.delivery_customer_charge)
+    const depositRequired = p_header.deposit_type === 'percentage' ? total * Number(p_header.deposit_value) / 100 : Number(p_header.deposit_value)
+    quote = { id: p_quote_id ?? '33333333-3333-4333-8333-333333333333', business_id: business.id, quote_number: 'ARPE-COT-2026-0001', customer_name: p_header.customer_name, customer_phone: p_header.customer_phone, product: String(lines[0].product), portions: lines[0].portions, flavor: lines[0].flavor, filling: lines[0].filling, decoration: lines[0].decoration, extras: lines[0].extras, delivery_date: p_header.delivery_date, delivery_time: p_header.delivery_time, notes: p_header.notes, total_amount: total, deposit_type: p_header.deposit_type, deposit_value: p_header.deposit_value, deposit_required: depositRequired, status: p_header.status, delivery_internal_cost: p_header.delivery_internal_cost, delivery_customer_charge: p_header.delivery_customer_charge, created_at: now, updated_at: now }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([quote]) })
   })
   await page.route('**/rest/v1/rpc/arpe_update_order_status', async route => {
     if (order) order = { ...order, status: route.request().postDataJSON().p_status, updated_at: new Date().toISOString() }
@@ -102,6 +123,12 @@ async function login(page: Page) {
   await page.getByRole('button', { name: 'Entrar a mi negocio' }).click()
 }
 
+async function expectDashboardLoaded(page: Page, businessName: string) {
+  await expect(page.locator('.app-header').getByRole('link', { name: 'EJNEXA Business Inicio' })).toBeVisible()
+  await expect(page.locator('.dashboard-heading h1')).toHaveText(/Buenos días\.|Buenas tardes\.|Buenas noches\./)
+  await expect(page.locator('.dashboard-business-heading h2')).toHaveText(businessName)
+}
+
 test('onboarding, persistence, settings, navigation and logout', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 800 })
   await mockBackend(page)
@@ -115,15 +142,27 @@ test('onboarding, persistence, settings, navigation and logout', async ({ page }
   await page.getByLabel('Dirección').fill('Managua')
   await page.getByLabel('Moneda principal').selectOption('CRC')
   await page.getByRole('button', { name: 'Crear mi negocio' }).click()
-  await expect(page.getByRole('heading', { name: /Todo empieza/ })).toBeVisible()
+  await expectDashboardLoaded(page, 'Dulce Encanto')
   await page.reload()
-  await expect(page.getByRole('heading', { name: /Todo empieza/ })).toBeVisible()
+  await expectDashboardLoaded(page, 'Dulce Encanto')
   await expect(page.getByText('CRC', { exact: false }).first()).toBeVisible()
   for (const name of ['Cotizar', 'Pedidos', 'Pagos', 'Agenda']) {
     await page.getByRole('navigation').getByRole('link', { name, exact: true }).click()
-    if (name === 'Pedidos' || name === 'Pagos') await expect(page.getByRole('heading', { name: 'Aún no tienes pedidos' })).toBeVisible()
-    else await expect(page.getByRole('heading', { name: 'Estamos preparando este espacio' })).toBeVisible()
+    if (name === 'Cotizar') await expect(page.getByRole('heading', { name: 'Cotizaciones.' })).toBeVisible()
+    if (name === 'Pedidos') await expect(page.getByRole('heading', { name: 'Tus pedidos aparecerán aquí' })).toBeVisible()
+    if (name === 'Pagos') await expect(page.getByRole('heading', { name: 'Aún no tienes pedidos' })).toBeVisible()
+    if (name === 'Agenda') await expect(page.getByRole('heading', { name: 'Tu agenda está al día' })).toBeVisible()
+    const overflow = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      viewportWidth: innerWidth,
+      elements: [...document.querySelectorAll('body *')].map(element => {
+        const rect = element.getBoundingClientRect()
+        return { tag: element.tagName, className: typeof element.className === 'string' ? element.className : '', text: element.textContent?.trim().slice(0, 50), left: Math.round(rect.left), right: Math.round(rect.right), width: Math.round(rect.width) }
+      }).filter(element => element.right > innerWidth + 1 || element.left < -1).slice(0, 12),
+    }))
+    expect(overflow.scrollWidth, `${name}: horizontal overflow ${JSON.stringify(overflow)}`).toBeLessThanOrEqual(overflow.viewportWidth)
   }
+  await page.getByRole('button', { name: 'Abrir menú' }).click()
   await page.getByRole('link', { name: 'Configuración', exact: true }).click()
   await page.getByLabel('Nombre del negocio').fill('Dulce Encanto Nicaragua')
   await page.getByLabel('Moneda principal').selectOption('USD')
@@ -197,7 +236,15 @@ test('official platform and active business identities stay separate across modu
     expect(headerBounds.platform.right, `${path}: platform logo must fit before the business identity`).toBeLessThanOrEqual(headerBounds.business.left)
     expect(headerBounds.business.right, `${path}: business identity must fit before the menu`).toBeLessThanOrEqual(headerBounds.menu.left)
     expect(headerBounds.menu.right, `${path}: menu must stay inside the viewport`).toBeLessThanOrEqual(headerBounds.viewportWidth)
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${path}: no horizontal overflow`).toBe(true)
+    const layout = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      viewportWidth: innerWidth,
+      elements: [...document.querySelectorAll('body *')].map(element => {
+        const rect = element.getBoundingClientRect()
+        return { tag: element.tagName, className: typeof element.className === 'string' ? element.className : '', text: element.textContent?.trim().slice(0, 50), left: Math.round(rect.left), right: Math.round(rect.right), width: Math.round(rect.width) }
+      }).filter(element => element.right > innerWidth + 1 || element.left < -1).slice(0, 12),
+    }))
+    expect(layout.scrollWidth, `${path}: horizontal overflow ${JSON.stringify(layout)}`).toBeLessThanOrEqual(layout.viewportWidth)
   }
 })
 
@@ -268,7 +315,7 @@ test('signup confirmation and recovery password form', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Una nueva contraseña' })).toBeVisible()
   await page.getByLabel('Contraseña', { exact: true }).fill('Updated-password-456')
   await page.getByRole('button', { name: 'Guardar contraseña' }).click()
-  await expect(page.getByRole('heading', { name: /Todo empieza/ })).toBeVisible()
+  await expectDashboardLoaded(page, 'Dulce Encanto')
 })
 
 test('logo upload, signed preview and removal', async ({ page }) => {
@@ -281,6 +328,7 @@ test('logo upload, signed preview and removal', async ({ page }) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(route.request().url().includes('/sign/') ? { signedURL: '/object/sign/arpe-business-logos/test.png?token=test' } : { Key: 'test.png' }) })
   })
   await login(page)
+  await page.getByRole('button', { name: 'Abrir menú' }).click()
   await page.getByRole('link', { name: 'Configuración', exact: true }).click()
   await page.getByLabel('Logo del negocio').setInputFiles('public/icons/icon-192.png')
   await expect(page.getByAltText('Vista previa del nuevo logo')).toBeVisible()
@@ -302,16 +350,17 @@ test('quotes: create, accept, convert once and track order snapshot/status', asy
   await expect(page.getByRole('heading', { name: 'Cotizaciones.' })).toBeVisible()
   await page.getByRole('button', { name: /Nueva cotización/ }).click()
   await page.getByLabel('Nombre del cliente').fill('María López')
-  await page.getByLabel('Producto').fill('Pastel de chocolate')
+  const firstProduct = page.locator('.bundle-item').first()
+  await firstProduct.getByRole('textbox', { name: 'Producto', exact: true }).fill('Pastel de chocolate')
   await page.getByLabel('Porciones').fill('12')
-  await page.getByLabel('Precio total').fill('1000')
-  await page.getByLabel('Valor del anticipo').fill('50')
+  await firstProduct.getByLabel('Precio unitario').fill('1000')
+  await page.getByLabel('Porcentaje de anticipo (%)').fill('50')
   await expect(page.getByText(/C\$ 500/).first()).toBeVisible()
-  await page.getByRole('button', { name: 'Guardar borrador' }).click()
+  await page.getByRole('button', { name: 'Guardar cotización' }).click()
   await expect(page.getByText('ARPE-COT-2026-0001', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Editar ARPE-COT-2026-0001' }).click()
-  await page.getByLabel('Producto').fill('Pastel de chocolate premium')
-  await page.getByRole('button', { name: 'Guardar cambios' }).click()
+  await page.locator('.bundle-item').first().getByRole('textbox', { name: 'Producto', exact: true }).fill('Pastel de chocolate premium')
+  await page.getByRole('button', { name: 'Guardar cotización' }).click()
   await expect(page.getByText('Pastel de chocolate premium')).toBeVisible()
   await page.getByLabel('Estado de ARPE-COT-2026-0001').selectOption('accepted')
   await expect(page.getByText('ahora está aceptada')).toBeVisible()
@@ -323,7 +372,7 @@ test('quotes: create, accept, convert once and track order snapshot/status', asy
   await expect(page.getByRole('heading', { name: 'ARPE-PED-2026-0001' })).toBeVisible()
   await expect(page.getByText('Pastel de chocolate premium')).toBeVisible()
   await expect(page.getByText('Anticipo requerido', { exact: true })).toBeVisible()
-  await expect(page.getByText(/no registra pagos recibidos/)).toBeVisible()
+  await expect(page.getByText('Solo los pagos registrados cuentan como dinero recibido.')).toBeVisible()
   await page.getByLabel('Estado').selectOption('in_preparation')
   await expect(page.getByLabel('Estado')).toHaveValue('in_preparation')
   await page.getByLabel('Estado').selectOption('delivered')
