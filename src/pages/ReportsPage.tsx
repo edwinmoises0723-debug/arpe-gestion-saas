@@ -10,8 +10,9 @@ import { agendaDateKey, localCalendarDate } from '../lib/agenda'
 import { errorMessage } from '../lib/supabase'
 import { Loading, Notice } from '../components/Feedback'
 import { InlineBarChart } from '../components/InlineBarChart'
+import { OrderStatusDonut } from '../components/OrderStatusDonut'
 import {
-  buildReportCsv, buildReportSummary, encodeUtf16Le, formatReportRange, getReportRange,
+  buildReportCsv, buildReportSummary, buildSalesCollectionComparison, encodeUtf16Le, formatReportRange, getReportRange,
   type ReportPeriod,
 } from '../lib/reports'
 
@@ -73,6 +74,7 @@ export function ReportsPage({ business }: { business: Business }) {
   const matchingOrders = useMemo(() => report ? searchOrders(report.periodOrders, search).sort((a, b) => b.created_at.localeCompare(a.created_at)) : [], [report, search])
   const maxProductRevenue = report?.products.reduce((max, product) => Math.max(max, product.revenue), 0) ?? 0
   const maxPaymentMethodAmount = report?.paymentMethods.reduce((max, method) => Math.max(max, method.amount), 0) ?? 0
+  const salesCollection = report ? buildSalesCollectionComparison(report.sales, report.collected) : null
 
   function retryLoad() {
     setLoading(true)
@@ -125,8 +127,17 @@ export function ReportsPage({ business }: { business: Business }) {
       <div className="reports-grid">
         <section className="panel report-panel">
           <SectionTitle icon={<PackageCheck size={18} />} title="Estado de pedidos" />
-          <div className="reports-status-bar" aria-hidden="true">{Object.entries(report.orderStatuses).map(([status, count]) => <span key={status} className={`status-segment status-${status}`} style={{ width: `${report.orderCount ? count / report.orderCount * 100 : 0}%` }} />)}</div>
-          <ul className="reports-status-list">{Object.entries(report.orderStatuses).map(([status, count]) => <li key={status}><i className={`status-dot status-${status}`} /><span>{orderStatusText[status as keyof typeof orderStatusText]}</span><strong>{count}</strong></li>)}</ul>
+          <div className="reports-status-visual"><OrderStatusDonut counts={report.orderStatuses} labels={orderStatusText} className="reports-order-status-donut" /><ul className="reports-status-list">{Object.entries(report.orderStatuses).map(([status, count]) => <li key={status}><i className={`status-dot status-${status}`} /><span>{orderStatusText[status as keyof typeof orderStatusText]}</span><strong>{count}</strong></li>)}</ul></div>
+        </section>
+
+        <section className="panel report-panel reports-sales-collection">
+          <SectionTitle icon={<Activity size={18} />} title="Ventas vs. Cobros" />
+          <p className="reports-panel-note reports-comparison-intro">Ventas registradas corresponden a pedidos creados en el período. Cobros corresponden a pagos recibidos en el período.</p>
+          {salesCollection && <div className="reports-comparison-bars" aria-label="Comparación de ventas registradas y cobros recibidos">
+            <ComparisonBar label="Ventas registradas" value={salesCollection.sales} width={salesCollection.salesBarPercent} business={business} />
+            <ComparisonBar label="Cobros recibidos" value={salesCollection.collected} width={salesCollection.collectedBarPercent} business={business} tone="collection" />
+          </div>}
+          {salesCollection?.collectionPercentOfSales !== null && salesCollection?.collectionPercentOfSales !== undefined && <p className="reports-collection-context">Cobros del período equivalen al {new Intl.NumberFormat('es', { maximumFractionDigits: 1 }).format(salesCollection.collectionPercentOfSales)}% de las ventas registradas del período.</p>}
         </section>
 
         <section className="panel report-panel">
@@ -169,10 +180,11 @@ export function ReportsPage({ business }: { business: Business }) {
 
         <section className="panel report-panel reports-profitability">
           <SectionTitle icon={<Banknote size={18} />} title="Utilidad estimada" />
-          {report.profitability.profit === null ? <><EmptyReport text="Sin datos de costos suficientes todavía." /><p className="reports-panel-note">Completa el Motor de Costos de tus cotizaciones para analizar rentabilidad.</p></> : <>
+          {report.profitability.profit === null ? <><EmptyReport text="Aún no hay pedidos con costeo completo en este período." /><p className="reports-panel-note">Completa el Motor de Costos para conocer la utilidad estimada.</p><div className="reports-cost-coverage"><progress max={100} value={0} aria-label={`Costeo completo en 0 de ${report.profitability.billableOrderCount} pedidos`} /><span>Cobertura de costos</span></div><span className="reports-coverage">0 de {report.profitability.billableOrderCount} pedidos con costeo completo</span>{report.profitability.uncostedOrderCount > 0 && <p className="reports-uncosted">{report.profitability.uncostedOrderCount} {report.profitability.uncostedOrderCount === 1 ? 'pedido sin información de costos' : 'pedidos sin información de costos'}</p>}</> : <>
             <strong className="reports-profit-value">{formatCurrency(report.profitability.profit, business)}</strong>
             <p className="reports-panel-note">Utilidad conocida de pedidos no cancelados con costeo completo.</p>
-            <div className="reports-cost-coverage"><progress max={report.profitability.billableOrderCount || 1} value={report.profitability.costedOrderCount} aria-label={`Costeo completo en ${report.profitability.costedOrderCount} de ${report.profitability.billableOrderCount} pedidos`} /><span>Cobertura de costos</span></div>
+            <div className="reports-profit-breakdown"><span>Ventas con costeo<strong>{formatCurrency(report.profitability.costedSales, business)}</strong></span><span>Costos estimados<strong>{formatCurrency(report.profitability.estimatedCosts ?? 0, business)}</strong></span></div>
+            <div className="reports-cost-coverage"><progress max={100} value={report.profitability.costCoveragePercent} aria-label={`Costeo completo en ${report.profitability.costedOrderCount} de ${report.profitability.billableOrderCount} pedidos`} /><span>Cobertura de costos</span></div>
             <span className="reports-coverage">{report.profitability.costedOrderCount} de {report.profitability.billableOrderCount} pedidos con costeo completo</span>
             {report.profitability.uncostedOrderCount > 0 && <p className="reports-uncosted">{report.profitability.uncostedOrderCount} {report.profitability.uncostedOrderCount === 1 ? 'pedido sin información de costos' : 'pedidos sin información de costos'}</p>}
             {report.profitability.consolidatedMargin !== null && <div className="reports-profit-margin"><span>Margen sobre ventas costeadas</span><strong>{new Intl.NumberFormat('es', { maximumFractionDigits: 2 }).format(report.profitability.consolidatedMargin)}%</strong></div>}
@@ -191,6 +203,10 @@ export function ReportsPage({ business }: { business: Business }) {
 
 function Metric({ icon, label, value, help, tone }: { icon: ReactNode; label: string; value: string; help: string; tone: string }) {
   return <article className={`reports-metric tone-${tone}`}><span className="reports-metric-icon">{icon}</span><span className="reports-metric-label">{label}</span><strong>{value}</strong><p>{help}</p></article>
+}
+
+function ComparisonBar({ label, value, width, business, tone = 'sales' }: { label: string; value: number; width: number; business: Business; tone?: 'sales' | 'collection' }) {
+  return <div className={`reports-comparison-row is-${tone}`}><div className="reports-comparison-heading"><span>{label}</span><strong>{formatCurrency(value, business)}</strong></div><div className="reports-comparison-track" aria-hidden="true"><span style={{ width: `${width}%` }} /></div></div>
 }
 
 function SectionTitle({ icon, title }: { icon: ReactNode; title: string }) {

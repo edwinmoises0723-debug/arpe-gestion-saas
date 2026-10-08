@@ -72,14 +72,25 @@ describe('Dashboard financial metrics', () => {
 
   it('counts estimated profit only from orders with real cost data', () => {
     const metrics = getDashboardFinancialMetrics([
-      order({ estimated_profit: 700 }), order({ id: 'uncosted', estimated_profit: null }),
+      order({ internal_cost_total: 300, estimated_profit: 700 }), order({ id: 'uncosted', estimated_profit: null }),
     ], [])
     expect(metrics.estimatedProfit).toBe(700)
     expect(metrics.costedOrderCount).toBe(1)
+    expect(metrics).toMatchObject({ costedSales: 1800, estimatedCosts: 1100, costCoveragePercent: 50 })
+    expect(metrics.consolidatedMargin).toBeCloseTo(38.89, 2)
   })
 
   it('identifies when none of the orders have cost data', () => {
     const metrics = getDashboardFinancialMetrics([order({ estimated_profit: null })], [])
+    expect(metrics.estimatedProfit).toBeNull()
+    expect(metrics.costedOrderCount).toBe(0)
+    expect(metrics.estimatedCosts).toBeNull()
+    expect(metrics.consolidatedMargin).toBeNull()
+    expect(metrics.costCoveragePercent).toBe(0)
+  })
+
+  it('does not treat profit without a recorded total cost as cost coverage', () => {
+    const metrics = getDashboardFinancialMetrics([order({ estimated_profit: 700 })], [])
     expect(metrics.estimatedProfit).toBeNull()
     expect(metrics.costedOrderCount).toBe(0)
   })

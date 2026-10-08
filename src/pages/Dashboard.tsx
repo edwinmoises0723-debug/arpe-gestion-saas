@@ -15,6 +15,7 @@ import { getDashboardAlerts, getDashboardFinancialMetrics, getDashboardOrderMetr
 import { Loading, Notice } from '../components/Feedback'
 import { BusinessLogo } from '../components/BusinessLogo'
 import { InlineBarChart } from '../components/InlineBarChart'
+import { OrderStatusDonut } from '../components/OrderStatusDonut'
 import { sections } from '../lib/navigation'
 
 const orderStatusLabels = {
@@ -152,8 +153,7 @@ export function Dashboard({ business }: { business: Business }) {
 
       <section className="panel dashboard-order-status">
         <SectionHeading icon={<ClipboardList size={18} />} eyebrow="VISTA GENERAL" title="Estado de tus pedidos" action={<Link to="/pedidos" className="dashboard-section-link">Ver pedidos <ArrowRight size={15} /></Link>} />
-        {statusTotal > 0 && <div className="dashboard-status-bar" role="img" aria-label="Distribución de pedidos por estado">{(Object.keys(orderStatusLabels) as (keyof typeof orderStatusLabels)[]).map(status => <span key={status} className={`status-segment status-${status}`} title={`${orderStatusLabels[status]}: ${orderMetrics.byStatus[status]}`} style={{ width: `${(orderMetrics.byStatus[status] / statusTotal) * 100}%` }} />)}</div>}
-        <ul className="dashboard-status-counts">{(Object.keys(orderStatusLabels) as (keyof typeof orderStatusLabels)[]).map(status => <li key={status}><span className={`status-dot status-${status}`} />{orderStatusLabels[status]}<strong>{orderMetrics.byStatus[status]}</strong></li>)}</ul>
+        <div className="dashboard-status-visual"><OrderStatusDonut counts={orderMetrics.byStatus} labels={orderStatusLabels} /><ul className="dashboard-status-counts">{(Object.keys(orderStatusLabels) as (keyof typeof orderStatusLabels)[]).map(status => <li key={status}><span className={`status-dot status-${status}`} />{orderStatusLabels[status]}<strong>{orderMetrics.byStatus[status]}</strong></li>)}</ul></div>
         {statusTotal === 0 && <p className="dashboard-empty-inline">Todavía no hay pedidos registrados.</p>}
       </section>
 
@@ -165,7 +165,14 @@ export function Dashboard({ business }: { business: Business }) {
 
       <section className="panel dashboard-profit">
         <SectionHeading icon={<Activity size={18} />} eyebrow="INFORMACIÓN INTERNA" title="Utilidad estimada" />
-        {financial.estimatedProfit === null ? <DashboardEmpty title="Sin datos de costos todavía" text="Los pedidos con Motor de Costos permitirán calcular este indicador." /> : <><strong className="dashboard-profit-value">{formatCurrency(financial.estimatedProfit, business)}</strong><p>Calculada solo con pedidos no cancelados que tienen costeo.</p><span className="dashboard-cost-coverage">Costeo disponible en {financial.costedOrderCount} de {financial.nonCancelledOrderCount} pedidos.</span></>}
+        {financial.estimatedProfit === null ? <><DashboardEmpty title="Aún no podemos calcular tu utilidad" text="Completa el costeo de tus pedidos para conocer la utilidad estimada. Solo se incluyen pedidos no cancelados con costos registrados." /><Link className="dashboard-text-link dashboard-cost-settings-link" to="/configuracion">Completar costos <ArrowRight size={15} /></Link></> : <>
+          <strong className="dashboard-profit-value">{formatCurrency(financial.estimatedProfit, business)}</strong>
+          <p>Utilidad estimada de pedidos no cancelados con costeo completo.</p>
+          <div className="dashboard-profit-breakdown"><span>Ventas con costeo<strong>{formatCurrency(financial.costedSales, business)}</strong></span><span>Costos estimados<strong>{formatCurrency(financial.estimatedCosts ?? 0, business)}</strong></span></div>
+          <div className="dashboard-cost-coverage-bar"><progress max={100} value={financial.costCoveragePercent} aria-label={`Cobertura de costos: ${financial.costedOrderCount} de ${financial.nonCancelledOrderCount} pedidos`} /><span>{financial.costedOrderCount} de {financial.nonCancelledOrderCount} pedidos · {new Intl.NumberFormat('es', { maximumFractionDigits: 0 }).format(financial.costCoveragePercent)}% con costos</span></div>
+          {financial.consolidatedMargin !== null && <div className="dashboard-profit-margin"><span>Margen sobre ventas costeadas</span><strong>{new Intl.NumberFormat('es', { maximumFractionDigits: 2 }).format(financial.consolidatedMargin)}%</strong></div>}
+          <p className="dashboard-profit-disclaimer">La cobertura puede ser parcial si hay pedidos sin costeo.</p>
+        </>}
       </section>
 
       <section className="panel dashboard-recent-payments">

@@ -17,7 +17,8 @@ export function getDashboardFinancialMetrics(orders: Order[], payments: Payment[
   const salesCents = billableOrders.reduce((sum, order) => sum + cents(Number(order.total_amount)), 0)
   const collectedCents = payments.filter(payment => payment.status === 'posted').reduce((sum, payment) => sum + cents(Number(payment.amount)), 0)
   const outstandingCents = billableOrders.reduce((sum, order) => sum + cents(summarizePayments(order, payments).realBalance), 0)
-  const costedOrders = billableOrders.filter(order => order.estimated_profit !== null)
+  const costedOrders = billableOrders.filter(order => order.internal_cost_total !== null && order.estimated_profit !== null)
+  const costedSalesCents = costedOrders.reduce((sum, order) => sum + cents(Number(order.total_amount)), 0)
   const estimatedProfitCents = costedOrders.reduce((sum, order) => sum + cents(Number(order.estimated_profit)), 0)
 
   return {
@@ -27,7 +28,11 @@ export function getDashboardFinancialMetrics(orders: Order[], payments: Payment[
     averageTicket: billableOrders.length ? amount(Math.round(salesCents / billableOrders.length)) : 0,
     nonCancelledOrderCount: billableOrders.length,
     estimatedProfit: costedOrders.length ? amount(estimatedProfitCents) : null,
+    costedSales: amount(costedSalesCents),
+    estimatedCosts: costedOrders.length ? amount(costedSalesCents - estimatedProfitCents) : null,
+    consolidatedMargin: costedSalesCents > 0 ? estimatedProfitCents / costedSalesCents * 100 : null,
     costedOrderCount: costedOrders.length,
+    costCoveragePercent: billableOrders.length ? costedOrders.length / billableOrders.length * 100 : 0,
   }
 }
 

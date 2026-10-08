@@ -66,3 +66,38 @@
 .inline-chart-selection>span{min-width:0;overflow-wrap:anywhere}
 @media(max-width:370px){.inline-chart-track.dashboard-bar-chart{height:112px;gap:2px}.inline-chart-track.reports-chart{height:124px;gap:2px}.inline-chart-selection{font-size:.58rem}}
 @media(prefers-reduced-motion:reduce){.inline-chart *,.reports-page *{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
+.order-status-donut{--status-confirmed:var(--color-info);--status-in_preparation:var(--color-warning);--status-ready:var(--color-success);--status-delivered:var(--color-accent-tertiary);--status-cancelled:var(--color-danger);position:relative;display:grid;place-items:center;flex:none;width:112px;aspect-ratio:1;border-radius:50%;background:var(--order-status-gradient)}
+.order-status-donut-center{display:grid;place-content:center;justify-items:center;width:72%;aspect-ratio:1;border:1px solid var(--color-border);border-radius:50%;background:var(--color-surface-elevated)}
+.order-status-donut-center strong{color:var(--color-text-primary);font-size:1.25rem;line-height:1.1;letter-spacing:-.04em}
+.order-status-donut-center small{margin-top:3px;color:var(--color-text-muted);font-size:.58rem}
+.dashboard-status-visual,.reports-status-visual{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:14px;min-width:0}
+.dashboard-status-visual .dashboard-status-counts{grid-template-columns:1fr}
+.dashboard-status-visual .dashboard-status-counts li{padding:4px 5px;background:transparent}
+.reports-order-status-donut{width:100px}
+.reports-status-visual .reports-status-list{grid-template-columns:1fr;gap:7px}
+.reports-status-visual .reports-status-list li{padding:3px 4px;background:transparent}
+.dashboard-profit-breakdown,.reports-profit-breakdown{display:grid;gap:7px;margin:12px 0;padding:10px 11px;border:1px solid var(--color-border);border-radius:10px;background:var(--color-surface-elevated)}
+.dashboard-profit-breakdown>span,.reports-profit-breakdown>span{display:flex;align-items:baseline;justify-content:space-between;gap:8px;color:var(--color-text-muted);font-size:.63rem}
+.dashboard-profit-breakdown strong,.reports-profit-breakdown strong{color:var(--color-text-primary);font-size:.68rem;text-align:right}
+.dashboard-cost-coverage-bar{display:grid;gap:6px;margin-top:10px}
+.dashboard-cost-coverage-bar progress{width:100%;height:7px;overflow:hidden;border:0;border-radius:999px;background:var(--color-surface-secondary);accent-color:var(--color-success)}
+.dashboard-cost-coverage-bar progress::-webkit-progress-bar{border-radius:999px;background:var(--color-surface-secondary)}
+.dashboard-cost-coverage-bar progress::-webkit-progress-value{border-radius:999px;background:var(--color-success)}
+.dashboard-cost-coverage-bar progress::-moz-progress-bar{border-radius:999px;background:var(--color-success)}
+.dashboard-cost-coverage-bar>span,.dashboard-profit-disclaimer{color:var(--color-text-muted);font-size:.61rem;line-height:1.45}
+.dashboard-profit-margin{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:11px;padding-top:10px;border-top:1px solid var(--color-border);color:var(--color-text-secondary);font-size:.66rem}
+.dashboard-profit-margin strong{color:var(--color-text-primary);font-size:.8rem}
+.dashboard-profit-disclaimer{margin:8px 0 0}
+.dashboard-cost-settings-link{margin-top:11px}
+.reports-comparison-intro{margin:-4px 0 14px}
+.reports-comparison-bars{display:grid;gap:15px}
+.reports-comparison-row{display:grid;gap:6px}
+.reports-comparison-heading{display:flex;align-items:baseline;justify-content:space-between;gap:8px;color:var(--color-text-secondary);font-size:.66rem}
+.reports-comparison-heading strong{color:var(--color-text-primary);font-size:.71rem;text-align:right}
+.reports-comparison-track{height:9px;overflow:hidden;border-radius:999px;background:var(--color-surface-secondary)}
+.reports-comparison-track>span{display:block;height:100%;min-width:0;border-radius:inherit;background:var(--color-success);transition:width 220ms ease-out}
+.reports-comparison-row.is-collection .reports-comparison-track>span{background:var(--color-accent-primary)}
+.reports-collection-context{margin:14px 0 0;padding:10px;border-radius:9px;background:var(--color-surface-secondary);color:var(--color-text-secondary);font-size:.65rem;line-height:1.5}
+@media(max-width:370px){.order-status-donut{width:86px}.reports-order-status-donut{width:82px}.dashboard-status-visual,.reports-status-visual{gap:9px}.dashboard-status-visual .dashboard-status-counts li,.reports-status-visual .reports-status-list li{font-size:.6rem}}
+@media(prefers-reduced-motion:reduce){.reports-comparison-track>span{transition:none}}

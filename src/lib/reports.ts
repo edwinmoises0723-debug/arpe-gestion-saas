@@ -115,11 +115,25 @@ export function buildProfitabilitySummary(orders: Order[]) {
   const profitCents = costed.reduce((sum, order) => sum + cents(Number(order.estimated_profit)), 0)
   return {
     profit: costed.length ? money(profitCents) : null,
+    estimatedCosts: costed.length ? money(salesCents - profitCents) : null,
     costedOrderCount: costed.length,
     billableOrderCount: billable.length,
     uncostedOrderCount: billable.length - costed.length,
+    costCoveragePercent: billable.length ? costed.length / billable.length * 100 : 0,
     costedSales: money(salesCents),
     consolidatedMargin: salesCents > 0 ? profitCents / salesCents * 100 : null,
+  }
+}
+
+export function buildSalesCollectionComparison(sales: number, collected: number) {
+  const scale = Math.max(sales, collected)
+  return {
+    sales,
+    collected,
+    scale,
+    collectionPercentOfSales: sales > 0 ? collected / sales * 100 : null,
+    salesBarPercent: scale > 0 ? sales / scale * 100 : 0,
+    collectedBarPercent: scale > 0 ? collected / scale * 100 : 0,
   }
 }
 

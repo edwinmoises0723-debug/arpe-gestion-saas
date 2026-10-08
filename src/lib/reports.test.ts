@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Order, OrderItem, Payment } from './database.types'
 import {
   buildCollectionSeries, buildPaymentMethodSummary, buildProductRanking, buildProfitabilitySummary,
-  buildReportCsv, buildReportSummary, buildOrderStatusSummary, encodeUtf16Le, filterOrdersByRange, filterPaymentsByRange,
+  buildReportCsv, buildReportSummary, buildSalesCollectionComparison, buildOrderStatusSummary, encodeUtf16Le, filterOrdersByRange, filterPaymentsByRange,
   getReportRange, isValidReportRange,
 } from './reports'
 
@@ -78,7 +78,15 @@ describe('reports helpers', () => {
     expect(buildProfitabilitySummary([order({ internal_cost_total: 300, estimated_profit: 700 }), order({ id: 'uncosted' })])).toMatchObject({ profit: 700, costedOrderCount: 1, billableOrderCount: 2, uncostedOrderCount: 1 })
   })
   it('calcula margen solo contra ventas de pedidos costeados', () => {
-    expect(buildProfitabilitySummary([order({ internal_cost_total: 300, estimated_profit: 700 }), order({ id: 'uncosted', total_amount: 900 })])).toMatchObject({ costedSales: 1000, consolidatedMargin: 70 })
+    expect(buildProfitabilitySummary([order({ internal_cost_total: 300, estimated_profit: 700 }), order({ id: 'uncosted', total_amount: 900 })])).toMatchObject({ costedSales: 1000, estimatedCosts: 300, consolidatedMargin: 70, costedOrderCount: 1, billableOrderCount: 2, uncostedOrderCount: 1, costCoveragePercent: 50 })
+  })
+  it('sets cost coverage to zero when the period has no billable orders', () => {
+    expect(buildProfitabilitySummary([])).toMatchObject({ costCoveragePercent: 0, billableOrderCount: 0, costedOrderCount: 0, profit: null })
+  })
+  it('compares period sales to period collections without dividing by zero', () => {
+    expect(buildSalesCollectionComparison(1000, 600)).toMatchObject({ collectionPercentOfSales: 60, salesBarPercent: 100, collectedBarPercent: 60 })
+    expect(buildSalesCollectionComparison(0, 250)).toMatchObject({ collectionPercentOfSales: null, salesBarPercent: 0, collectedBarPercent: 100 })
+    expect(buildSalesCollectionComparison(0, 0)).toMatchObject({ collectionPercentOfSales: null, salesBarPercent: 0, collectedBarPercent: 0 })
   })
   it('agrupa pagos posted por método con monto y conteo', () => {
     expect(buildPaymentMethodSummary([payment(), payment({ id: 'payment-2', amount: 100 }), payment({ id: 'void', status: 'voided', amount: 500 })])).toEqual([{ method: 'cash', label: 'Efectivo', amount: 350, count: 2 }])

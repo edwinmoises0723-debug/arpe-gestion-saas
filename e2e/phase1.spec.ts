@@ -36,7 +36,7 @@ async function mockBackend(page: Page, existing = false, seedOrder = false, seed
     order_number: 'ARPE-PED-2026-0001', source_quote_number: 'ARPE-COT-2026-0001', customer_name: 'Ana Pérez',
     customer_phone: '', product: 'Pastel de vainilla', portions: 20, flavor: 'Vainilla', filling: '', decoration: '',
     extras: '', delivery_date: null, delivery_time: null, notes: '', total_amount: 1800, deposit_type: 'fixed',
-    deposit_value: 500, deposit_required: 500, internal_cost_total: null, estimated_profit: null, real_margin_percent: null,
+    deposit_value: 500, deposit_required: 500, internal_cost_total: seedAnalytics ? 1000 : null, estimated_profit: seedAnalytics ? 800 : null, real_margin_percent: seedAnalytics ? 44.44 : null,
     status: 'delivered', created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
   } : null
   const payments: Record<string, unknown>[] = seedAnalytics && order ? [{
@@ -49,8 +49,8 @@ async function mockBackend(page: Page, existing = false, seedOrder = false, seed
   let orderItems: Record<string, unknown>[] = seedAnalytics && order ? [{
     id: '66666666-6666-4666-8666-666666666666', business_id: business.id, order_id: order.id, source_quote_item_id: null,
     product: 'Pastel de vainilla', quantity: 1, unit_label: 'unidad', portions: 20, flavor: 'Vainilla', filling: '',
-    decoration: '', extras: '', notes: '', unit_price: 1800, position: 1, line_total: 1800, internal_cost_total: null,
-    estimated_profit: null, real_margin_percent: null, created_at: new Date().toISOString(),
+    decoration: '', extras: '', notes: '', unit_price: 1800, position: 1, line_total: 1800, internal_cost_total: seedAnalytics ? 1000 : null,
+    estimated_profit: seedAnalytics ? 800 : null, real_margin_percent: seedAnalytics ? 44.44 : null, created_at: new Date().toISOString(),
   }] : []
   const costSettings = { business_id: business.id, waste_percent: 12, indirect_percent: 12, labor_hourly_rate: 100, markup_percent: 60 }
   await page.route('**/auth/v1/**', async route => {
@@ -233,6 +233,10 @@ test('dashboard and reports charts stay accessible and responsive', async ({ pag
   await dashboardChart.getByRole('button').last().click()
   await expect(page.locator('.dashboard-page .inline-chart-selection')).toContainText('C$')
   await expect(page.locator('.dashboard-status-counts')).toContainText('Entregados')
+  await expect(page.locator('.dashboard-status-visual').getByRole('img', { name: /Total: 1 pedidos/ })).toBeVisible()
+  await expect(page.locator('.dashboard-status-visual .order-status-donut-center')).toContainText('Pedidos')
+  await expect(page.locator('.dashboard-profit')).toContainText('Ventas con costeo')
+  await expect(page.locator('.dashboard-profit')).toContainText('Margen sobre ventas costeadas')
   await page.screenshot({ path: testInfo.outputPath('dashboard-390.png'), fullPage: true })
 
   for (const width of [320, 360, 390, 768, 884, 1440]) {
@@ -251,6 +255,9 @@ test('dashboard and reports charts stay accessible and responsive', async ({ pag
   await expect(page.locator('.reports-product-ranking .reports-rank-track')).toHaveCount(1)
   await expect(page.locator('.reports-payment-ranking .reports-rank-track')).toHaveCount(1)
   await expect(page.locator('.reports-delivery-list li')).toHaveCount(3)
+  await expect(page.locator('.reports-status-visual').getByRole('img', { name: /Total: 1 pedidos/ })).toBeVisible()
+  await expect(page.locator('.reports-sales-collection')).toContainText('Ventas vs. Cobros')
+  await expect(page.locator('.reports-profitability')).toContainText('Costos estimados')
   await reportChart.getByRole('button').last().click()
   await expect(page.locator('.reports-page .inline-chart-selection')).toContainText('C$')
   await page.locator('.reports-filter select').selectOption('last7')
