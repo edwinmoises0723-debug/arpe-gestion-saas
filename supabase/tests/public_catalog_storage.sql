@@ -32,6 +32,14 @@ values
 do $$ begin perform set_config('request.jwt.claim.sub','cccccccc-3333-4333-8333-333333333333',true); end $$;
 set local role authenticated;
 do $$ declare affected integer; begin
+  if auth.uid() <> 'cccccccc-3333-4333-8333-333333333333'::uuid then raise exception 'Storage test JWT subject was not applied'; end if;
+  if storage.foldername('cccccccc-3333-4333-8333-333333333333/cccccccc-cccc-4ccc-8ccc-cccccccccccc/products/own.png')
+    <> array['cccccccc-3333-4333-8333-333333333333','cccccccc-cccc-4ccc-8ccc-cccccccccccc','products']::text[] then
+    raise exception 'Storage folder path parsing did not match the asserted namespace';
+  end if;
+  if not exists (select 1 from public.arpe_businesses where id='cccccccc-cccc-4ccc-8ccc-cccccccccccc' and owner_id=auth.uid()) then
+    raise exception 'Authenticated owner cannot read its fixture business';
+  end if;
   begin
     insert into storage.objects(bucket_id,name,owner_id) values ('ejnexa-catalog-media','cccccccc-3333-4333-8333-333333333333/dddddddd-dddd-4ddd-8ddd-dddddddddddd/products/foreign-business.png','cccccccc-3333-4333-8333-333333333333');
     raise exception 'TEST_FAILED owner A uploaded inside owner B business';
