@@ -56,6 +56,15 @@ do $$ declare affected integer; begin
     insert into storage.objects(bucket_id,name,owner_id) values ('ejnexa-catalog-media','cccccccc-3333-4333-8333-333333333333/cccccccc-cccc-4ccc-8ccc-cccccccccccc/products/nested/invalid.png','cccccccc-3333-4333-8333-333333333333');
     raise exception 'TEST_FAILED arbitrary nested media path accepted';
   exception when insufficient_privilege then null; end;
+  raise notice 'Catalog upload condition: %, effective Storage insert policies: %',
+    ('ejnexa-catalog-media' = 'ejnexa-catalog-media'
+      and (storage.foldername('cccccccc-3333-4333-8333-333333333333/cccccccc-cccc-4ccc-8ccc-cccccccccccc/products/own.png'))[1] = (select auth.uid())::text
+      and exists (select 1 from public.arpe_businesses b where b.id::text = (storage.foldername('cccccccc-3333-4333-8333-333333333333/cccccccc-cccc-4ccc-8ccc-cccccccccccc/products/own.png'))[2] and b.owner_id = (select auth.uid()))
+      and (storage.foldername('cccccccc-3333-4333-8333-333333333333/cccccccc-cccc-4ccc-8ccc-cccccccccccc/products/own.png'))[3] in ('products', 'profile')
+      and cardinality(storage.foldername('cccccccc-3333-4333-8333-333333333333/cccccccc-cccc-4ccc-8ccc-cccccccccccc/products/own.png')) = 3
+      and storage.filename('cccccccc-3333-4333-8333-333333333333/cccccccc-cccc-4ccc-8ccc-cccccccccccc/products/own.png') <> ''),
+    (select jsonb_agg(jsonb_build_object('name', policyname, 'command', cmd, 'mode', permissive, 'roles', roles, 'check', with_check))
+      from pg_policies where schemaname='storage' and tablename='objects');
   insert into storage.objects(bucket_id,name,owner_id) values ('ejnexa-catalog-media','cccccccc-3333-4333-8333-333333333333/cccccccc-cccc-4ccc-8ccc-cccccccccccc/products/own.png','cccccccc-3333-4333-8333-333333333333');
   delete from storage.objects where bucket_id='ejnexa-catalog-media' and name='dddddddd-4444-4444-8444-444444444444/dddddddd-dddd-4ddd-8ddd-dddddddddddd/products/foreign.png';
   get diagnostics affected = row_count;
