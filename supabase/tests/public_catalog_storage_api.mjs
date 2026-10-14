@@ -47,6 +47,11 @@ const upload = async (client, path) => client.storage.from(bucket).upload(path, 
   contentType: 'image/png',
   upsert: false,
 })
+const assertObjectAvailable = async (client, path, message) => {
+  const { data, error } = await client.storage.from(bucket).download(path)
+  assert.ifError(error)
+  assert.equal(Buffer.compare(Buffer.from(await data.arrayBuffer()), png), 0, message)
+}
 
 assert.ifError((await upload(ownerA.client, aProduct)).error)
 assert.ifError((await upload(ownerA.client, aLogo)).error)
@@ -63,18 +68,20 @@ assert.ok((await upload(ownerA.client, `${ownerA.ownerId}/${ownerA.businessId}/p
 assert.ok((await upload(anonymous, aProduct)).error, 'anonymous visitors cannot upload media')
 
 const remove = async (client, path) => client.storage.from(bucket).remove([path])
-const assertDeleteDenied = async (client, path, message) => {
-  const { data, error } = await remove(client, path)
-  assert.ok(error || data?.length === 0, message)
+const assertDeleteDenied = async (client, reader, path, message) => {
+  const { error } = await remove(client, path)
+  assert.ifError(error)
+  await assertObjectAvailable(reader, path, message)
 }
 const assertDeleteAllowed = async (client, path, message) => {
-  const { data, error } = await remove(client, path)
+  const { error } = await remove(client, path)
   assert.ifError(error)
-  assert.ok(data?.length > 0, message)
+  const { error: uploadError } = await upload(client, path)
+  assert.ifError(uploadError, message)
 }
 
-await assertDeleteDenied(ownerA.client, bProduct, 'owner A cannot delete owner B object')
-await assertDeleteDenied(anonymous, aProduct, 'anonymous visitors cannot delete media')
+await assertDeleteDenied(ownerA.client, ownerB.client, bProduct, 'owner A cannot delete owner B object')
+await assertDeleteDenied(anonymous, ownerA.client, aProduct, 'anonymous visitors cannot delete media')
 await assertDeleteAllowed(ownerA.client, aProduct, 'owner A can delete its own product media')
 await assertDeleteAllowed(ownerA.client, aLogo, 'owner A can delete its own profile media')
 await assertDeleteAllowed(ownerB.client, bProduct, 'owner B can delete its own product media')

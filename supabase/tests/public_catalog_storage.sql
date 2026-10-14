@@ -10,15 +10,18 @@ values
   ('cccccccc-cccc-4ccc-8ccc-cccccccccccc','cccccccc-3333-4333-8333-333333333333','Storage A'),
   ('dddddddd-dddd-4ddd-8ddd-dddddddddddd','dddddddd-4444-4444-8444-444444444444','Storage B');
 
-do $$ declare bucket storage.buckets; insert_policy text; delete_policy text; begin
+do $$ declare bucket storage.buckets; insert_policy text; select_policy text; delete_policy text; begin
   select * into bucket from storage.buckets where id='ejnexa-catalog-media';
   if bucket.id is null or bucket.public is not true or bucket.file_size_limit <> 5242880 then raise exception 'Catalog bucket is missing or has wrong visibility/size'; end if;
   if bucket.allowed_mime_types is distinct from array['image/png','image/jpeg','image/webp']::text[] then raise exception 'Catalog bucket MIME allowlist mismatch'; end if;
   select with_check into insert_policy from pg_policies where schemaname='storage' and tablename='objects' and policyname='Catalog owners can upload marketing media';
+  select qual into select_policy from pg_policies where schemaname='storage' and tablename='objects' and policyname='Catalog owners can select marketing media';
   select qual into delete_policy from pg_policies where schemaname='storage' and tablename='objects' and policyname='Catalog owners can delete marketing media';
   if insert_policy not ilike '%auth.uid()%' or insert_policy not ilike '%arpe_businesses%' or insert_policy not ilike '%foldername(objects.name)%' or insert_policy not ilike '%cardinality%' or insert_policy not ilike '%filename%' then raise exception 'Upload policy does not enforce exact owner/business/folder/file path'; end if;
+  if select_policy not ilike '%auth.uid()%' or select_policy not ilike '%arpe_businesses%' or select_policy not ilike '%foldername(objects.name)%' or select_policy not ilike '%cardinality%' or select_policy not ilike '%filename%' then raise exception 'Select policy does not enforce exact owner/business/folder/file path'; end if;
   if delete_policy not ilike '%auth.uid()%' or delete_policy not ilike '%arpe_businesses%' or delete_policy not ilike '%foldername(objects.name)%' or delete_policy not ilike '%cardinality%' or delete_policy not ilike '%filename%' then raise exception 'Delete policy does not enforce exact owner/business/folder/file path'; end if;
   if not exists(select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='Catalog owners can upload marketing media' and cmd='INSERT' and roles @> array['authenticated']::name[]) then raise exception 'Upload must require authentication'; end if;
+  if not exists(select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='Catalog owners can select marketing media' and cmd='SELECT' and roles @> array['authenticated']::name[]) then raise exception 'Select must require authentication'; end if;
   if not exists(select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='Catalog owners can delete marketing media' and cmd='DELETE' and roles @> array['authenticated']::name[]) then raise exception 'Delete must require authentication'; end if;
   if exists (select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname ilike '%catalog%' and roles @> array['anon']::name[]) then raise exception 'Anonymous media write policy exists'; end if;
   if exists (select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='Catalog owners can update marketing media') then raise exception 'Unexpected storage update policy'; end if;
