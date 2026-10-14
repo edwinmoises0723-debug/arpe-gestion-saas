@@ -16,8 +16,8 @@ do $$ declare bucket storage.buckets; insert_policy text; delete_policy text; be
   if bucket.allowed_mime_types is distinct from array['image/png','image/jpeg','image/webp']::text[] then raise exception 'Catalog bucket MIME allowlist mismatch'; end if;
   select with_check into insert_policy from pg_policies where schemaname='storage' and tablename='objects' and policyname='Catalog owners can upload marketing media';
   select qual into delete_policy from pg_policies where schemaname='storage' and tablename='objects' and policyname='Catalog owners can delete marketing media';
-  if insert_policy not ilike '%auth.uid()%' or insert_policy not ilike '%arpe_businesses%' or insert_policy not ilike '%foldername%' or insert_policy not ilike '%cardinality%' or insert_policy not ilike '%filename%' then raise exception 'Upload policy does not enforce exact owner/business/folder/file path'; end if;
-  if delete_policy not ilike '%auth.uid()%' or delete_policy not ilike '%arpe_businesses%' or delete_policy not ilike '%foldername%' or delete_policy not ilike '%cardinality%' or delete_policy not ilike '%filename%' then raise exception 'Delete policy does not enforce exact owner/business/folder/file path'; end if;
+  if insert_policy not ilike '%auth.uid()%' or insert_policy not ilike '%arpe_businesses%' or insert_policy not ilike '%foldername(objects.name)%' or insert_policy not ilike '%cardinality%' or insert_policy not ilike '%filename%' then raise exception 'Upload policy does not enforce exact owner/business/folder/file path'; end if;
+  if delete_policy not ilike '%auth.uid()%' or delete_policy not ilike '%arpe_businesses%' or delete_policy not ilike '%foldername(objects.name)%' or delete_policy not ilike '%cardinality%' or delete_policy not ilike '%filename%' then raise exception 'Delete policy does not enforce exact owner/business/folder/file path'; end if;
   if not exists(select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='Catalog owners can upload marketing media' and cmd='INSERT' and roles @> array['authenticated']::name[]) then raise exception 'Upload must require authentication'; end if;
   if not exists(select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='Catalog owners can delete marketing media' and cmd='DELETE' and roles @> array['authenticated']::name[]) then raise exception 'Delete must require authentication'; end if;
   if exists (select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname ilike '%catalog%' and roles @> array['anon']::name[]) then raise exception 'Anonymous media write policy exists'; end if;
@@ -56,15 +56,6 @@ do $$ declare affected integer; begin
     insert into storage.objects(bucket_id,name,owner_id) values ('ejnexa-catalog-media','cccccccc-3333-4333-8333-333333333333/cccccccc-cccc-4ccc-8ccc-cccccccccccc/products/nested/invalid.png','cccccccc-3333-4333-8333-333333333333');
     raise exception 'TEST_FAILED arbitrary nested media path accepted';
   exception when insufficient_privilege then null; end;
-  raise notice 'Catalog upload condition: %, effective Storage insert policies: %',
-    ('ejnexa-catalog-media' = 'ejnexa-catalog-media'
-      and (storage.foldername('cccccccc-3333-4333-8333-333333333333/cccccccc-cccc-4ccc-8ccc-cccccccccccc/products/own.png'))[1] = (select auth.uid())::text
-      and exists (select 1 from public.arpe_businesses b where b.id::text = (storage.foldername('cccccccc-3333-4333-8333-333333333333/cccccccc-cccc-4ccc-8ccc-cccccccccccc/products/own.png'))[2] and b.owner_id = (select auth.uid()))
-      and (storage.foldername('cccccccc-3333-4333-8333-333333333333/cccccccc-cccc-4ccc-8ccc-cccccccccccc/products/own.png'))[3] in ('products', 'profile')
-      and cardinality(storage.foldername('cccccccc-3333-4333-8333-333333333333/cccccccc-cccc-4ccc-8ccc-cccccccccccc/products/own.png')) = 3
-      and storage.filename('cccccccc-3333-4333-8333-333333333333/cccccccc-cccc-4ccc-8ccc-cccccccccccc/products/own.png') <> ''),
-    (select jsonb_agg(jsonb_build_object('name', policyname, 'command', cmd, 'mode', permissive, 'roles', roles, 'check', with_check))
-      from pg_policies where schemaname='storage' and tablename='objects');
   insert into storage.objects(bucket_id,name,owner_id) values ('ejnexa-catalog-media','cccccccc-3333-4333-8333-333333333333/cccccccc-cccc-4ccc-8ccc-cccccccccccc/products/own.png','cccccccc-3333-4333-8333-333333333333');
   delete from storage.objects where bucket_id='ejnexa-catalog-media' and name='dddddddd-4444-4444-8444-444444444444/dddddddd-dddd-4ddd-8ddd-dddddddddddd/products/foreign.png';
   get diagnostics affected = row_count;

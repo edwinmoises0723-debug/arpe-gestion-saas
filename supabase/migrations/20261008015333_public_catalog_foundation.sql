@@ -107,7 +107,7 @@ create policy "Catalog owners can upload marketing media"
     and (storage.foldername(name))[1] = (select auth.uid())::text
     and exists (
       select 1 from public.arpe_businesses b
-      where b.id::text = (storage.foldername(name))[2]
+      where b.id::text = (storage.foldername(objects.name))[2]
         and b.owner_id = (select auth.uid())
     )
     and (storage.foldername(name))[3] in ('products', 'profile')
@@ -122,7 +122,7 @@ create policy "Catalog owners can delete marketing media"
     and (storage.foldername(name))[1] = (select auth.uid())::text
     and exists (
       select 1 from public.arpe_businesses b
-      where b.id::text = (storage.foldername(name))[2]
+      where b.id::text = (storage.foldername(objects.name))[2]
         and b.owner_id = (select auth.uid())
     )
     and (storage.foldername(name))[3] in ('products', 'profile')
