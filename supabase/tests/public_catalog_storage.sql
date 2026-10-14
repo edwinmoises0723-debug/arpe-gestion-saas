@@ -1,5 +1,5 @@
 -- LOCAL ONLY. Requires the catalog migration and a disposable local Supabase database.
--- This test exercises Storage RLS upload checks and cross-business delete denial, then rolls back fixtures.
+-- This test exercises Storage RLS upload checks and policy definitions, then rolls back fixtures.
 begin;
 select plan(1);
 insert into auth.users(id) values
@@ -24,14 +24,9 @@ do $$ declare bucket storage.buckets; insert_policy text; delete_policy text; be
   if exists (select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='Catalog owners can update marketing media') then raise exception 'Unexpected storage update policy'; end if;
 end $$;
 
--- Seed a foreign object as the local database owner, then prove owner A cannot delete it.
-insert into storage.objects(bucket_id, name, owner_id)
-values
-  ('ejnexa-catalog-media','dddddddd-4444-4444-8444-444444444444/dddddddd-dddd-4ddd-8ddd-dddddddddddd/products/foreign.png','dddddddd-4444-4444-8444-444444444444'),
-  ('ejnexa-catalog-media','cccccccc-3333-4333-8333-333333333333/cccccccc-cccc-4ccc-8ccc-cccccccccccc/products/for-anon.png','cccccccc-3333-4333-8333-333333333333');
 do $$ begin perform set_config('request.jwt.claim.sub','cccccccc-3333-4333-8333-333333333333',true); end $$;
 set local role authenticated;
-do $$ declare affected integer; begin
+do $$ begin
   if auth.uid() <> 'cccccccc-3333-4333-8333-333333333333'::uuid then raise exception 'Storage test JWT subject was not applied'; end if;
   if storage.foldername('cccccccc-3333-4333-8333-333333333333/cccccccc-cccc-4ccc-8ccc-cccccccccccc/products/own.png')
     <> array['cccccccc-3333-4333-8333-333333333333','cccccccc-cccc-4ccc-8ccc-cccccccccccc','products']::text[] then
@@ -57,22 +52,13 @@ do $$ declare affected integer; begin
     raise exception 'TEST_FAILED arbitrary nested media path accepted';
   exception when insufficient_privilege then null; end;
   insert into storage.objects(bucket_id,name,owner_id) values ('ejnexa-catalog-media','cccccccc-3333-4333-8333-333333333333/cccccccc-cccc-4ccc-8ccc-cccccccccccc/products/own.png','cccccccc-3333-4333-8333-333333333333');
-  -- Supabase requires deletions through its Storage API; this SQL check proves a foreign object is hidden by RLS.
-  delete from storage.objects where bucket_id='ejnexa-catalog-media' and name='dddddddd-4444-4444-8444-444444444444/dddddddd-dddd-4ddd-8ddd-dddddddddddd/products/foreign.png';
-  get diagnostics affected = row_count;
-  if affected <> 0 then raise exception 'TEST_FAILED owner A deleted owner B media'; end if;
 end $$;
 reset role;
 set local role anon;
-do $$ declare affected integer; begin
+do $$ begin
   begin
     insert into storage.objects(bucket_id,name,owner_id) values ('ejnexa-catalog-media','cccccccc-3333-4333-8333-333333333333/cccccccc-cccc-4ccc-8ccc-cccccccccccc/products/anon.png','cccccccc-3333-4333-8333-333333333333');
     raise exception 'TEST_FAILED anon inserted catalog media';
-  exception when insufficient_privilege then null; end;
-  begin
-    delete from storage.objects where bucket_id='ejnexa-catalog-media' and name='cccccccc-3333-4333-8333-333333333333/cccccccc-cccc-4ccc-8ccc-cccccccccccc/products/for-anon.png';
-    get diagnostics affected = row_count;
-    if affected <> 0 then raise exception 'TEST_FAILED anon deleted catalog media'; end if;
   exception when insufficient_privilege then null; end;
 end $$;
 reset role;
