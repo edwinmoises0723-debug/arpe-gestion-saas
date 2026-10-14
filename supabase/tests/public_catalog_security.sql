@@ -95,7 +95,8 @@ do $$ declare affected integer; invalid_path text; begin
     raise exception 'TEST_FAILED enabled catalog without slug accepted';
   exception when check_violation then null; end;
   begin
-    insert into public.arpe_businesses(owner_id,name,catalog_slug) values ('cccccccc-3333-4333-8333-333333333333','Invalid slug','Bad Slug!');
+    update public.arpe_businesses set catalog_slug='Bad Slug!'
+      where id='cccccccc-cccc-4ccc-8ccc-cccccccccccc';
     raise exception 'TEST_FAILED invalid slug accepted';
   exception when check_violation then null; end;
 end $$;
