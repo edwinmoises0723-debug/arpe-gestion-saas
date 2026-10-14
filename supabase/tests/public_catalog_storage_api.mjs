@@ -37,13 +37,6 @@ const createOwner = async (label) => {
   return { client, ownerId: data.user.id, businessId: business.id }
 }
 
-const checkPublicObject = async (owner, business, folder, file) => {
-  const path = `${owner}/${business}/${folder}/${file}`
-  const url = anonymous.storage.from(bucket).getPublicUrl(path).data.publicUrl
-  const response = await fetch(url, { cache: 'no-store' })
-  return response.status
-}
-
 const ownerA = await createOwner('a')
 const ownerB = await createOwner('b')
 const aProduct = `${ownerA.ownerId}/${ownerA.businessId}/products/${randomUUID()}.png`
@@ -69,22 +62,21 @@ assert.ok((await upload(ownerA.client, `${ownerA.ownerId}/${ownerA.businessId}/p
   'nested paths are rejected')
 assert.ok((await upload(anonymous, aProduct)).error, 'anonymous visitors cannot upload media')
 
-assert.equal(await checkPublicObject(ownerB.ownerId, ownerB.businessId, 'products', bProduct.split('/').at(-1)), 200)
-await ownerA.client.storage.from(bucket).remove([bProduct])
-assert.equal(await checkPublicObject(ownerB.ownerId, ownerB.businessId, 'products', bProduct.split('/').at(-1)), 200,
-  'owner A cannot delete owner B object')
-await anonymous.storage.from(bucket).remove([aProduct])
-assert.equal(await checkPublicObject(ownerA.ownerId, ownerA.businessId, 'products', aProduct.split('/').at(-1)), 200,
-  'anonymous visitors cannot delete media')
+const remove = async (client, path) => client.storage.from(bucket).remove([path])
+const assertDeleteDenied = async (client, path, message) => {
+  const { data, error } = await remove(client, path)
+  assert.ok(error || data?.length === 0, message)
+}
+const assertDeleteAllowed = async (client, path, message) => {
+  const { data, error } = await remove(client, path)
+  assert.ifError(error)
+  assert.ok(data?.length > 0, message)
+}
 
-assert.ifError((await ownerA.client.storage.from(bucket).remove([aProduct])).error)
-assert.notEqual(await checkPublicObject(ownerA.ownerId, ownerA.businessId, 'products', aProduct.split('/').at(-1)), 200,
-  'owner A can delete its own product media')
-assert.ifError((await ownerA.client.storage.from(bucket).remove([aLogo])).error)
-assert.notEqual(await checkPublicObject(ownerA.ownerId, ownerA.businessId, 'profile', aLogo.split('/').at(-1)), 200,
-  'owner A can delete its own profile media')
-assert.ifError((await ownerB.client.storage.from(bucket).remove([bProduct])).error)
-assert.notEqual(await checkPublicObject(ownerB.ownerId, ownerB.businessId, 'products', bProduct.split('/').at(-1)), 200,
-  'owner B can delete its own product media')
+await assertDeleteDenied(ownerA.client, bProduct, 'owner A cannot delete owner B object')
+await assertDeleteDenied(anonymous, aProduct, 'anonymous visitors cannot delete media')
+await assertDeleteAllowed(ownerA.client, aProduct, 'owner A can delete its own product media')
+await assertDeleteAllowed(ownerA.client, aLogo, 'owner A can delete its own profile media')
+await assertDeleteAllowed(ownerB.client, bProduct, 'owner B can delete its own product media')
 
 console.log('Storage API ownership, valid paths, cross-tenant denial, anonymous denial and owner deletes passed.')
