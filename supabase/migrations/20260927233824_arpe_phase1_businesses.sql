@@ -1,3 +1,8 @@
+-- Fresh environments do not contain the legacy private schema
+-- created by pre-repository migrations.
+create schema if not exists private;
+revoke all on schema private from public, anon, authenticated;
+
 -- Phase 1 is isolated from pre-existing ARPE tables. No data is imported or overwritten.
 create table public.arpe_businesses (
   id uuid primary key default gen_random_uuid(),

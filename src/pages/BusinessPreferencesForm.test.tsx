@@ -14,6 +14,7 @@ const business: Business = {
   show_slogan_on_documents: true, show_description_on_documents: true, show_whatsapp_on_documents: true,
   show_email_on_documents: true, show_address_on_documents: true,
   document_footer_message: 'Gracias por confiar en nosotros.', created_at: '', updated_at: '',
+  catalog_slug: null, public_catalog_enabled: false, public_catalog_show_whatsapp: true, public_catalog_logo_path: null,
 }
 
 beforeEach(() => vi.resetAllMocks())

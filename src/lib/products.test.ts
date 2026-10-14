@@ -3,11 +3,15 @@ import type { CatalogProduct, QuoteBundleHeader } from './database.types'
 import { calculateBundle, calculateItemCost, duplicateProduct, filterCatalog, fromCatalog, lineTotal, newItemCost, newProduct, removeProduct, suggestedUnitPrice, summarizeProducts, validateBundle } from './products'
 
 const header: QuoteBundleHeader = { customer_name: 'Cliente de prueba', customer_phone: '', delivery_date: null, delivery_time: null, notes: '', status: 'draft', deposit_type: 'percentage', deposit_value: 50, delivery_internal_cost: 100, delivery_customer_charge: 150 }
-const catalog: CatalogProduct = { id: 'catalog-1', business_id: 'business-1', name: 'Alfajor', category: 'Galletas', description: 'Relleno suave', unit_label: 'unidad', default_unit_price: 35, default_portions: null, default_flavor: 'Chocolate', default_filling: 'Ganache', default_decoration: '', default_extras: '', is_active: true, created_at: '', updated_at: '' }
+const catalog: CatalogProduct = { id: 'catalog-1', business_id: 'business-1', name: 'Alfajor', category: 'Galletas', description: 'Relleno suave', unit_label: 'unidad', default_unit_price: 35, default_portions: null, default_flavor: 'Chocolate', default_filling: 'Ganache', default_decoration: '', default_extras: '', is_active: true, image_path: null, is_public: false, public_price_mode: 'exact', public_sort_order: 0, created_at: '', updated_at: '' }
 describe('productos independientes y catálogo', () => {
   it('copies catalog snapshots in both directions and duplicates cost data independently', () => {
     const source = { ...catalog }
     const item = fromCatalog(source)
+    expect(item).not.toHaveProperty('image_path')
+    expect(item).not.toHaveProperty('is_public')
+    expect(item).not.toHaveProperty('public_price_mode')
+    expect(item).not.toHaveProperty('public_sort_order')
     source.name = 'Nuevo nombre'; source.default_unit_price = 40
     expect(item.product).toBe('Alfajor'); expect(item.unit_price).toBe(35)
     item.product = 'Personalizado'; expect(source.name).toBe('Nuevo nombre')

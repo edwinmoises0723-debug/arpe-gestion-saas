@@ -24,14 +24,20 @@ const business: Business = {
   show_email_on_documents: true,
   show_address_on_documents: true,
   document_footer_message: 'Gracias por elegirnos.',
+  catalog_slug: null,
+  public_catalog_enabled: false,
+  public_catalog_show_whatsapp: true,
+  public_catalog_logo_path: null,
   created_at: '',
   updated_at: '',
 }
-const catalog: CatalogProduct = { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', business_id: business.id, name: 'Pastel de Chocolate Premium', category: 'Pasteles', description: '', unit_label: 'pastel', default_unit_price: 2000, default_portions: 20, default_flavor: 'Chocolate', default_filling: 'Ganache', default_decoration: 'Floral', default_extras: '', is_active: true, created_at: '', updated_at: '' }
+const catalog: CatalogProduct = { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', business_id: business.id, name: 'Pastel de Chocolate Premium', category: 'Pasteles', description: '', unit_label: 'pastel', default_unit_price: 2000, default_portions: 20, default_flavor: 'Chocolate', default_filling: 'Ganache', default_decoration: 'Floral', default_extras: '', is_active: true, image_path: null, is_public: false, public_price_mode: 'exact', public_sort_order: 0, created_at: '', updated_at: '' }
 const baseQuote: Quote = { id: '33333333-3333-4333-8333-333333333333', business_id: business.id, quote_number: 'ARPE-COT-2026-0001', customer_name: 'Cliente local', customer_phone: '', product: catalog.name, portions: 20, flavor: 'Chocolate', filling: 'Ganache', decoration: 'Floral', extras: '', delivery_date: null, delivery_time: null, notes: '', total_amount: 2000, deposit_type: 'percentage', deposit_value: 50, deposit_required: 1000, status: 'sent', delivery_internal_cost: 0, delivery_customer_charge: 0, created_at: '2026-10-01T12:00:00Z', updated_at: '2026-10-01T12:00:00Z' }
 
 async function backend(page: Page, seed = 0) {
+  let currentBusiness = { ...business }
   let quote: Quote | null = seed ? { ...baseQuote } : null
+  let nextCatalogId = 0
   let items: QuoteItem[] = seed ? [{ ...baseQuote, id: 'item-1', quote_id: baseQuote.id, catalog_product_id: catalog.id, position: 1, quantity: 1, unit_label: 'pastel', unit_price: 2000, line_total: 2000 }] : []
   let products = [{ ...catalog }]
   let bundle: QuoteBundleItem[] = []
@@ -46,10 +52,11 @@ async function backend(page: Page, seed = 0) {
     const request = route.request(), url = new URL(request.url()), table = url.pathname.split('/').at(-1)
     let response: unknown = []
     if (url.pathname.startsWith('/auth/')) response = table === 'user' ? user : { user, access_token: 'test-token', refresh_token: 'test-refresh', token_type: 'bearer', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600 }
-    else if (table === 'arpe_businesses') response = [business]
+    else if (url.pathname.startsWith('/storage/v1/object/ejnexa-catalog-media')) response = request.method() === 'DELETE' ? {} : { Key: url.pathname.split('/').slice(-4).join('/') }
+    else if (table === 'arpe_businesses') { if (request.method() === 'PATCH') { currentBusiness = { ...currentBusiness, ...request.postDataJSON() }; response = currentBusiness } else response = [currentBusiness] }
     else if (table === 'arpe_catalog_products') {
-      if (request.method() === 'PATCH') { products[0] = { ...products[0], ...request.postDataJSON() }; response = products[0] }
-      else if (request.method() === 'POST') { const created = { ...catalog, ...request.postDataJSON(), id: 'catalog-new' }; products = [...products, created]; response = created }
+      if (request.method() === 'PATCH') { const id = url.searchParams.get('id')?.replace('eq.', ''); const index = products.findIndex(product => product.id === id); products[index] = { ...products[index], ...request.postDataJSON() }; response = products[index] }
+      else if (request.method() === 'POST') { const created = { ...catalog, ...request.postDataJSON(), id: `catalog-new-${++nextCatalogId}` }; products = [...products, created]; response = created }
       else response = products
     } else if (table === 'arpe_cost_settings') response = [{ business_id: business.id, waste_percent: 12, indirect_percent: 12, labor_hourly_rate: 100, markup_percent: 60 }]
     else if (table === 'arpe_quotes') response = quote ? [quote] : []
@@ -312,4 +319,72 @@ test('payment history opens posted and voided receipts with exports and thermal 
     await expect(voidReceipt).toContainText('COMPROBANTE ANULADO')
     await page.getByRole('button', { name: 'Volver al comprobante' }).click()
   }
+})
+
+test('catalog media and public controls save without touching quote snapshots', async ({ page }) => {
+  test.setTimeout(120000)
+  await page.setViewportSize({ width: 390, height: 844 })
+  const mediaEvents: string[] = []
+  const controlledInputWarnings: string[] = []
+  page.on('console', message => { if (message.type() === 'error' && message.text().includes('controlled input to be uncontrolled')) controlledInputWarnings.push(message.text()) })
+  page.on('request', request => {
+    const path = new URL(request.url()).pathname
+    if (path.startsWith('/storage/v1/object/ejnexa-catalog-media')) mediaEvents.push(request.method() === 'DELETE' ? 'delete' : 'upload')
+    if (path.endsWith('/arpe_catalog_products') && ['POST', 'PATCH'].includes(request.method())) mediaEvents.push(`db:${request.method()}`)
+  })
+  await backend(page)
+  await page.getByRole('button', { name: 'Abrir menú' }).click()
+  await page.getByRole('link', { name: 'Catálogo', exact: true }).click()
+  const publicSettings = page.getByRole('heading', { name: 'Catálogo público' }).locator('..').locator('..')
+  await publicSettings.getByLabel('Enlace del catálogo').fill('dulce-encanto')
+  await publicSettings.getByLabel('Activar catálogo público').check()
+  await page.getByRole('button', { name: 'Guardar catálogo público' }).click()
+  await expect(page.getByText('Configuración del catálogo público guardada.')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Crear producto' }).click()
+  await page.getByLabel('Nombre', { exact: true }).fill('Producto sin foto')
+  await page.getByRole('button', { name: 'Guardar producto' }).click()
+  const noImageCard = page.locator('.catalog-card').filter({ hasText: 'Producto sin foto' })
+  await expect(noImageCard).toBeVisible()
+  await expect(noImageCard.locator('.catalog-product-image img')).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Crear producto' }).click()
+  await page.getByLabel('Nombre', { exact: true }).fill('Pastel fotográfico')
+  await page.getByLabel('Mostrar en catálogo público').check()
+  await page.getByLabel('Cómo mostrar el precio').selectOption('from')
+  await page.getByLabel('Orden en catálogo público').fill('3')
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/4XcAAAAASUVORK5CYII=', 'base64')
+  const imageInput = page.getByLabel('Seleccionar imagen del producto')
+  await imageInput.setInputFiles({ name: 'pastel.png', mimeType: 'image/png', buffer: png })
+  await expect(page.getByRole('img', { name: 'Vista previa del producto' })).toBeVisible()
+  await page.getByRole('button', { name: 'Guardar producto' }).click()
+  const productCard = page.locator('.catalog-card').filter({ hasText: 'Pastel fotográfico' })
+  await expect(productCard).toContainText('Público')
+  await expect.poll(() => mediaEvents.slice(-2)).toEqual(['upload', 'db:POST'])
+  await expect(productCard.locator('img')).toBeVisible()
+
+  await productCard.getByRole('button', { name: 'Editar' }).click()
+  await expect(page.getByRole('img', { name: 'Vista previa del producto' })).toBeVisible()
+  const replaceInput = page.getByLabel('Seleccionar imagen del producto')
+  await replaceInput.setInputFiles({ name: 'pastel.webp', mimeType: 'image/webp', buffer: png })
+  await expect(page.getByRole('img', { name: 'Vista previa del producto' })).toBeVisible()
+  await page.getByRole('button', { name: 'Guardar producto' }).click()
+  const updated = page.locator('.catalog-card').filter({ hasText: 'Pastel fotográfico' })
+  await expect(updated).toContainText('Público')
+  await expect.poll(() => mediaEvents.slice(-3)).toEqual(['upload', 'db:PATCH', 'delete'])
+  mediaEvents.length = 0
+  await updated.getByRole('button', { name: 'Editar' }).click()
+  await page.getByRole('button', { name: 'Quitar imagen' }).click()
+  await page.getByLabel('Mostrar en catálogo público').uncheck()
+  await page.getByRole('button', { name: 'Guardar producto' }).click()
+  await expect(page.locator('.catalog-card').filter({ hasText: 'Pastel fotográfico' })).toContainText('Privado')
+  await expect.poll(() => mediaEvents.slice(-2)).toEqual(['db:PATCH', 'delete'])
+  await expect(page.locator('.catalog-card').filter({ hasText: 'Pastel fotográfico' }).locator('img')).toHaveCount(0)
+  await page.locator('.catalog-card').filter({ hasText: 'Pastel fotográfico' }).getByRole('button', { name: 'Desactivar' }).click()
+  await page.getByLabel('Estado').selectOption('inactive')
+  await expect(page.locator('.catalog-card').filter({ hasText: 'Pastel fotográfico' })).toContainText('Inactivo')
+  await page.locator('.catalog-card').filter({ hasText: 'Pastel fotográfico' }).getByRole('button', { name: 'Activar' }).click()
+  await page.getByLabel('Estado').selectOption('all')
+  await expect(page.locator('.catalog-card').filter({ hasText: 'Pastel fotográfico' })).toContainText('Activo')
+  expect(controlledInputWarnings).toEqual([])
 })

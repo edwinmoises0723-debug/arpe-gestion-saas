@@ -24,6 +24,10 @@ const business: Business = {
   show_email_on_documents: true,
   show_address_on_documents: true,
   document_footer_message: 'Gracias por elegirnos.',
+  catalog_slug: null,
+  public_catalog_enabled: false,
+  public_catalog_show_whatsapp: true,
+  public_catalog_logo_path: null,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 }
