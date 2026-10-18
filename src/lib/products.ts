@@ -2,6 +2,7 @@ import type { CatalogProduct, CatalogProductInput, ItemCostInput, OrderItem, Quo
 import { calculateCosts, defaultCostSettings } from './costs'
 import { calculateDeposit } from './quotes'
 import { client } from './supabase'
+import { removeCatalogMedia, uploadCatalogMedia, validateCatalogImage } from './catalog'
 
 export const money = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
 export const lineTotal = (item: { quantity: number; unit_price: number }) => money(item.quantity * item.unit_price)
@@ -72,11 +73,21 @@ export async function listCatalog(businessId: string) {
   if (error) throw error
   return data ?? []
 }
-export async function saveCatalog(id: string | null, input: CatalogProductInput) {
-  const table = client().from('arpe_catalog_products')
-  const { data, error } = await (id ? table.update(input).eq('id', id).eq('business_id', input.business_id) : table.insert(input)).select().single()
-  if (error) throw error
-  return data
+export async function saveCatalog(id: string | null, input: CatalogProductInput, media?: { ownerId: string; imageFile?: File | null; removeImage?: boolean; previousImagePath?: string | null }) {
+  const previous = media?.previousImagePath ?? input.image_path
+  let uploaded: string | null = null
+  try {
+    if (media?.imageFile) { validateCatalogImage(media.imageFile); uploaded = await uploadCatalogMedia(media.ownerId, input.business_id, 'products', media.imageFile) }
+    const next = { ...input, image_path: uploaded ?? (media?.removeImage ? null : input.image_path) }
+    const table = client().from('arpe_catalog_products')
+    const { data, error } = await (id ? table.update(next).eq('id', id).eq('business_id', input.business_id) : table.insert(next)).select().single()
+    if (error) throw error
+    if (previous && previous !== next.image_path && media) await removeCatalogMedia(previous, media.ownerId).catch(() => undefined)
+    return data
+  } catch (error) {
+    if (uploaded && media) await removeCatalogMedia(uploaded, media.ownerId).catch(() => undefined)
+    throw error
+  }
 }
 export function filterCatalog(items: CatalogProduct[], search: string, category: string, status: string) {
   const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()

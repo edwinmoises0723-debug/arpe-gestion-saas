@@ -6,6 +6,7 @@ export type CostItemCategory = 'packaging' | 'topper' | 'decoration' | 'supplies
 export type OrderStatus = 'confirmed' | 'in_preparation' | 'ready' | 'delivered' | 'cancelled'
 export type PaymentMethod = 'cash' | 'bank_transfer' | 'bank_deposit' | 'card' | 'mobile_payment' | 'other'
 export type PaymentStatus = 'posted' | 'voided'
+export type PublicCatalogPriceMode = 'exact' | 'from' | 'contact'
 
 export type Business = {
   id: string
@@ -27,6 +28,10 @@ export type Business = {
   show_email_on_documents: boolean
   show_address_on_documents: boolean
   document_footer_message: string
+  catalog_slug: string | null
+  public_catalog_enabled: boolean
+  public_catalog_show_whatsapp: boolean
+  public_catalog_logo_path: string | null
   created_at: string
   updated_at: string
 }
@@ -179,9 +184,13 @@ export type CatalogProduct = {
   id: string; business_id: string; name: string; category: string; description: string
   unit_label: string; default_unit_price: number; default_portions: number | null
   default_flavor: string; default_filling: string; default_decoration: string; default_extras: string
-  is_active: boolean; created_at: string; updated_at: string
+  is_active: boolean; image_path: string | null; is_public: boolean
+  public_price_mode: PublicCatalogPriceMode; public_sort_order: number
+  created_at: string; updated_at: string
 }
 export type CatalogProductInput = Omit<CatalogProduct, 'id' | 'created_at' | 'updated_at'>
+export type PublicCatalogProfile = Pick<Business, 'catalog_slug' | 'name' | 'slogan' | 'description' | 'currency' | 'public_catalog_logo_path'> & { whatsapp: string | null }
+export type PublicCatalogProduct = Omit<Pick<CatalogProduct, 'id' | 'name' | 'category' | 'description' | 'unit_label' | 'default_unit_price' | 'default_portions' | 'image_path' | 'public_price_mode' | 'public_sort_order'>, 'default_unit_price'> & { default_unit_price: number | null }
 export type ProductFields = {
   product: string; quantity: number; unit_label: string; portions: number | null
   flavor: string; filling: string; decoration: string; extras: string; notes: string
@@ -223,7 +232,7 @@ export type Database = {
       arpe_businesses: {
         Row: Business
         Insert: BusinessInput & { owner_id: string; id?: string; logo_path?: string | null }
-        Update: Partial<BusinessInput & BusinessPreferencesInput & { logo_path: string | null }>
+        Update: Partial<BusinessInput & BusinessPreferencesInput & Pick<Business, 'catalog_slug' | 'public_catalog_enabled' | 'public_catalog_show_whatsapp' | 'public_catalog_logo_path'> & { logo_path: string | null }>
         Relationships: []
       }
       arpe_quotes: {
@@ -277,6 +286,8 @@ export type Database = {
       arpe_reschedule_order_delivery: { Args: { p_order_id: string; p_new_delivery_date: string; p_new_delivery_time: string | null; p_reason: string }; Returns: Order[] }
       arpe_register_payment: { Args: { p_order_id: string; p_request_id: string; p_amount: number; p_method: PaymentMethod; p_reference: string; p_notes: string; p_paid_at: string }; Returns: Payment[] }
       arpe_void_payment: { Args: { p_payment_id: string; p_void_reason: string }; Returns: Payment[] }
+      ejnexa_get_public_catalog_profile: { Args: { p_slug: string }; Returns: PublicCatalogProfile[] }
+      ejnexa_get_public_catalog_products: { Args: { p_slug: string }; Returns: PublicCatalogProduct[] }
     }
     Enums: { [_ in never]: never }
     CompositeTypes: { [_ in never]: never }

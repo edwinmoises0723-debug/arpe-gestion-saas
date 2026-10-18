@@ -11,6 +11,7 @@ const business: Business = {
   default_deposit_type: 'percentage', default_deposit_value: 50, default_document_format: 'a4',
   show_slogan_on_documents: true, show_description_on_documents: true, show_whatsapp_on_documents: true,
   show_email_on_documents: true, show_address_on_documents: true, document_footer_message: 'Gracias por confiar en nosotros.',
+  catalog_slug: null, public_catalog_enabled: false, public_catalog_show_whatsapp: true, public_catalog_logo_path: null,
   created_at: '2026-01-01T10:00:00Z', updated_at: '2026-01-01T10:00:00Z',
 }
 

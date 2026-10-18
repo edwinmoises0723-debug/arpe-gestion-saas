@@ -1,0 +1,83 @@
+name: Public catalog security
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - test/public-catalog-validation
+  pull_request:
+    paths:
+      - 'supabase/**'
+      - '.github/workflows/public-catalog-security.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-catalog-security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_TELEMETRY_DISABLED: '1'
+      VITE_SUPABASE_URL: http://127.0.0.1:54321
+      VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_test_only
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install application dependencies
+        run: npm ci
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v3
+
+      - name: Start the complete local Supabase stack
+        run: supabase start
+
+      - name: Recreate local database and apply all repository migrations
+        run: supabase db reset --local --no-seed
+
+      - name: Test public catalog permissions and RPCs
+        run: supabase test db supabase/tests/public_catalog_security.sql
+
+      - name: Test catalog Storage ownership and policies
+        run: supabase test db supabase/tests/public_catalog_storage.sql
+
+      - name: Export local API settings for Storage tests
+        shell: bash
+        run: |
+          local_status="$(supabase status -o env)"
+          api_url="$(printf '%s\n' "$local_status" | sed -n 's/^API_URL=//p' | tr -d '"')"
+          anon_key="$(printf '%s\n' "$local_status" | sed -n 's/^ANON_KEY=//p' | tr -d '"')"
+          test -n "$api_url" && test -n "$anon_key"
+          {
+            echo "SUPABASE_URL=$api_url"
+            echo "SUPABASE_ANON_KEY=$anon_key"
+          } >> "$GITHUB_ENV"
+
+      - name: Test Storage uploads and deletes through the API
+        run: node supabase/tests/public_catalog_storage_api.mjs
+
+      - name: Run application tests
+        run: npm test
+
+      - name: Check TypeScript
+        run: npm run typecheck
+
+      - name: Lint catalog changes
+        run: npx eslint src/lib/catalog.ts src/lib/catalog.test.ts src/lib/products.ts src/lib/products.test.ts src/pages/CatalogPage.tsx supabase/tests/public_catalog_storage_api.mjs
+
+      - name: Build application
+        run: npm run build
+
+      - name: Check patch formatting
+        run: git diff --check
