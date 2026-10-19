@@ -27,6 +27,7 @@ const PaymentsPage = lazy(() => import('./pages/PaymentsPage').then(m => ({ defa
 const AgendaPage = lazy(() => import('./pages/AgendaPage').then(m => ({ default: m.AgendaPage })))
 const ClientDocumentPage = lazy(() => import('./pages/ClientDocumentPage').then(m => ({ default: m.ClientDocumentPage })))
 const PaymentReceiptPage = lazy(() => import('./pages/PaymentReceiptPage').then(m => ({ default: m.PaymentReceiptPage })))
+const PublicCatalogPage = lazy(() => import('./pages/PublicCatalogPage').then(m => ({ default: m.PublicCatalogPage })))
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false }
@@ -74,5 +75,8 @@ function SessionGate() {
 }
 
 export default function App() {
-  return <ErrorBoundary><a className="skip-link" href="#main">Saltar al contenido</a><BrowserRouter><Suspense fallback={<Loading />}>{supabase ? <AuthProvider><SessionGate /></AuthProvider> : <div className="center-page"><Brand /><h1>Conectemos tu espacio</h1><p>Configura VITE_SUPABASE_URL y VITE_SUPABASE_PUBLISHABLE_KEY en .env.local y reinicia la aplicación.</p><p>Encontrarás los pasos en el README del proyecto.</p><Credit /></div>}</Suspense><PwaStatus /></BrowserRouter></ErrorBoundary>
+  return <ErrorBoundary><BrowserRouter><Suspense fallback={<Loading />}><Routes>
+    <Route path="/catalogo/:slug" element={<PublicCatalogPage />} />
+    <Route path="*" element={<><a className="skip-link" href="#main">Saltar al contenido</a>{supabase ? <AuthProvider><SessionGate /></AuthProvider> : <div className="center-page"><Brand /><h1>Conectemos tu espacio</h1><p>Configura VITE_SUPABASE_URL y VITE_SUPABASE_PUBLISHABLE_KEY en .env.local y reinicia la aplicación.</p><p>Encontrarás los pasos en el README del proyecto.</p><Credit /></div>}<PwaStatus /></>} />
+  </Routes></Suspense></BrowserRouter></ErrorBoundary>
 }
