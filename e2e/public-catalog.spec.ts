@@ -53,6 +53,7 @@ test('public catalog is available without login and supports discovery, detail, 
   })
 
   await page.goto('/catalogo/arpe-dulce-encanto', { waitUntil: 'domcontentloaded' })
+  const origin = new URL(page.url()).origin
   await expect(page).toHaveURL(/\/catalogo\/arpe-dulce-encanto$/)
   await expect(page.getByRole('heading', { name: 'ARPE Dulce Encanto' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Nuestros productos' })).toBeVisible()
@@ -73,7 +74,7 @@ test('public catalog is available without login and supports discovery, detail, 
 
   await page.getByRole('button', { name: 'Compartir', exact: true }).click()
   await expect(page.getByRole('status')).toContainText('Enlace del catálogo copiado.')
-  await expect.poll(() => page.evaluate(() => (window as Window & { __catalogCopied?: string }).__catalogCopied)).toBe('http://127.0.0.1:5175/catalogo/arpe-dulce-encanto')
+  await expect.poll(() => page.evaluate(() => (window as Window & { __catalogCopied?: string }).__catalogCopied)).toBe(`${origin}/catalogo/arpe-dulce-encanto`)
   let whatsappTarget = ''
   await page.context().route('https://wa.me/**', async route => { whatsappTarget = route.request().url(); await route.fulfill({ status: 200, contentType: 'text/html', body: '<title>intercepted WhatsApp</title>' }) })
   const whatsappPopupPromise = page.waitForEvent('popup')
@@ -163,6 +164,7 @@ async function mockInternalCatalogBackend(page: Page) {
 test('internal catalog exposes sharing tools only while published and builds PDF from public RPCs', async ({ page }, testInfo) => {
   await mockInternalCatalogBackend(page)
   await page.goto('/')
+  const origin = new URL(page.url()).origin
   await page.getByLabel('Correo electrónico').fill('catalog-test@example.com')
   await page.getByLabel('Contraseña', { exact: true }).fill('Example-password-123')
   await page.getByRole('button', { name: 'Entrar a mi negocio' }).click()
@@ -176,7 +178,7 @@ test('internal catalog exposes sharing tools only while published and builds PDF
   await page.screenshot({ path: testInfo.outputPath('catalog-internal-share-390.png'), fullPage: true })
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.screenshot({ path: testInfo.outputPath('catalog-internal-share-1440.png'), fullPage: true })
-  await expect(distribution.getByRole('link', { name: 'Ver catálogo' })).toHaveAttribute('href', 'http://127.0.0.1:5175/catalogo/dulce-encanto')
+  await expect(distribution.getByRole('link', { name: 'Ver catálogo' })).toHaveAttribute('href', `${origin}/catalogo/dulce-encanto`)
   await expect(distribution.getByRole('button', { name: 'Mostrar QR' })).toBeVisible()
   await expect(distribution.getByRole('button', { name: 'Descargar PDF' })).toBeVisible()
   await expect(distribution.getByRole('button', { name: 'WhatsApp' })).toBeVisible()
