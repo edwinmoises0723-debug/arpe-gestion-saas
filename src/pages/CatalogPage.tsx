@@ -6,6 +6,7 @@ import { filterCatalog, listCatalog, saveCatalog } from '../lib/products'
 import { formatCurrency } from '../lib/quotes'
 import { errorMessage } from '../lib/supabase'
 import { Loading, Notice } from '../components/Feedback'
+import { CatalogDistributionActions } from '../components/CatalogDistributionActions'
 
 export function CatalogPage({ business }: { business: Business }) {
   const [products, setProducts] = useState<CatalogProduct[]>([])
@@ -52,14 +53,17 @@ function PublicCatalogSettings({ business, onSaved, onError }: { business: Busin
     catch (reason) { setLocalError(errorMessage(reason)) } finally { setBusy(false) }
   }
   const validSlug = isValidCatalogSlug(values.catalog_slug ?? '')
-  return <section className="panel public-catalog-settings"><div><span className="eyebrow accent">VISIBILIDAD COMERCIAL</span><h2>Catálogo público</h2><p className="muted">Prepara un enlace para mostrar tus productos cuando habilitemos el escaparate público.</p></div>
-    <form onSubmit={submit}><fieldset className="bundle-fieldset" disabled={busy}>
+  return <section className="panel public-catalog-settings"><div><span className="eyebrow accent">VISIBILIDAD COMERCIAL</span><h2>Catálogo público</h2><p className="muted">Comparte tus productos con un enlace público. Solo se muestran los productos activos que hayas marcado como públicos.</p></div>
+    <form id="catalog-settings-form" onSubmit={submit}><fieldset className="bundle-fieldset" disabled={busy}>
       <label className="catalog-check"><input type="checkbox" checked={values.public_catalog_enabled} onChange={e => setValues({ ...values, public_catalog_enabled: e.target.checked })} /> Activar catálogo público</label>
       <label>Enlace del catálogo<input required minLength={3} maxLength={80} autoCapitalize="none" value={values.catalog_slug ?? ''} onChange={e => setValues({ ...values, catalog_slug: e.target.value })} /><small>Vista previa: /catalogo/{values.catalog_slug || 'tu-negocio'}</small>{values.catalog_slug && !validSlug && <small className="catalog-field-error">Usa letras minúsculas, números y guiones.</small>}</label>
       <label className="catalog-check"><input type="checkbox" checked={values.public_catalog_show_whatsapp} onChange={e => setValues({ ...values, public_catalog_show_whatsapp: e.target.checked })} /> Permitir mostrar mi WhatsApp</label>
       {values.public_catalog_show_whatsapp && !business.whatsapp && <p className="catalog-warning">Agrega un número de WhatsApp en la configuración del negocio para poder mostrarlo.</p>}
       <div className="catalog-public-logo"><strong>Logo público (opcional)</strong>{previewUrl && <img src={previewUrl} alt="Vista previa del logo público" />}<div className="catalog-actions"><label className="secondary-button catalog-file-button"><Upload size={16} />{values.public_catalog_logo_path || file ? 'Cambiar logo' : 'Seleccionar logo'}<input aria-label="Seleccionar logo público" type="file" accept="image/png,image/jpeg,image/webp" onChange={e => { const chosen = e.target.files?.[0] ?? null; if (chosen) { try { validateCatalogImage(chosen); setFile(chosen); setRemoveLogo(false); setLocalError('') } catch (reason) { setLocalError(errorMessage(reason)) } } }} /></label>{(values.public_catalog_logo_path || file) && <button className="text-button" type="button" onClick={() => { setFile(null); setRemoveLogo(true); setValues({ ...values, public_catalog_logo_path: null }) }}><X size={16} /> Quitar logo</button>}</div><small>Las imágenes del catálogo son contenido comercial público. Una URL conocida puede seguir accesible mientras exista el archivo.</small></div>
     </fieldset>{localError && <Notice error>{localError}</Notice>}<div className="form-actions"><button className="primary" disabled={busy || (values.public_catalog_enabled && !validSlug)}>{busy ? 'Guardando…' : 'Guardar catálogo público'}</button></div></form>
+    {values.public_catalog_enabled && validSlug
+      ? <CatalogDistributionActions name={business.name} slug={values.catalog_slug!} whatsapp={business.whatsapp} />
+      : <div className="catalog-unpublished"><p>Publica tu catálogo para comenzar a compartirlo.</p><a className="secondary-button" href="#catalog-settings-form">Configurar catálogo</a></div>}
   </section>
 }
 
