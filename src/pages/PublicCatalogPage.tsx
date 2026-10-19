@@ -6,6 +6,7 @@ import { catalogImageUrl, publicCatalogPriceLabel } from '../lib/catalog'
 import { filterPublicCatalogProducts, loadPublicCatalogProducts, loadPublicCatalogProfile } from '../lib/public-catalog'
 import { currencies } from '../lib/business'
 import type { PublicCatalogProduct, PublicCatalogProfile } from '../lib/database.types'
+import { CatalogDistributionActions } from '../components/CatalogDistributionActions'
 import './styles-public-catalog.css'
 
 type CatalogState = { status: 'loading' } | { status: 'error' } | { status: 'unavailable' } | { status: 'ready'; profile: PublicCatalogProfile; products: PublicCatalogProduct[] }
@@ -86,6 +87,8 @@ export function PublicCatalogPage() {
         <span className="public-hero-glow" aria-hidden="true" />
       </div>
     </header>
+
+    <div className="public-distribution-wrap"><CatalogDistributionActions name={state.profile.name} slug={state.profile.catalog_slug!} whatsapp={state.profile.whatsapp} publicView /></div>
 
     <main className="public-main" id="main">
       <div className="public-section-heading"><div><span className="public-eyebrow public-eyebrow-dark">HECHO PARA DESCUBRIR</span><h2>Nuestros productos</h2></div><span className="public-product-count">{state.products.length} {state.products.length === 1 ? 'producto' : 'productos'}</span></div>
