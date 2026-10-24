@@ -52,7 +52,7 @@ test('public catalog is available without login and supports discovery, detail, 
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(slug === 'vacio' || slug === 'no-existe' ? [] : products) })
   })
 
-  await page.goto('/catalogo/arpe-dulce-encanto', { waitUntil: 'domcontentloaded' })
+  await gotoPublicCatalog(page, 'arpe-dulce-encanto')
   const origin = new URL(page.url()).origin
   await expect(page).toHaveURL(/\/catalogo\/arpe-dulce-encanto$/)
   await expect(page.getByRole('heading', { name: 'ARPE Dulce Encanto' })).toBeVisible()
@@ -103,9 +103,36 @@ test('public catalog is available without login and supports discovery, detail, 
 
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.screenshot({ path: testInfo.outputPath('public-catalog-1440.png'), fullPage: true })
-  await page.goto('/catalogo/sin-whatsapp', { waitUntil: 'domcontentloaded' })
-  await expect(page.getByRole('button', { name: 'Consultar por WhatsApp' })).toHaveCount(0)
+})
 
+test('public catalog handles filters, detail, responsive widths and unavailable states', async ({ page }) => {
+  const pageErrors: string[] = []
+  page.on('pageerror', error => pageErrors.push(error.message))
+  await page.route('**/*.supabase.co/**', async route => {
+    const request = route.request()
+    const url = new URL(request.url())
+    if (url.pathname.startsWith('/storage/v1/object/public/ejnexa-catalog-media/')) {
+      await route.fulfill({ status: 200, contentType: 'image/png', body: tinyPng })
+      return
+    }
+    if (!url.pathname.startsWith('/rest/v1/rpc/')) {
+      await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ message: 'Unexpected endpoint' }) })
+      return
+    }
+    const slug = (request.postDataJSON() as { p_slug?: string }).p_slug
+    if (slug === 'error') {
+      await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ message: 'internal test detail' }) })
+      return
+    }
+    if (url.pathname.endsWith('/ejnexa_get_public_catalog_profile')) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(slug === 'no-existe' ? [] : [{ ...profile, catalog_slug: slug, whatsapp: slug === 'sin-whatsapp' ? null : profile.whatsapp }]) })
+      return
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(slug === 'vacio' || slug === 'no-existe' ? [] : products) })
+  })
+
+  await gotoPublicCatalog(page, 'sin-whatsapp')
+  await expect(page.getByRole('button', { name: 'Consultar por WhatsApp' })).toHaveCount(0)
   await page.getByRole('searchbox', { name: 'Buscar productos' }).fill('chocolate')
   await page.getByRole('button', { name: 'Pasteles', exact: true }).click()
   await expect(page.locator('.public-product-card')).toHaveCount(1)
@@ -114,30 +141,144 @@ test('public catalog is available without login and supports discovery, detail, 
   await expect(page.getByText('No encontramos productos con esos filtros.')).toBeVisible()
   await page.getByRole('button', { name: 'Limpiar filtros' }).click()
   await expect(page.locator('.public-product-card')).toHaveCount(3)
-
   await page.getByRole('button', { name: 'Ver detalle de Pastel de Chocolate' }).click()
   const dialog = page.getByRole('dialog', { name: 'Pastel de Chocolate' })
   await expect(dialog).toBeVisible()
   await expect(dialog).toContainText('20 porciones')
   await page.keyboard.press('Escape')
   await expect(dialog).not.toBeVisible()
-
   for (const width of [320, 360, 390, 768, 884, 1440]) {
     await page.setViewportSize({ width, height: 900 })
     const dimensions = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth, content: document.documentElement.scrollWidth }))
     expect(dimensions.content, `horizontal overflow at ${width}px`).toBeLessThanOrEqual(dimensions.viewport)
   }
-
-  await page.goto('/catalogo/vacio', { waitUntil: 'domcontentloaded' })
+  await gotoPublicCatalog(page, 'vacio')
   await expect(page.getByText('Muy pronto encontrarás nuestros productos aquí.')).toBeVisible()
-  await page.goto('/catalogo/no-existe', { waitUntil: 'domcontentloaded' })
+  await gotoPublicCatalog(page, 'no-existe')
   await expect(page.getByRole('heading', { name: 'Este catálogo no está disponible' })).toBeVisible()
   await expect(page.getByText('ARPE Dulce Encanto')).toHaveCount(0)
-  await page.goto('/catalogo/error', { waitUntil: 'domcontentloaded' })
+  await gotoPublicCatalog(page, 'error')
   await expect(page.getByRole('heading', { name: 'No pudimos cargar el catálogo' })).toBeVisible()
   await page.getByRole('button', { name: 'Intentar de nuevo' }).click()
   await expect(page.getByRole('heading', { name: 'No pudimos cargar el catálogo' })).toBeVisible()
   expect(pageErrors).toEqual([])
+})
+
+test('public catalog lets visitors prepare and share a quote request without creating business records', async ({ page }, testInfo) => {
+  const directTableRequests: string[] = []
+  const pageErrors: string[] = []
+  const consoleErrors: string[] = []
+  page.on('pageerror', error => pageErrors.push(error.message))
+  page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()) })
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'share', { configurable: true, value: undefined })
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (value: string) => { (window as Window & { __requestCopied?: string }).__requestCopied = value } } })
+  })
+  await page.route('**/*.supabase.co/**', async route => {
+    const request = route.request()
+    const url = new URL(request.url())
+    if (url.pathname.startsWith('/rest/v1/') && !url.pathname.includes('/rpc/')) directTableRequests.push(url.pathname)
+    if (!url.pathname.startsWith('/rest/v1/rpc/')) {
+      await route.fulfill({ status: 200, contentType: 'image/png', body: tinyPng })
+      return
+    }
+    const slug = (request.postDataJSON() as { p_slug?: string }).p_slug
+    if (url.pathname.endsWith('/ejnexa_get_public_catalog_profile')) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ ...profile, catalog_slug: slug, whatsapp: slug === 'sin-whatsapp' ? null : profile.whatsapp }]) })
+      return
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(products) })
+  })
+
+  await gotoPublicCatalog(page, 'arpe-dulce-encanto')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.getByRole('button', { name: 'Ver detalle de Pastel de Chocolate' }).click()
+  const productDetail = page.getByRole('dialog', { name: 'Pastel de Chocolate' })
+  await productDetail.getByRole('button', { name: 'Agregar Pastel de Chocolate a solicitud' }).click()
+  await expect(productDetail.getByText('Agregado')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(productDetail).not.toBeVisible()
+  const pastelCard = page.locator('.public-product-card').filter({ has: page.getByRole('button', { name: 'Ver detalle de Pastel de Chocolate' }) })
+  await pastelCard.getByRole('button', { name: 'Aumentar cantidad de Pastel de Chocolate' }).click()
+  await page.screenshot({ path: testInfo.outputPath('public-catalog-selected-390.png'), fullPage: true })
+  await page.getByRole('button', { name: 'Postres', exact: true }).click()
+  const tresLechesCard = page.locator('.public-product-card').filter({ has: page.getByRole('button', { name: 'Ver detalle de Tres Leches' }) })
+  await tresLechesCard.getByRole('button', { name: 'Agregar Tres Leches a solicitud' }).click()
+  await page.getByRole('button', { name: /Mi solicitud · 2 productos/ }).click()
+  const panel = page.getByRole('dialog', { name: 'Mi solicitud' })
+  await expect(panel).toBeVisible()
+  await expect(panel).toContainText('2 productos distintos')
+  await expect(panel).toContainText('3 unidades en total')
+  await expect(panel).toContainText('Los precios mostrados son referencias')
+  await page.screenshot({ path: testInfo.outputPath('request-panel-390.png'), fullPage: true })
+  await panel.getByLabel('Tu nombre').fill('María Gómez')
+  const future = new Date()
+  future.setDate(future.getDate() + 7)
+  const futureDate = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, '0')}-${String(future.getDate()).padStart(2, '0')}`
+  await panel.getByLabel(/¿Para qué fecha lo necesitas/).fill(futureDate)
+  await panel.getByLabel(/Cuéntanos lo que necesitas/).fill('Pastel azul con temática de fútbol')
+  await expect(panel.getByRole('region', { name: 'Revisa tu solicitud' })).toContainText('María Gómez')
+  await page.screenshot({ path: testInfo.outputPath('request-review-390.png'), fullPage: true })
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.screenshot({ path: testInfo.outputPath('public-catalog-selected-1440.png'), fullPage: true })
+  await page.screenshot({ path: testInfo.outputPath('request-panel-1440.png'), fullPage: true })
+
+  let whatsappTarget = ''
+  await page.context().route('https://wa.me/**', async route => { whatsappTarget = route.request().url(); await route.fulfill({ status: 200, contentType: 'text/html', body: '<title>intercepted WhatsApp</title>' }) })
+  const popupPromise = page.waitForEvent('popup')
+  await panel.getByRole('button', { name: 'Solicitar cotización por WhatsApp' }).click()
+  const popup = await popupPromise
+  await expect.poll(() => whatsappTarget).toContain('https://wa.me/50588881111?text=')
+  const decoded = decodeURIComponent(whatsappTarget)
+  expect(decoded).toContain('Mi nombre es María Gómez')
+  expect(decoded).toContain('Pastel de Chocolate')
+  expect(decoded).toContain('Cantidad: 2 pastel')
+  expect(decoded).toContain('Tres Leches')
+  expect(decoded).toContain('Pastel azul con temática de fútbol')
+  expect(decoded).toContain('/catalogo/arpe-dulce-encanto')
+  expect(decoded).not.toContain('product-1')
+  await popup.close()
+  expect(directTableRequests).toEqual([])
+
+  await page.keyboard.press('Escape')
+  await expect(panel).not.toBeVisible()
+  await gotoPublicCatalog(page, 'sin-whatsapp')
+  const productCard = page.locator('.public-product-card').filter({ has: page.getByRole('button', { name: 'Ver detalle de Pastel de Chocolate' }) })
+  await productCard.getByRole('button', { name: 'Agregar Pastel de Chocolate a solicitud' }).click()
+  await page.getByRole('button', { name: /Mi solicitud · 1 producto/ }).click()
+  const noWhatsAppPanel = page.getByRole('dialog', { name: 'Mi solicitud' })
+  await noWhatsAppPanel.getByRole('button', { name: 'Copiar solicitud' }).click()
+  await expect(noWhatsAppPanel.getByText('Escribe un nombre de 2 a 100 caracteres.')).toBeVisible()
+  await expect(noWhatsAppPanel.getByLabel('Tu nombre')).toBeFocused()
+  await noWhatsAppPanel.getByLabel('Tu nombre').fill('Carlos Ramírez')
+  await expect(noWhatsAppPanel.getByRole('button', { name: 'Solicitar cotización por WhatsApp' })).toHaveCount(0)
+  await expect(noWhatsAppPanel).toContainText('Este negocio no tiene WhatsApp público habilitado.')
+  await noWhatsAppPanel.getByRole('button', { name: 'Copiar solicitud' }).click()
+  await expect(noWhatsAppPanel.locator('.catalog-request-notice')).toContainText('Solicitud copiada.')
+  await expect.poll(() => page.evaluate(() => (window as Window & { __requestCopied?: string }).__requestCopied)).toContain('Carlos Ramírez')
+  await noWhatsAppPanel.getByRole('button', { name: 'Compartir solicitud' }).click()
+  await expect(noWhatsAppPanel.locator('.catalog-request-notice')).toContainText('Solicitud copiada.')
+  await page.evaluate(() => Object.defineProperty(navigator, 'share', { configurable: true, value: async ({ text }: { text: string }) => { (window as Window & { __requestShared?: string }).__requestShared = text } }))
+  await noWhatsAppPanel.getByRole('button', { name: 'Compartir solicitud' }).click()
+  await expect(noWhatsAppPanel.locator('.catalog-request-notice')).toContainText('Solicitud lista para compartir.')
+  await expect.poll(() => page.evaluate(() => (window as Window & { __requestShared?: string }).__requestShared)).toContain('Carlos Ramírez')
+  await page.keyboard.press('Escape')
+  await expect(noWhatsAppPanel).not.toBeVisible()
+  await page.getByRole('button', { name: /Mi solicitud · 1 producto/ }).click()
+  await expect(page.getByRole('dialog', { name: 'Mi solicitud' })).toBeVisible()
+  await noWhatsAppPanel.getByRole('button', { name: 'Limpiar solicitud' }).click()
+  await noWhatsAppPanel.getByRole('button', { name: 'Conservar' }).click()
+  await expect(page.getByRole('button', { name: /Mi solicitud · 1 producto/ })).toBeVisible()
+  await noWhatsAppPanel.getByRole('button', { name: 'Limpiar solicitud' }).click()
+  await noWhatsAppPanel.getByRole('button', { name: 'Sí, limpiar' }).click()
+  await expect(noWhatsAppPanel.getByText('Aún no agregas productos.')).toBeVisible()
+  for (const width of [320, 360, 390, 768, 884, 1440]) {
+    await page.setViewportSize({ width, height: 900 })
+    const dimensions = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth, content: document.documentElement.scrollWidth }))
+    expect(dimensions.content, `horizontal overflow at ${width}px`).toBeLessThanOrEqual(dimensions.viewport)
+  }
+  expect(pageErrors).toEqual([])
+  expect(consoleErrors).toEqual([])
 })
 
 const internalUserId = '11111111-1111-4111-8111-111111111111'
@@ -148,6 +289,13 @@ const internalBusiness: Business = {
   default_deposit_type: 'percentage', default_deposit_value: 50, default_document_format: 'a4', show_slogan_on_documents: true, show_description_on_documents: true,
   show_whatsapp_on_documents: true, show_email_on_documents: true, show_address_on_documents: true, document_footer_message: 'Gracias por elegirnos.',
   catalog_slug: 'dulce-encanto', public_catalog_enabled: true, public_catalog_show_whatsapp: true, public_catalog_logo_path: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+}
+
+async function gotoPublicCatalog(page: Page, slug: string) {
+  const profileResponse = page.waitForResponse(response => response.url().includes('/rest/v1/rpc/ejnexa_get_public_catalog_profile'))
+  const productsResponse = page.waitForResponse(response => response.url().includes('/rest/v1/rpc/ejnexa_get_public_catalog_products'))
+  await page.goto(`/catalogo/${slug}`, { waitUntil: 'domcontentloaded' })
+  await Promise.all([profileResponse, productsResponse])
 }
 
 async function mockInternalCatalogBackend(page: Page) {
@@ -167,7 +315,10 @@ test('internal catalog exposes sharing tools only while published and builds PDF
   const origin = new URL(page.url()).origin
   await page.getByLabel('Correo electrónico').fill('catalog-test@example.com')
   await page.getByLabel('Contraseña', { exact: true }).fill('Example-password-123')
+  const dashboardTables = ['arpe_quotes', 'arpe_quote_items', 'arpe_orders', 'arpe_order_items', 'arpe_payments']
+  const dashboardResponses = dashboardTables.map(table => page.waitForResponse(response => new URL(response.url()).pathname.endsWith(`/rest/v1/${table}`)))
   await page.getByRole('button', { name: 'Entrar a mi negocio' }).click()
+  await Promise.all(dashboardResponses)
   await expect(page.getByRole('heading', { name: 'Dulce Encanto' })).toBeVisible()
   await page.getByRole('button', { name: 'Abrir menú' }).click()
   await page.getByRole('navigation', { name: 'Módulos complementarios' }).getByRole('link', { name: 'Catálogo' }).click()
