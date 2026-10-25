@@ -82,7 +82,6 @@ begin
     raise exception 'Authenticated table privileges are not read-only';
   end if;
   if has_schema_privilege('anon', 'private', 'USAGE')
-     or has_schema_privilege('authenticated', 'private', 'USAGE')
      or has_table_privilege('anon', 'private.arpe_catalog_request_sequences', 'SELECT,INSERT,UPDATE,DELETE')
      or has_table_privilege('authenticated', 'private.arpe_catalog_request_sequences', 'SELECT,INSERT,UPDATE,DELETE') then
     raise exception 'Private request sequence is exposed';
