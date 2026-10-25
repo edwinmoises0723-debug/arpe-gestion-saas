@@ -8,7 +8,7 @@ import { errorMessage } from '../lib/supabase'
 import { deliveryTimeFromParts, deliveryTimeToParts } from '../lib/delivery-time'
 import { Loading, Notice } from '../components/Feedback'
 import { ItemCostAssistant } from '../components/ItemCostAssistant'
-import type { CatalogRequestQuotePreparation } from '../lib/catalog-requests'
+import { pendingCatalogRequestPriceNames, type CatalogRequestQuotePreparation } from '../lib/catalog-requests'
 import './quote-request-prefill.css'
 
 export function QuoteForm({ business, quote, preparation, onSaved, onCancel }: { business: Business; quote: Quote | null; preparation?: CatalogRequestQuotePreparation | null; onSaved: (quote: Quote) => void; onCancel: () => void }) {
@@ -28,17 +28,26 @@ export function QuoteForm({ business, quote, preparation, onSaved, onCancel }: {
     return () => { active = false }
   }, [business.id, quote, preparation])
   const values = items.map(item => item.value)
+  const pendingPriceNames = pendingCatalogRequestPriceNames(preparation, values)
   const summary = calculateBundle(header, values)
   const time = deliveryTimeToParts(header.delivery_time) ?? { hour: '12', minute: '00', period: 'PM' as const }
   const amount = (n: number) => formatCurrency(n, business)
   const changeItem = (index: number, value: QuoteBundleItem) => setItems(current => current.map((item, i) => i === index ? { ...item, value } : item))
   async function submit(event: FormEvent) {
-    event.preventDefault(); setError(''); setBusy(true)
+    event.preventDefault(); setError('')
+    if (pendingPriceNames.length > 0) {
+      const names = pendingPriceNames.join(', ')
+      setError(pendingPriceNames.length === 1
+        ? `Define un precio mayor que cero para: ${names}.`
+        : `Define un precio mayor que cero para los productos pendientes: ${names}.`)
+      return
+    }
+    setBusy(true)
     try { onSaved(await saveQuoteBundle(quote?.id ?? null, header, values)) } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
   if (loading) return <Loading text="Preparando los productos de tu cotización…" />
   return <div className="quote-editor"><div className="editor-heading"><button className="back-button" onClick={onCancel}><ArrowLeft size={17} /> Cotizaciones</button><span className="eyebrow accent">{quote ? quote.quote_number : preparation ? `DESDE ${preparation.requestNumber}` : 'NUEVA COTIZACIÓN'}</span><h1>{quote ? 'Editar cotización' : preparation ? 'Preparar cotización' : 'Crear una cotización'}</h1><p className="muted">Uno o varios productos, una propuesta y una entrega.</p></div>
-    {preparation && <div className="request-quote-prefill" role="status"><strong>Datos copiados de {preparation.requestNumber}</strong><span>Revisa y ajusta precios, costos y demás condiciones antes de guardar. La solicitud no cambiará de estado al guardar esta cotización.</span>{preparation.itemsWithoutPublishedPrice.length > 0 && <span>Sin precio publicado: {preparation.itemsWithoutPublishedPrice.join(', ')}. Estos productos empiezan en 0 y requieren que indiques el precio.</span>}</div>}
+    {preparation && <div className="request-quote-prefill" role="status"><strong>Datos copiados de {preparation.requestNumber}</strong><span>Revisa y ajusta precios, costos y demás condiciones antes de guardar. La solicitud no cambiará de estado al guardar esta cotización.</span>{pendingPriceNames.length > 0 && <span>{pendingPriceNames.length === 1 ? 'Precio pendiente de definir' : 'Precios pendientes de definir'}: {pendingPriceNames.join(', ')}. {pendingPriceNames.length === 1 ? 'Indica el precio de este producto antes de guardar la cotización.' : 'Indica sus precios antes de guardar la cotización.'}</span>}</div>}
     <form className="quote-form" onSubmit={submit}><fieldset className="bundle-fieldset" disabled={busy || !loaded}>
       <section className="panel quote-section"><h2>Cliente</h2><div className="form-grid"><label>Nombre del cliente<input required maxLength={120} value={header.customer_name} onChange={e => setHeader({ ...header, customer_name: e.target.value })} /></label><label>Teléfono<input type="tel" maxLength={30} value={header.customer_phone} onChange={e => setHeader({ ...header, customer_phone: e.target.value })} /></label></div></section>
       <section className="panel quote-section"><h2>Entrega</h2><label>Fecha<input type="date" value={header.delivery_date ?? ''} onChange={e => setHeader({ ...header, delivery_date: e.target.value || null })} /></label>
@@ -53,7 +62,7 @@ export function QuoteForm({ business, quote, preparation, onSaved, onCancel }: {
           <div className="form-grid"><label>Cantidad<input type="number" min="0.001" step="0.001" required value={item.quantity} onChange={e => changeItem(index, { ...item, quantity: Number(e.target.value) })} /></label><label>Unidad<input list="product-units" required maxLength={40} value={item.unit_label} onChange={e => changeItem(index, { ...item, unit_label: e.target.value })} /></label><label>Porciones <small>Opcional</small><input type="number" min="1" step="1" value={item.portions ?? ''} onChange={e => changeItem(index, { ...item, portions: e.target.value ? Number(e.target.value) : null })} /></label></div>
           <div className="form-grid">{(['flavor', 'filling', 'decoration', 'extras'] as const).map((field, n) => <label key={field}>{['Sabor', 'Relleno', 'Decoración', 'Extras'][n]}<input maxLength={n < 2 ? 120 : 500} value={item[field]} onChange={e => changeItem(index, { ...item, [field]: e.target.value })} /></label>)}</div>
           <label>Notas del producto<textarea maxLength={1000} value={item.notes} onChange={e => changeItem(index, { ...item, notes: e.target.value })} /></label>
-          <label>Precio unitario<input type="number" min="0" step="0.01" required value={item.unit_price} onChange={e => changeItem(index, { ...item, unit_price: Number(e.target.value) })} /></label><div className="calculated-row"><span>{item.quantity} × {amount(item.unit_price)} · Subtotal</span><strong>{amount(lineTotal(item))}</strong></div>
+          <label htmlFor={`quote-item-price-${key}`}>Precio unitario{preparation?.pendingPriceItems.some(pending => pending.catalogProductId === item.catalog_product_id) && item.unit_price <= 0 && <small id={`quote-item-price-hint-${key}`}>Define el precio antes de guardar</small>}<input id={`quote-item-price-${key}`} type="number" min="0" step="0.01" required value={item.unit_price} aria-invalid={preparation?.pendingPriceItems.some(pending => pending.catalogProductId === item.catalog_product_id) && item.unit_price <= 0 ? true : undefined} aria-describedby={preparation?.pendingPriceItems.some(pending => pending.catalogProductId === item.catalog_product_id) && item.unit_price <= 0 ? `quote-item-price-hint-${key}` : undefined} onChange={e => changeItem(index, { ...item, unit_price: Number(e.target.value) })} /></label><div className="calculated-row"><span>{item.quantity} × {amount(item.unit_price)} · Subtotal</span><strong>{amount(lineTotal(item))}</strong></div>
           {item.cost ? <details className="item-cost-details"><summary>Mostrar asistente de costos</summary><ItemCostAssistant item={item} business={business} onChange={value => changeItem(index, value)} /></details> : <button type="button" className="secondary-button" onClick={() => changeItem(index, { ...item, cost: newItemCost(settings) })}>Iniciar asistente de costos</button>}
         </article>)}
         <datalist id="product-units">{['unidad', 'pastel', 'docena', 'caja', 'libra', 'kg', 'porción'].map(unit => <option key={unit} value={unit} />)}</datalist>

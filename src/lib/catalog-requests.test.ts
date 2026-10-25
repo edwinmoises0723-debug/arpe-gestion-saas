@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CatalogRequest, CatalogRequestItem } from './database.types'
-import { filterCatalogRequests, formatCatalogRequestDate, isCatalogRequestQuotePreparation, prepareCatalogRequestQuote } from './catalog-requests'
+import { filterCatalogRequests, formatCatalogRequestDate, isCatalogRequestQuotePreparation, pendingCatalogRequestPriceNames, prepareCatalogRequestQuote } from './catalog-requests'
 
 const request = (overrides: Partial<CatalogRequest> = {}): CatalogRequest => ({
   id: 'request-a', business_id: 'business-a', request_number: 'SOL-2026-0001', client_request_key: 'key-a',
@@ -42,6 +42,37 @@ describe('solicitudes internas del catálogo', () => {
     const preparation = prepareCatalogRequestQuote(request(), [item()])
     expect(isCatalogRequestQuotePreparation(preparation, 'business-a')).toBe(true)
     expect(isCatalogRequestQuotePreparation(preparation, 'business-b')).toBe(false)
+  })
+
+  it('marca precio contact pendiente por catalog_product_id y libera al definirlo o retirar/reemplazar el producto', () => {
+    const preparation = prepareCatalogRequestQuote(request(), [item({
+      catalog_product_id: 'product-contact',
+      product_name_snapshot: 'Topper personalizado',
+      public_price_mode_snapshot: 'contact',
+      public_unit_price_snapshot: null,
+    })])
+    const pendingItem = preparation.items[0]
+
+    expect(pendingCatalogRequestPriceNames(preparation, [pendingItem])).toEqual(['Topper personalizado'])
+    expect(pendingCatalogRequestPriceNames(preparation, [{ ...pendingItem, unit_price: 150 }])).toEqual([])
+    expect(pendingCatalogRequestPriceNames(preparation, [])).toEqual([])
+    expect(pendingCatalogRequestPriceNames(preparation, [{ ...pendingItem, catalog_product_id: 'different-product' }])).toEqual([])
+  })
+
+  it('mantiene bloqueado un duplicado contact sin precio y permite precios cero legítimos', () => {
+    const contactPreparation = prepareCatalogRequestQuote(request(), [item({
+      catalog_product_id: 'product-contact',
+      product_name_snapshot: 'Topper personalizado',
+      public_price_mode_snapshot: 'contact',
+      public_unit_price_snapshot: null,
+    })])
+    const pendingItem = contactPreparation.items[0]
+    expect(pendingCatalogRequestPriceNames(contactPreparation, [pendingItem, { ...pendingItem }])).toEqual(['Topper personalizado'])
+
+    const exactFreePreparation = prepareCatalogRequestQuote(request(), [item({ public_unit_price_snapshot: 0 })])
+    const fromFreePreparation = prepareCatalogRequestQuote(request(), [item({ public_price_mode_snapshot: 'from', public_unit_price_snapshot: 0 })])
+    expect(pendingCatalogRequestPriceNames(exactFreePreparation, exactFreePreparation.items)).toEqual([])
+    expect(pendingCatalogRequestPriceNames(fromFreePreparation, fromFreePreparation.items)).toEqual([])
   })
 
   it('formatea fechas date-only sin desplazamiento de zona horaria y omite fechas vacías', () => {

@@ -20,6 +20,7 @@ export type CatalogRequestQuotePreparation = {
   header: Pick<QuoteBundleHeader, 'customer_name' | 'customer_phone' | 'delivery_date' | 'notes'>
   items: QuoteBundleItem[]
   itemsWithoutPublishedPrice: string[]
+  pendingPriceItems: Array<{ catalogProductId: string; productName: string }>
 }
 
 function normalizeSearch(value: string) {
@@ -82,6 +83,9 @@ export async function changeCatalogRequestStatus(action: CatalogRequestAction, r
 
 export function prepareCatalogRequestQuote(request: CatalogRequest, items: CatalogRequestItem[]): CatalogRequestQuotePreparation {
   const ordered = [...items].sort((a, b) => a.position - b.position)
+  const pendingPriceItems = ordered
+    .filter(item => item.public_price_mode_snapshot === 'contact' || item.public_unit_price_snapshot === null)
+    .map(item => ({ catalogProductId: item.catalog_product_id, productName: item.product_name_snapshot }))
   return {
     requestId: request.id,
     requestNumber: request.request_number,
@@ -108,7 +112,17 @@ export function prepareCatalogRequestQuote(request: CatalogRequest, items: Catal
       direct_costs: [],
     })),
     itemsWithoutPublishedPrice: ordered.filter(item => item.public_price_mode_snapshot === 'contact' || item.public_unit_price_snapshot === null).map(item => item.product_name_snapshot),
+    pendingPriceItems,
   }
+}
+
+export function pendingCatalogRequestPriceNames(preparation: CatalogRequestQuotePreparation | null | undefined, items: QuoteBundleItem[]) {
+  if (!preparation || preparation.pendingPriceItems.length === 0) return []
+  const pendingIds = new Set(preparation.pendingPriceItems.map(item => item.catalogProductId))
+  return [...new Set(items
+    .filter(item => item.catalog_product_id !== null && pendingIds.has(item.catalog_product_id) && item.unit_price <= 0)
+    .map(item => item.product.trim())
+    .filter(Boolean))]
 }
 
 export function isCatalogRequestQuotePreparation(value: unknown, businessId: string): value is CatalogRequestQuotePreparation {
@@ -117,5 +131,7 @@ export function isCatalogRequestQuotePreparation(value: unknown, businessId: str
   return preparation.businessId === businessId
     && typeof preparation.requestId === 'string'
     && typeof preparation.requestNumber === 'string'
-    && Boolean(preparation.header && Array.isArray(preparation.items) && Array.isArray(preparation.itemsWithoutPublishedPrice))
+    && Boolean(preparation.header && Array.isArray(preparation.items) && Array.isArray(preparation.itemsWithoutPublishedPrice)
+      && Array.isArray(preparation.pendingPriceItems)
+      && preparation.pendingPriceItems.every(item => typeof item.catalogProductId === 'string' && typeof item.productName === 'string'))
 }

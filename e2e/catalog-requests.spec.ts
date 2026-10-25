@@ -23,6 +23,7 @@ const requestItems: CatalogRequestItem[] = [
 
 async function mockBackend(page: Page) {
   const requestsState = structuredClone(requests)
+  let quoteSaveCalls = 0
   await page.route('**/auth/v1/**', async route => {
     const url = route.request().url()
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(url.includes('/user') ? user : url.includes('/logout') ? {} : session) })
@@ -57,6 +58,11 @@ async function mockBackend(page: Page) {
   await page.route('**/rest/v1/arpe_quote_items*', async route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }))
   await page.route('**/rest/v1/arpe_orders*', async route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }))
   await page.route('**/rest/v1/arpe_order_items*', async route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }))
+  await page.route('**/rest/v1/rpc/arpe_save_quote_bundle', async route => {
+    quoteSaveCalls += 1
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 'saved-quote', quote_number: 'COT-2026-0001' }]) })
+  })
+  return { quoteSaveCalls: () => quoteSaveCalls }
 }
 
 async function openInbox(page: Page) {
@@ -99,7 +105,7 @@ test('inbox muestra snapshots, filtros y detalle sin overflow en móvil, Fold y 
 })
 
 test('marca en revisión, actualiza badge y prepara una cotización editable desde snapshots', async ({ page }) => {
-  await mockBackend(page)
+  const backend = await mockBackend(page)
   await openInbox(page)
   await page.getByRole('button', { name: /SOL-2026-0001/ }).click()
   await page.getByRole('button', { name: 'Marcar en revisión' }).click()
@@ -113,5 +119,12 @@ test('marca en revisión, actualiza badge y prepara una cotización editable des
   await expect(page.getByLabel('Fecha')).toHaveValue('2026-11-02')
   await expect(page.getByLabel('Observaciones generales')).toHaveValue('Sin nueces')
   await expect(page.getByLabel('Producto').first()).toHaveValue('Pastel de Chocolate')
-  await expect(page.getByText(/Topper personalizado.*empiezan en 0/i)).toBeVisible()
+  await expect(page.getByText(/Precio pendiente de definir: Topper personalizado/i)).toBeVisible()
+  await page.getByRole('button', { name: 'Guardar cotización' }).click()
+  await expect(page.getByRole('alert')).toContainText('Define un precio mayor que cero para: Topper personalizado.')
+  expect(backend.quoteSaveCalls()).toBe(0)
+  await page.getByLabel('Precio unitario').nth(1).fill('150')
+  await expect(page.getByText(/Precio pendiente de definir/i)).toHaveCount(0)
+  await page.getByRole('button', { name: 'Guardar cotización' }).click()
+  await expect.poll(() => backend.quoteSaveCalls()).toBe(1)
 })
