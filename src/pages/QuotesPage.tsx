@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, ArrowUpDown, CalendarDays, Check, ChevronDown, ClipboardList, FilePenLine, FileText, Plus, Search, Trash2, X } from 'lucide-react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import type { Business, Order, Quote, QuoteStatus } from '../lib/database.types'
 import { formatCurrency, listQuotes, quoteStatuses, removeQuote, updateQuote } from '../lib/quotes'
 import { convertQuoteToOrder, listOrders } from '../lib/orders'
@@ -9,6 +9,7 @@ import { filterAndSortQuotes, type QuoteSortOrder, type QuoteStatusFilter } from
 import { QuoteForm } from './QuoteBundleForm'
 import { summarizeQuoteProducts } from '../lib/products'
 import { Loading, Notice } from '../components/Feedback'
+import { isCatalogRequestQuotePreparation } from '../lib/catalog-requests'
 
 const statusLabel = (status: QuoteStatus) => quoteStatuses.find(item => item.value === status)?.label ?? status
 const quoteSortOptions: { value: QuoteSortOrder; label: string }[] = [
@@ -38,6 +39,9 @@ function QuoteListTools({ search, onSearch, status, onStatus, sortOrder, onSortO
 
 export function QuotesPage({ business }: { business: Business }) {
   const navigate = useNavigate()
+  const location = useLocation()
+  const locationState = location.state as { catalogRequestPreparation?: unknown } | null
+  const preparation = isCatalogRequestQuotePreparation(locationState?.catalogRequestPreparation, business.id) ? locationState.catalogRequestPreparation : null
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<QuoteStatusFilter>('all')
@@ -45,7 +49,7 @@ export function QuotesPage({ business }: { business: Business }) {
   const displayedQuotes = useMemo(() => filterAndSortQuotes(quotes, search, statusFilter, sortOrder), [quotes, search, statusFilter, sortOrder])
   const [ordersByQuote, setOrdersByQuote] = useState<Record<string, Order>>({})
   const [selected, setSelected] = useState<Quote | null>(null)
-  const [creating, setCreating] = useState(false)
+  const [creating, setCreating] = useState(() => preparation !== null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -55,7 +59,7 @@ export function QuotesPage({ business }: { business: Business }) {
   const [converting, setConverting] = useState(false)
   async function refresh() { setLoading(true); setError(''); try { const [items, orders] = await Promise.all([listQuotes(business.id), listOrders(business.id)]); setQuotes(items); setOrdersByQuote(Object.fromEntries(orders.map(order => [order.quote_id, order]))) } catch (e) { setError(errorMessage(e)) } finally { setLoading(false) } }
   useEffect(() => { let active = true; void Promise.all([listQuotes(business.id), listOrders(business.id)]).then(([items, orders]) => { if (active) { setQuotes(items); setOrdersByQuote(Object.fromEntries(orders.map(order => [order.quote_id, order]))) } }).catch(e => { if (active) setError(errorMessage(e)) }).finally(() => { if (active) setLoading(false) }); return () => { active = false } }, [business.id])
-  if (creating || selected) return <QuoteForm business={business} quote={selected} onCancel={() => { setCreating(false); setSelected(null) }} onSaved={quote => { setCreating(false); setSelected(null); setNotice(`${quote.quote_number} se guardó correctamente.`); void refresh() }} />
+  if (creating || selected || preparation) return <QuoteForm key={preparation?.requestId ?? selected?.id ?? 'new'} business={business} quote={selected} preparation={preparation} onCancel={() => { setCreating(false); setSelected(null); if (preparation) navigate('/cotizar', { replace: true, state: null }) }} onSaved={quote => { setCreating(false); setSelected(null); if (preparation) navigate('/cotizar', { replace: true, state: null }); setNotice(`${quote.quote_number} se guardó correctamente.`); void refresh() }} />
   async function changeStatus(quote: Quote, status: QuoteStatus) { try { const updated = await updateQuote(quote.id, business.id, { status }); setQuotes(items => items.map(item => item.id === updated.id ? { ...updated, items: item.items } : item)); setNotice(`${quote.quote_number} ahora está ${statusLabel(status).toLowerCase()}.`) } catch (e) { setError(errorMessage(e)) } }
   async function confirmDelete() { if (!deleting || ordersByQuote[deleting.id]) return; try { await removeQuote(deleting.id, business.id); setQuotes(items => items.filter(item => item.id !== deleting.id)); setNotice('Cotización eliminada.'); setDeleting(null) } catch (e) { setError(errorMessage(e)) } }
   async function confirmConvert() { if (!convertDialog) return; setConverting(true); setError(''); try { const order = await convertQuoteToOrder(convertDialog.id); setOrdersByQuote(current => ({ ...current, [convertDialog.id]: order })); setConvertedOrder(order); setConvertDialog(null) } catch (e) { setError(errorMessage(e)) } finally { setConverting(false) } }

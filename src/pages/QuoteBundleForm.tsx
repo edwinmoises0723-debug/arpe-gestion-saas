@@ -8,10 +8,12 @@ import { errorMessage } from '../lib/supabase'
 import { deliveryTimeFromParts, deliveryTimeToParts } from '../lib/delivery-time'
 import { Loading, Notice } from '../components/Feedback'
 import { ItemCostAssistant } from '../components/ItemCostAssistant'
+import type { CatalogRequestQuotePreparation } from '../lib/catalog-requests'
+import './quote-request-prefill.css'
 
-export function QuoteForm({ business, quote, onSaved, onCancel }: { business: Business; quote: Quote | null; onSaved: (quote: Quote) => void; onCancel: () => void }) {
-  const [header, setHeader] = useState<QuoteBundleHeader>(() => ({ customer_name: quote?.customer_name ?? '', customer_phone: quote?.customer_phone ?? '', delivery_date: quote?.delivery_date ?? null, delivery_time: quote?.delivery_time ?? null, notes: quote?.notes ?? '', ...getInitialQuoteDeposit(business, quote), status: quote?.status ?? 'draft', delivery_internal_cost: quote?.delivery_internal_cost ?? 0, delivery_customer_charge: quote?.delivery_customer_charge ?? 0 }))
-  const [items, setItems] = useState(() => [{ key: crypto.randomUUID(), value: newProduct() }])
+export function QuoteForm({ business, quote, preparation, onSaved, onCancel }: { business: Business; quote: Quote | null; preparation?: CatalogRequestQuotePreparation | null; onSaved: (quote: Quote) => void; onCancel: () => void }) {
+  const [header, setHeader] = useState<QuoteBundleHeader>(() => ({ customer_name: quote?.customer_name ?? preparation?.header.customer_name ?? '', customer_phone: quote?.customer_phone ?? preparation?.header.customer_phone ?? '', delivery_date: quote?.delivery_date ?? preparation?.header.delivery_date ?? null, delivery_time: quote?.delivery_time ?? null, notes: quote?.notes ?? preparation?.header.notes ?? '', ...getInitialQuoteDeposit(business, quote), status: quote?.status ?? 'draft', delivery_internal_cost: quote?.delivery_internal_cost ?? 0, delivery_customer_charge: quote?.delivery_customer_charge ?? 0 }))
+  const [items, setItems] = useState(() => preparation ? preparation.items.map(value => ({ key: crypto.randomUUID(), value: structuredClone(value) })) : [{ key: crypto.randomUUID(), value: newProduct() }])
   const [catalog, setCatalog] = useState<CatalogProduct[]>([])
   const [settings, setSettings] = useState(defaultCostSettings)
   const [loading, setLoading] = useState(true)
@@ -21,10 +23,10 @@ export function QuoteForm({ business, quote, onSaved, onCancel }: { business: Bu
   useEffect(() => {
     let active = true
     void Promise.all([listCatalog(business.id), getCostSettings(business.id), quote ? loadQuoteBundle(quote.id, business.id) : Promise.resolve(null)])
-      .then(([products, defaults, saved]) => { if (active) { setCatalog(products); setSettings(defaults); if (saved) setItems(saved.map(value => ({ key: crypto.randomUUID(), value }))); setLoaded(true) } })
+      .then(([products, defaults, saved]) => { if (active) { setCatalog(products); setSettings(defaults); if (saved) setItems(saved.map(value => ({ key: crypto.randomUUID(), value }))); else if (preparation?.businessId === business.id) setItems(preparation.items.map(value => ({ key: crypto.randomUUID(), value: structuredClone(value) }))); setLoaded(true) } })
       .catch(e => { if (active) setError(errorMessage(e)) }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [business.id, quote])
+  }, [business.id, quote, preparation])
   const values = items.map(item => item.value)
   const summary = calculateBundle(header, values)
   const time = deliveryTimeToParts(header.delivery_time) ?? { hour: '12', minute: '00', period: 'PM' as const }
@@ -35,7 +37,8 @@ export function QuoteForm({ business, quote, onSaved, onCancel }: { business: Bu
     try { onSaved(await saveQuoteBundle(quote?.id ?? null, header, values)) } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
   if (loading) return <Loading text="Preparando los productos de tu cotización…" />
-  return <div className="quote-editor"><div className="editor-heading"><button className="back-button" onClick={onCancel}><ArrowLeft size={17} /> Cotizaciones</button><span className="eyebrow accent">{quote ? quote.quote_number : 'NUEVA COTIZACIÓN'}</span><h1>{quote ? 'Editar cotización' : 'Crear una cotización'}</h1><p className="muted">Uno o varios productos, una propuesta y una entrega.</p></div>
+  return <div className="quote-editor"><div className="editor-heading"><button className="back-button" onClick={onCancel}><ArrowLeft size={17} /> Cotizaciones</button><span className="eyebrow accent">{quote ? quote.quote_number : preparation ? `DESDE ${preparation.requestNumber}` : 'NUEVA COTIZACIÓN'}</span><h1>{quote ? 'Editar cotización' : preparation ? 'Preparar cotización' : 'Crear una cotización'}</h1><p className="muted">Uno o varios productos, una propuesta y una entrega.</p></div>
+    {preparation && <div className="request-quote-prefill" role="status"><strong>Datos copiados de {preparation.requestNumber}</strong><span>Revisa y ajusta precios, costos y demás condiciones antes de guardar. La solicitud no cambiará de estado al guardar esta cotización.</span>{preparation.itemsWithoutPublishedPrice.length > 0 && <span>Sin precio publicado: {preparation.itemsWithoutPublishedPrice.join(', ')}. Estos productos empiezan en 0 y requieren que indiques el precio.</span>}</div>}
     <form className="quote-form" onSubmit={submit}><fieldset className="bundle-fieldset" disabled={busy || !loaded}>
       <section className="panel quote-section"><h2>Cliente</h2><div className="form-grid"><label>Nombre del cliente<input required maxLength={120} value={header.customer_name} onChange={e => setHeader({ ...header, customer_name: e.target.value })} /></label><label>Teléfono<input type="tel" maxLength={30} value={header.customer_phone} onChange={e => setHeader({ ...header, customer_phone: e.target.value })} /></label></div></section>
       <section className="panel quote-section"><h2>Entrega</h2><label>Fecha<input type="date" value={header.delivery_date ?? ''} onChange={e => setHeader({ ...header, delivery_date: e.target.value || null })} /></label>
