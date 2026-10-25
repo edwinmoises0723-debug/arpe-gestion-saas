@@ -58,6 +58,7 @@ async function mockBackend(page: Page) {
   await page.route('**/rest/v1/arpe_quote_items*', async route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }))
   await page.route('**/rest/v1/arpe_orders*', async route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }))
   await page.route('**/rest/v1/arpe_order_items*', async route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }))
+  await page.route('**/rest/v1/arpe_payments*', async route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }))
   await page.route('**/rest/v1/rpc/arpe_save_quote_bundle', async route => {
     quoteSaveCalls += 1
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 'saved-quote', quote_number: 'COT-2026-0001' }]) })
@@ -70,7 +71,7 @@ async function openInbox(page: Page) {
   await page.getByLabel('Correo electrónico').fill('inbox@example.test')
   await page.getByLabel('Contraseña', { exact: true }).fill('Example-password-123')
   await page.getByRole('button', { name: 'Entrar a mi negocio' }).click()
-  await expect(page.locator('.dashboard-heading h1')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Abrir menú' })).toBeVisible()
   await page.getByRole('button', { name: 'Abrir menú' }).click()
   await page.getByRole('link', { name: /Solicitudes/ }).click()
   await expect(page.getByRole('heading', { name: 'Solicitudes.' })).toBeVisible()
