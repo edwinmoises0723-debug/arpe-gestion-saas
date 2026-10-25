@@ -49,6 +49,9 @@ jobs:
       - name: Test public catalog permissions and RPCs
         run: supabase test db supabase/tests/public_catalog_security.sql
 
+      - name: Test catalog request intake security
+        run: supabase test db supabase/tests/catalog_request_security.sql
+
       - name: Test catalog Storage ownership and policies
         run: supabase test db supabase/tests/public_catalog_storage.sql
 

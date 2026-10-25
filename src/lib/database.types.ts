@@ -7,6 +7,8 @@ export type OrderStatus = 'confirmed' | 'in_preparation' | 'ready' | 'delivered'
 export type PaymentMethod = 'cash' | 'bank_transfer' | 'bank_deposit' | 'card' | 'mobile_payment' | 'other'
 export type PaymentStatus = 'posted' | 'voided'
 export type PublicCatalogPriceMode = 'exact' | 'from' | 'contact'
+export type CatalogRequestStatus = 'new' | 'reviewing' | 'converted' | 'declined' | 'archived'
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export type Business = {
   id: string
@@ -189,6 +191,37 @@ export type CatalogProduct = {
   created_at: string; updated_at: string
 }
 export type CatalogProductInput = Omit<CatalogProduct, 'id' | 'created_at' | 'updated_at'>
+export type CatalogRequest = {
+  id: string
+  business_id: string
+  request_number: string
+  client_request_key: string
+  customer_name: string
+  customer_phone: string
+  desired_date: string | null
+  details: string
+  status: CatalogRequestStatus
+  converted_quote_id: string | null
+  submitted_at: string
+  updated_at: string
+  reviewed_at: string | null
+  converted_at: string | null
+}
+export type CatalogRequestItem = {
+  id: string
+  request_id: string
+  business_id: string
+  catalog_product_id: string
+  position: number
+  product_name_snapshot: string
+  category_snapshot: string
+  quantity: number
+  unit_label_snapshot: string
+  default_portions_snapshot: number | null
+  public_price_mode_snapshot: PublicCatalogPriceMode
+  public_unit_price_snapshot: number | null
+  created_at: string
+}
 export type PublicCatalogProfile = Pick<Business, 'catalog_slug' | 'name' | 'slogan' | 'description' | 'currency' | 'public_catalog_logo_path'> & { whatsapp: string | null }
 export type PublicCatalogProduct = Omit<Pick<CatalogProduct, 'id' | 'name' | 'category' | 'description' | 'unit_label' | 'default_unit_price' | 'default_portions' | 'image_path' | 'public_price_mode' | 'public_sort_order'>, 'default_unit_price'> & { default_unit_price: number | null }
 export type ProductFields = {
@@ -224,6 +257,8 @@ type ReadOnlyTable<T> = { Row: T; Insert: never; Update: never; Relationships: [
 export type Database = {
   public: {
     Tables: {
+      arpe_catalog_requests: ReadOnlyTable<CatalogRequest>
+      arpe_catalog_request_items: ReadOnlyTable<CatalogRequestItem>
       arpe_catalog_products: { Row: CatalogProduct; Insert: CatalogProductInput; Update: Partial<CatalogProductInput>; Relationships: [] }
       arpe_quote_items: ReadOnlyTable<QuoteItem>
       arpe_quote_item_costs: ReadOnlyTable<QuoteItemCost>
@@ -288,6 +323,18 @@ export type Database = {
       arpe_void_payment: { Args: { p_payment_id: string; p_void_reason: string }; Returns: Payment[] }
       ejnexa_get_public_catalog_profile: { Args: { p_slug: string }; Returns: PublicCatalogProfile[] }
       ejnexa_get_public_catalog_products: { Args: { p_slug: string }; Returns: PublicCatalogProduct[] }
+      ejnexa_submit_catalog_request: {
+        Args: {
+          p_slug: string
+          p_client_request_key: string
+          p_customer_name: string
+          p_customer_phone: string | null
+          p_desired_date: string | null
+          p_details: string | null
+          p_items: Json
+        }
+        Returns: Array<Pick<CatalogRequest, 'id' | 'request_number' | 'status' | 'submitted_at'>>
+      }
     }
     Enums: { [_ in never]: never }
     CompositeTypes: { [_ in never]: never }
