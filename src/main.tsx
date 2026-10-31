@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
+import { ThemeProvider } from './theme/ThemeProvider'
 import './styles.css'
 import './styles-products.css'
 import './styles-costs.css'
@@ -14,5 +15,7 @@ import './styles-quotes-search.css'
 import './styles-reports.css'
 import './styles-system.css'
 import './styles-shell.css'
+import './styles/tokens.css'
+import './styles/themes.css'
 
-createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>)
+createRoot(document.getElementById('root')!).render(<StrictMode><ThemeProvider><App /></ThemeProvider></StrictMode>)

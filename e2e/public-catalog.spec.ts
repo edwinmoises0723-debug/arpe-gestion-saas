@@ -20,6 +20,7 @@ test('public catalog is available without login and supports discovery, detail, 
   const paths: string[] = []
   const consoleErrors: string[] = []
   const pageErrors: string[] = []
+  await page.emulateMedia({ colorScheme: 'dark' })
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'share', { configurable: true, value: undefined })
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (value: string) => { (window as Window & { __catalogCopied?: string }).__catalogCopied = value } } })
@@ -53,6 +54,8 @@ test('public catalog is available without login and supports discovery, detail, 
   })
 
   await gotoPublicCatalog(page, 'arpe-dulce-encanto')
+  expect(await page.locator('html').getAttribute('data-theme')).toBe('dark')
+  expect(await page.locator('.public-catalog').evaluate(element => getComputedStyle(element).backgroundColor)).toBe('rgb(248, 246, 239)')
   const origin = new URL(page.url()).origin
   await expect(page).toHaveURL(/\/catalogo\/arpe-dulce-encanto$/)
   await expect(page.getByRole('heading', { name: 'ARPE Dulce Encanto' })).toBeVisible()

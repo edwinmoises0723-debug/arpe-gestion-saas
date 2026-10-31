@@ -94,12 +94,12 @@ test('inbox muestra snapshots, filtros y detalle sin overflow en móvil, Fold y 
   await expect(page.getByRole('button', { name: /SOL-2026-0002/ })).toBeVisible()
   await page.getByRole('button', { name: /Todas 2/ }).click()
 
-  for (const width of [320, 360, 390, 768, 884, 1440]) {
+  for (const width of [320, 360, 390, 400, 768, 884, 1440]) {
     await page.setViewportSize({ width, height: 900 })
     await expectNoHorizontalOverflow(page)
     await page.getByRole('button', { name: /SOL-2026-0001/ }).click()
     await expect(page.getByText('Topper personalizado', { exact: true })).toBeVisible()
-    await expect(page.getByText('Consultar', { exact: true })).toBeVisible()
+    await expect(page.getByText('Precio pendiente', { exact: true })).toBeVisible()
     await expectNoHorizontalOverflow(page)
     if (width < 768) await page.getByRole('button', { name: 'Volver a solicitudes' }).click()
   }
@@ -121,11 +121,15 @@ test('marca en revisión, actualiza badge y prepara una cotización editable des
   await expect(page.getByLabel('Observaciones generales')).toHaveValue('Sin nueces')
   await expect(page.getByRole('textbox', { name: 'Producto' }).first()).toHaveValue('Pastel de Chocolate')
   await expect(page.getByText(/Precio pendiente de definir: Topper personalizado/i)).toBeVisible()
+  await expect(page.getByLabel('Precio unitario').nth(1)).toHaveValue('')
+  await expect(page.getByText(/Total pendiente · completa los precios/)).toBeVisible()
   await page.getByRole('button', { name: 'Guardar cotización' }).click()
   await expect(page.getByRole('alert')).toContainText('Define un precio mayor que cero para: Topper personalizado.')
   expect(backend.quoteSaveCalls()).toBe(0)
   await page.getByLabel('Precio unitario').nth(1).fill('150')
   await expect(page.getByText(/Precio pendiente de definir/i)).toHaveCount(0)
+  await expect(page.getByLabel('Precio unitario').nth(1)).toHaveValue('150')
+  await expect(page.getByText(/Total pendiente/)).toHaveCount(0)
   await page.getByRole('button', { name: 'Guardar cotización' }).click()
   await expect.poll(() => backend.quoteSaveCalls()).toBe(1)
 })
