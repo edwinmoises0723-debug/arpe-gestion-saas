@@ -262,6 +262,27 @@ test('public catalog persists a request once and keeps sharing attached to its r
   await expect.poll(() => page.evaluate(() => (window as Window & { __requestCopied?: string }).__requestCopied)).toContain('SOL-2026-0001')
   expect(submissionPayloads).toHaveLength(1)
 
+  await panel.getByRole('button', { name: 'Cerrar mi solicitud' }).click()
+  await expect(panel).not.toBeVisible()
+  await page.getByRole('button', { name: 'Todos', exact: true }).click()
+  const lockedPastel = page.locator('.public-product-card').filter({ has: page.getByRole('button', { name: 'Ver detalle de Pastel de Chocolate' }) })
+  const lockedTresLeches = page.locator('.public-product-card').filter({ has: page.getByRole('button', { name: 'Ver detalle de Tres Leches' }) })
+  const lockedAlfajor = page.locator('.public-product-card').filter({ has: page.getByRole('button', { name: 'Ver detalle de Alfajor especial' }) })
+  await expect(lockedPastel.getByRole('button', { name: 'Aumentar cantidad de Pastel de Chocolate' })).toBeDisabled()
+  await expect(lockedTresLeches.getByRole('button', { name: 'Aumentar cantidad de Tres Leches' })).toBeDisabled()
+  await expect(lockedAlfajor.getByRole('button', { name: 'Agregar Alfajor especial a solicitud' })).toBeDisabled()
+  await page.getByRole('button', { name: /Mi solicitud · 2 productos/ }).click()
+  await expect(panel.getByText('SOL-2026-0001')).toBeVisible()
+  await expect(panel.getByRole('region', { name: 'Revisa tu solicitud' })).toContainText('2 × Pastel de Chocolate')
+  await expect(panel.getByRole('region', { name: 'Revisa tu solicitud' })).toContainText('1 × Tres Leches')
+  await panel.getByRole('button', { name: 'Crear otra solicitud' }).click()
+  await expect(panel.getByText('Aún no agregas productos.')).toBeVisible()
+  await panel.getByRole('button', { name: 'Volver al catálogo' }).click()
+  await expect(lockedPastel.getByRole('button', { name: 'Agregar Pastel de Chocolate a solicitud' })).toBeEnabled()
+  await lockedPastel.getByRole('button', { name: 'Agregar Pastel de Chocolate a solicitud' }).click()
+  await expect(page.getByRole('button', { name: /Mi solicitud · 1 producto/ })).toBeVisible()
+  await expect(submissionPayloads).toHaveLength(1)
+
   await page.keyboard.press('Escape')
   await expect(panel).not.toBeVisible()
   await gotoPublicCatalog(page, 'sin-whatsapp')
@@ -314,7 +335,7 @@ test('public catalog retries the exact pending payload with one idempotency key'
       if (attempts === 1) {
         await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ message: 'sensitive SQL detail must not be shown' }) })
       } else {
-        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 'retry-request-id', request_number: 'SOL-2026-0002', status: 'new', submitted_at: new Date().toISOString() }]) })
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 'retry-request-id', request_number: 'SOL-2026-0002', status: 'reviewing', submitted_at: new Date().toISOString() }]) })
       }
       return
     }
@@ -334,6 +355,12 @@ test('public catalog retries the exact pending payload with one idempotency key'
   await panel.getByRole('button', { name: 'Enviar solicitud' }).click()
   await expect(panel.getByRole('alert')).toContainText('No pudimos confirmar el envío')
   await expect(panel.getByRole('alert')).not.toContainText('sensitive SQL detail')
+  await panel.getByRole('button', { name: 'Cerrar mi solicitud' }).click()
+  const pastelCard = page.locator('.public-product-card').filter({ has: page.getByRole('button', { name: 'Ver detalle de Pastel de Chocolate' }) })
+  await expect(pastelCard.getByRole('button', { name: 'Aumentar cantidad de Pastel de Chocolate' })).toBeDisabled()
+  const tresLechesCard = page.locator('.public-product-card').filter({ has: page.getByRole('button', { name: 'Ver detalle de Tres Leches' }) })
+  await expect(tresLechesCard.getByRole('button', { name: 'Agregar Tres Leches a solicitud' })).toBeDisabled()
+  await page.getByRole('button', { name: /Mi solicitud · 1 producto/ }).click()
   await panel.getByRole('button', { name: 'Reintentar envío' }).click()
   await expect(panel.getByText('SOL-2026-0002')).toBeVisible()
   expect(submissions).toHaveLength(2)

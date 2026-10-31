@@ -1,4 +1,4 @@
-import type { Json, PublicCatalogPriceMode, PublicCatalogProduct } from './database.types'
+import type { CatalogRequestStatus, Json, PublicCatalogPriceMode, PublicCatalogProduct } from './database.types'
 import { normalizeWhatsAppNumber } from './catalog-sharing'
 import { client } from './supabase'
 
@@ -25,7 +25,7 @@ export type CatalogRequestSubmissionPayload = {
   p_details: string
   p_items: Array<{ product_id: string; quantity: number }>
 }
-export type CatalogRequestSubmission = { id: string; requestNumber: string; status: 'new'; submittedAt: string }
+export type CatalogRequestSubmission = { id: string; requestNumber: string; status: CatalogRequestStatus; submittedAt: string }
 
 export function addCatalogRequestItem(items: CatalogRequestItem[], product: PublicCatalogProduct): CatalogRequestItem[] {
   const existing = items.find(item => item.productId === product.id)
@@ -86,8 +86,12 @@ export async function submitCatalogRequest(payload: CatalogRequestSubmissionPayl
   const { data, error } = await client().rpc('ejnexa_submit_catalog_request', args)
   if (error) throw error
   const result = data?.[0]
-  if (!result || result.status !== 'new') throw new Error('Submission response could not be confirmed')
-  return { id: result.id, requestNumber: result.request_number, status: 'new', submittedAt: result.submitted_at }
+  if (!result || typeof result.id !== 'string' || !result.id || typeof result.request_number !== 'string' || !result.request_number || typeof result.submitted_at !== 'string' || !result.submitted_at || !isCatalogRequestStatus(result.status)) throw new Error('Submission response could not be confirmed')
+  return { id: result.id, requestNumber: result.request_number, status: result.status, submittedAt: result.submitted_at }
+}
+
+export function isCatalogRequestStatus(value: string): value is CatalogRequestStatus {
+  return value === 'new' || value === 'reviewing' || value === 'converted' || value === 'declined' || value === 'archived'
 }
 
 export function calculateCatalogReference(items: CatalogRequestItem[]) {

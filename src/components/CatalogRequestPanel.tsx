@@ -8,6 +8,7 @@ import './catalog-request.css'
 type Props = {
   open: boolean
   onClose: () => void
+  onRequestLockChange: (locked: boolean) => void
   slug: string
   businessName: string
   whatsapp: string | null
@@ -24,7 +25,7 @@ const emptyForm: CatalogRequestForm = { customerName: '', desiredDate: '', detai
 type SubmissionState = { status: 'idle' } | { status: 'submitting'; pending: PendingSubmission } | { status: 'error'; pending: PendingSubmission } | { status: 'success'; pending: PendingSubmission; result: CatalogRequestSubmission }
 type PendingSubmission = { key: string; payload: CatalogRequestSubmissionPayload }
 
-export function CatalogRequestPanel({ open, onClose, slug, businessName, whatsapp, catalogUrl, currency, items, onQuantity, onRemove, onClear }: Props) {
+export function CatalogRequestPanel({ open, onClose, onRequestLockChange, slug, businessName, whatsapp, catalogUrl, currency, items, onQuantity, onRemove, onClear }: Props) {
   const dialog = useRef<HTMLDialogElement>(null)
   const nameInput = useRef<HTMLInputElement>(null)
   const dateInput = useRef<HTMLInputElement>(null)
@@ -105,6 +106,7 @@ export function CatalogRequestPanel({ open, onClose, slug, businessName, whatsap
     setNotice('Solicitud limpiada.')
     setConfirmClear(false)
     setSubmission({ status: 'idle' })
+    onRequestLockChange(false)
   }
 
   async function sendRequest() {
@@ -127,6 +129,7 @@ export function CatalogRequestPanel({ open, onClose, slug, businessName, whatsap
     }
     submitLock.current = true
     setSubmission({ status: 'submitting', pending })
+    onRequestLockChange(true)
     try {
       const result = await submitCatalogRequest(pending.payload)
       setSubmission({ status: 'success', pending, result })
@@ -145,6 +148,7 @@ export function CatalogRequestPanel({ open, onClose, slug, businessName, whatsap
     setNotice('')
     setConfirmClear(false)
     setSubmission({ status: 'idle' })
+    onRequestLockChange(false)
   }
 
   return <dialog ref={dialog} className="catalog-request-dialog" aria-labelledby="catalog-request-title" aria-describedby="catalog-request-description" aria-busy={submission.status === 'submitting'} onClose={onClose} onCancel={onClose} onClick={event => { if (event.target === dialog.current) dialog.current?.close() }}>

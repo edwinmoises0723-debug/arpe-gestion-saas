@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addCatalogRequestItem, buildCatalogRequestSubmissionPayload, buildQuoteRequestMessage, buildQuoteRequestWhatsAppUrl, calculateCatalogReference, formatRequestedDate, removeCatalogRequestItem, setCatalogRequestQuantity, validateCatalogRequest, type CatalogRequestForm, type CatalogRequestItem } from './catalog-request'
+import { addCatalogRequestItem, buildCatalogRequestSubmissionPayload, buildQuoteRequestMessage, buildQuoteRequestWhatsAppUrl, calculateCatalogReference, formatRequestedDate, isCatalogRequestStatus, removeCatalogRequestItem, setCatalogRequestQuantity, validateCatalogRequest, type CatalogRequestForm, type CatalogRequestItem } from './catalog-request'
 import type { PublicCatalogProduct } from './database.types'
 
 const products: PublicCatalogProduct[] = [
@@ -38,6 +38,12 @@ describe('public catalog quote request', () => {
     expect(payload).toEqual({ p_slug: 'dulce-encanto', p_client_request_key: 'request-key', p_customer_name: 'María Gómez', p_customer_phone: '', p_desired_date: '2026-10-25', p_details: 'Decoración azul', p_items: [{ product_id: 'pastel-id', quantity: 1 }, { product_id: 'alfajor-id', quantity: 1 }] })
     expect(Object.keys(payload)).not.toEqual(expect.arrayContaining(['business_id', 'owner_id', 'price', 'snapshot', 'image_path', 'category', 'name']))
     expect(payload.p_items.every(item => Object.keys(item).sort().join(',') === 'product_id,quantity')).toBe(true)
+  })
+
+  it('recognizes only valid persisted request statuses for idempotent replays', () => {
+    for (const status of ['new', 'reviewing', 'converted', 'declined', 'archived']) expect(isCatalogRequestStatus(status)).toBe(true)
+    expect(isCatalogRequestStatus('processing')).toBe(false)
+    expect(isCatalogRequestStatus('')).toBe(false)
   })
 
   it('calculates only a complete exact-price reference', () => {
