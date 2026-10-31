@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addCatalogRequestItem, buildQuoteRequestMessage, buildQuoteRequestWhatsAppUrl, calculateCatalogReference, formatRequestedDate, removeCatalogRequestItem, setCatalogRequestQuantity, validateCatalogRequest, type CatalogRequestForm, type CatalogRequestItem } from './catalog-request'
+import { addCatalogRequestItem, buildCatalogRequestSubmissionPayload, buildQuoteRequestMessage, buildQuoteRequestWhatsAppUrl, calculateCatalogReference, formatRequestedDate, removeCatalogRequestItem, setCatalogRequestQuantity, validateCatalogRequest, type CatalogRequestForm, type CatalogRequestItem } from './catalog-request'
 import type { PublicCatalogProduct } from './database.types'
 
 const products: PublicCatalogProduct[] = [
@@ -26,6 +26,18 @@ describe('public catalog quote request', () => {
     expect(validateCatalogRequest(item, { ...validForm, desiredDate: '2026-10-17' }, '2026-10-18')).toHaveProperty('desiredDate')
     expect(validateCatalogRequest(item, { ...validForm, desiredDate: '2026-10-18' }, '2026-10-18')).toEqual({})
     expect(validateCatalogRequest(item, { ...validForm, details: 'x'.repeat(1001) }, '2026-10-18')).toHaveProperty('details')
+    expect(validateCatalogRequest(Array.from({ length: 51 }, (_, index) => ({ ...item[0], productId: `product-${index}` })), validForm, '2026-10-18')).toHaveProperty('items')
+    expect(validateCatalogRequest([{ ...item[0], quantity: 10000 }], validForm, '2026-10-18')).toHaveProperty('items')
+    expect(setCatalogRequestQuantity(item, 'pastel-id', 10000)[0].quantity).toBe(9999)
+  })
+
+  it('builds a minimal public submission payload without prices, snapshots, or business identifiers', () => {
+    const selected = [...addCatalogRequestItem([], products[0]), ...addCatalogRequestItem([], products[1])]
+    const payload = buildCatalogRequestSubmissionPayload({ slug: 'dulce-encanto', requestKey: 'request-key', form: validForm, items: selected })
+    expect(Object.keys(payload).sort()).toEqual(['p_client_request_key', 'p_customer_name', 'p_customer_phone', 'p_desired_date', 'p_details', 'p_items', 'p_slug'].sort())
+    expect(payload).toEqual({ p_slug: 'dulce-encanto', p_client_request_key: 'request-key', p_customer_name: 'María Gómez', p_customer_phone: '', p_desired_date: '2026-10-25', p_details: 'Decoración azul', p_items: [{ product_id: 'pastel-id', quantity: 1 }, { product_id: 'alfajor-id', quantity: 1 }] })
+    expect(Object.keys(payload)).not.toEqual(expect.arrayContaining(['business_id', 'owner_id', 'price', 'snapshot', 'image_path', 'category', 'name']))
+    expect(payload.p_items.every(item => Object.keys(item).sort().join(',') === 'product_id,quantity')).toBe(true)
   })
 
   it('calculates only a complete exact-price reference', () => {
@@ -42,6 +54,7 @@ describe('public catalog quote request', () => {
     for (const product of products) items = addCatalogRequestItem(items, product)
     const message = buildQuoteRequestMessage({ businessName: 'Dulce Encanto', customerName: validForm.customerName, items, desiredDate: validForm.desiredDate, details: validForm.details, catalogUrl: 'https://example.test/catalogo/dulce-encanto', currencySymbol: 'C$' })
     expect(message).toContain('Mi nombre es María Gómez')
+    expect(message).not.toContain('Número de solicitud:')
     expect(message).toContain('Precio publicado: C$ 850,00')
     expect(message).toContain('Precio publicado: Desde C$ 35,00')
     expect(message).toContain('Precio publicado: Consultar precio')
@@ -60,5 +73,7 @@ describe('public catalog quote request', () => {
     const item = addCatalogRequestItem([], products[0])
     const message = buildQuoteRequestMessage({ businessName: 'Dulce Encanto', customerName: 'María', items: item, desiredDate: '', details: '', catalogUrl: 'https://example.test/catalogo/dulce', currencySymbol: 'C$' })
     expect(message).not.toContain('Fecha deseada:')
+    const savedMessage = buildQuoteRequestMessage({ businessName: 'Dulce Encanto', customerName: 'María', items: item, desiredDate: '', details: '', catalogUrl: 'https://example.test/catalogo/dulce', currencySymbol: 'C$', requestNumber: 'SOL-2026-0001' })
+    expect(savedMessage).toContain('Número de solicitud: SOL-2026-0001')
   })
 })
