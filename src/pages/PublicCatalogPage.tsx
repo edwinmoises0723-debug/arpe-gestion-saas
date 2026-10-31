@@ -21,6 +21,8 @@ export function PublicCatalogPage() {
   const [category, setCategory] = useState('')
   const [selected, setSelected] = useState<PublicCatalogProduct | null>(null)
   const [requestSelection, setRequestSelection] = useState<{ slug: string; items: CatalogRequestItem[] }>({ slug: '', items: [] })
+  const [lockedRequestSlug, setLockedRequestSlug] = useState('')
+  const lockedRequestSlugRef = useRef('')
   const [requestOpenSlug, setRequestOpenSlug] = useState('')
   const dialogRef = useRef<HTMLDialogElement>(null)
 
@@ -46,10 +48,19 @@ export function PublicCatalogPage() {
   const state = useMemo(() => storedState.slug === slug ? storedState.value : { status: 'loading' as const }, [storedState, slug])
   const profile = state.status === 'ready' ? state.profile : null
   const requestItems = requestSelection.slug === slug ? requestSelection.items : []
+  const requestLocked = lockedRequestSlug === slug
   const requestOpen = requestOpenSlug === slug
   const selectedById = new Map(requestItems.map(item => [item.productId, item]))
   const totalUnits = requestItems.reduce((total, item) => total + item.quantity, 0)
-  const updateRequestItems = (update: (items: CatalogRequestItem[]) => CatalogRequestItem[]) => setRequestSelection(current => ({ slug, items: update(current.slug === slug ? current.items : []) }))
+  const updateRequestItems = (update: (items: CatalogRequestItem[]) => CatalogRequestItem[], allowLocked = false) => {
+    if (!allowLocked && lockedRequestSlugRef.current === slug) return
+    setRequestSelection(current => ({ slug, items: update(current.slug === slug ? current.items : []) }))
+  }
+  const setRequestLock = (locked: boolean) => {
+    const next = locked ? slug : lockedRequestSlugRef.current === slug ? '' : lockedRequestSlugRef.current
+    lockedRequestSlugRef.current = next
+    setLockedRequestSlug(next)
+  }
   useEffect(() => {
     if (!profile) return
     const previousTitle = document.title
@@ -110,31 +121,31 @@ export function PublicCatalogPage() {
             {categories.map(value => <button type="button" key={value} className={category === value ? 'is-selected' : ''} aria-pressed={category === value} onClick={() => setCategory(category === value ? '' : value)}>{value}</button>)}
           </div>
         </div>
-        {visibleProducts.length ? <section className="public-product-grid" aria-label="Productos disponibles">{visibleProducts.map(product => <PublicProductCard key={product.id} product={product} currency={currencySymbol} quantity={selectedById.get(product.id)?.quantity ?? 0} onOpen={() => setSelected(product)} onAdd={() => updateRequestItems(current => addCatalogRequestItem(current, product))} onQuantity={quantity => updateRequestItems(current => setCatalogRequestQuantity(current, product.id, quantity))} />)}</section> : <section className="public-filter-empty"><h3>No encontramos productos con esos filtros.</h3><button type="button" className="public-clear-filters" onClick={() => { setSearch(''); setCategory('') }}>Limpiar filtros</button></section>}
+        {visibleProducts.length ? <section className="public-product-grid" aria-label="Productos disponibles">{visibleProducts.map(product => <PublicProductCard key={product.id} product={product} currency={currencySymbol} quantity={selectedById.get(product.id)?.quantity ?? 0} disabled={requestLocked} onOpen={() => setSelected(product)} onAdd={() => updateRequestItems(current => addCatalogRequestItem(current, product))} onQuantity={quantity => updateRequestItems(current => setCatalogRequestQuantity(current, product.id, quantity))} />)}</section> : <section className="public-filter-empty"><h3>No encontramos productos con esos filtros.</h3><button type="button" className="public-clear-filters" onClick={() => { setSearch(''); setCategory('') }}>Limpiar filtros</button></section>}
       </>}
     </main>
 
     <footer className="public-footer"><p>¿Te gustó algo? Explora el catálogo y encuentra tu próximo favorito.</p><div className="public-footer-rule" /><span>Catálogo impulsado por <strong>EJNEXA Business</strong> · EJNEXA AI Studio</span><small>Sistema diseñado por Ing. Edwin Nicaragua</small></footer>
 
     <dialog ref={dialogRef} className="public-product-dialog" aria-labelledby="public-dialog-title" onClose={() => setSelected(null)} onClick={event => { if (event.target === dialogRef.current) dialogRef.current?.close() }}>
-      {selected && <div className="public-dialog-content"><button type="button" className="public-dialog-close" aria-label="Cerrar detalle" onClick={() => dialogRef.current?.close()}><X size={19} /></button><CatalogImage path={selected.image_path} alt={selected.name} className="public-dialog-image" fallback={<span><Image size={32} aria-hidden="true" />Imagen no disponible</span>} /><div className="public-dialog-copy"><span className="public-eyebrow public-eyebrow-dark">{selected.category}</span><h2 id="public-dialog-title">{selected.name}</h2><p className="public-dialog-description">{selected.description}</p><PublicPrice product={selected} currency={currencySymbol} /><p className="public-unit">/ {selected.unit_label}</p>{selected.default_portions !== null && selected.default_portions > 0 && <p className="public-portions">{selected.default_portions} porciones</p>}<SelectionControl product={selected} quantity={selectedById.get(selected.id)?.quantity ?? 0} onAdd={() => updateRequestItems(current => addCatalogRequestItem(current, selected))} onQuantity={quantity => updateRequestItems(current => setCatalogRequestQuantity(current, selected.id, quantity))} /></div></div>}
+      {selected && <div className="public-dialog-content"><button type="button" className="public-dialog-close" aria-label="Cerrar detalle" onClick={() => dialogRef.current?.close()}><X size={19} /></button><CatalogImage path={selected.image_path} alt={selected.name} className="public-dialog-image" fallback={<span><Image size={32} aria-hidden="true" />Imagen no disponible</span>} /><div className="public-dialog-copy"><span className="public-eyebrow public-eyebrow-dark">{selected.category}</span><h2 id="public-dialog-title">{selected.name}</h2><p className="public-dialog-description">{selected.description}</p><PublicPrice product={selected} currency={currencySymbol} /><p className="public-unit">/ {selected.unit_label}</p>{selected.default_portions !== null && selected.default_portions > 0 && <p className="public-portions">{selected.default_portions} porciones</p>}<SelectionControl product={selected} quantity={selectedById.get(selected.id)?.quantity ?? 0} disabled={requestLocked} onAdd={() => updateRequestItems(current => addCatalogRequestItem(current, selected))} onQuantity={quantity => updateRequestItems(current => setCatalogRequestQuantity(current, selected.id, quantity))} /></div></div>}
     </dialog>
     {requestItems.length > 0 && <button type="button" className="catalog-request-floating" onClick={() => setRequestOpenSlug(slug)}><ClipboardList size={19} aria-hidden="true" /> Mi solicitud · {requestItems.length} {requestItems.length === 1 ? 'producto' : 'productos'} <span>· {totalUnits} {totalUnits === 1 ? 'unidad' : 'unidades'}</span></button>}
-    <CatalogRequestPanel key={slug} open={requestOpen} onClose={() => setRequestOpenSlug('')} businessName={state.profile.name} whatsapp={state.profile.whatsapp} catalogUrl={new URL(`/catalogo/${state.profile.catalog_slug}`, window.location.origin).toString()} currency={state.profile.currency} items={requestItems} onQuantity={(productId, quantity) => updateRequestItems(current => setCatalogRequestQuantity(current, productId, quantity))} onRemove={productId => updateRequestItems(current => removeCatalogRequestItem(current, productId))} onClear={() => updateRequestItems(() => [])} />
+    <CatalogRequestPanel key={slug} open={requestOpen} onClose={() => setRequestOpenSlug('')} onRequestLockChange={setRequestLock} slug={slug} businessName={state.profile.name} whatsapp={state.profile.whatsapp} catalogUrl={new URL(`/catalogo/${state.profile.catalog_slug}`, window.location.origin).toString()} currency={state.profile.currency} items={requestItems} onQuantity={(productId, quantity) => updateRequestItems(current => setCatalogRequestQuantity(current, productId, quantity))} onRemove={productId => updateRequestItems(current => removeCatalogRequestItem(current, productId))} onClear={() => updateRequestItems(() => [], true)} />
   </div>
 }
 
-function PublicProductCard({ product, currency, quantity, onOpen, onAdd, onQuantity }: { product: PublicCatalogProduct; currency: string; quantity: number; onOpen: () => void; onAdd: () => void; onQuantity: (quantity: number) => void }) {
+function PublicProductCard({ product, currency, quantity, disabled = false, onOpen, onAdd, onQuantity }: { product: PublicCatalogProduct; currency: string; quantity: number; disabled?: boolean; onOpen: () => void; onAdd: () => void; onQuantity: (quantity: number) => void }) {
   return <article className="public-product-card">
     <button type="button" className="public-product-open" onClick={onOpen} aria-label={`Ver detalle de ${product.name}`}><CatalogImage path={product.image_path} alt={product.name} className="public-product-image" fallback={<span><Image size={28} aria-hidden="true" /></span>} /><span className="public-card-copy"><span className="public-eyebrow public-eyebrow-dark">{product.category}</span><strong className="public-product-name">{product.name}</strong>{product.description && <span className="public-card-description">{product.description}</span>}<span className="public-card-price"><PublicPrice product={product} currency={currency} /><small>/ {product.unit_label}</small></span>{product.default_portions !== null && product.default_portions > 0 && <span className="public-portions">{product.default_portions} porciones</span>}</span></button>
-    <div className="public-product-actions"><SelectionControl product={product} quantity={quantity} onAdd={onAdd} onQuantity={onQuantity} /></div>
+    <div className="public-product-actions"><SelectionControl product={product} quantity={quantity} disabled={disabled} onAdd={onAdd} onQuantity={onQuantity} /></div>
   </article>
 }
 
-function SelectionControl({ product, quantity, onAdd, onQuantity }: { product: PublicCatalogProduct; quantity: number; onAdd: () => void; onQuantity: (quantity: number) => void }) {
+function SelectionControl({ product, quantity, disabled = false, onAdd, onQuantity }: { product: PublicCatalogProduct; quantity: number; disabled?: boolean; onAdd: () => void; onQuantity: (quantity: number) => void }) {
   return quantity === 0
-    ? <button type="button" className="public-add-request" aria-label={`Agregar ${product.name} a solicitud`} onClick={onAdd}><Plus size={16} aria-hidden="true" /> Agregar a solicitud</button>
-    : <div className="public-product-actions-selection"><span className="public-added-label">Agregado</span><div className="catalog-request-quantity"><button type="button" aria-label={`Disminuir cantidad de ${product.name}`} onClick={() => onQuantity(quantity - 1)}><Minus size={15} /></button><span aria-live="polite">{quantity}</span><button type="button" aria-label={`Aumentar cantidad de ${product.name}`} onClick={() => onQuantity(quantity + 1)}><Plus size={15} /></button></div></div>
+    ? <button type="button" className="public-add-request" disabled={disabled} aria-label={`Agregar ${product.name} a solicitud`} onClick={onAdd}><Plus size={16} aria-hidden="true" /> Agregar a solicitud</button>
+    : <div className="public-product-actions-selection"><span className="public-added-label">Agregado</span><div className="catalog-request-quantity"><button type="button" disabled={disabled} aria-label={`Disminuir cantidad de ${product.name}`} onClick={() => onQuantity(quantity - 1)}><Minus size={15} /></button><span aria-live="polite">{quantity}</span><button type="button" disabled={disabled} aria-label={`Aumentar cantidad de ${product.name}`} onClick={() => onQuantity(quantity + 1)}><Plus size={15} /></button></div></div>
 }
 
 function PublicPrice({ product, currency }: { product: PublicCatalogProduct; currency: string }) {

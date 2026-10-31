@@ -1,5 +1,6 @@
-import type { PublicCatalogPriceMode, PublicCatalogProduct } from './database.types'
+import type { CatalogRequestStatus, Json, PublicCatalogPriceMode, PublicCatalogProduct } from './database.types'
 import { normalizeWhatsAppNumber } from './catalog-sharing'
+import { client } from './supabase'
 
 export type CatalogRequestItem = {
   productId: string
@@ -15,6 +16,16 @@ export type CatalogRequestItem = {
 
 export type CatalogRequestForm = { customerName: string; desiredDate: string; details: string }
 export type CatalogRequestErrors = Partial<Record<keyof CatalogRequestForm | 'items', string>>
+export type CatalogRequestSubmissionPayload = {
+  p_slug: string
+  p_client_request_key: string
+  p_customer_name: string
+  p_customer_phone: string
+  p_desired_date: string | null
+  p_details: string
+  p_items: Array<{ product_id: string; quantity: number }>
+}
+export type CatalogRequestSubmission = { id: string; requestNumber: string; status: CatalogRequestStatus; submittedAt: string }
 
 export function addCatalogRequestItem(items: CatalogRequestItem[], product: PublicCatalogProduct): CatalogRequestItem[] {
   const existing = items.find(item => item.productId === product.id)
@@ -33,7 +44,7 @@ export function addCatalogRequestItem(items: CatalogRequestItem[], product: Publ
 }
 
 export function setCatalogRequestQuantity(items: CatalogRequestItem[], productId: string, quantity: number): CatalogRequestItem[] {
-  const safeQuantity = Number.isInteger(quantity) ? Math.max(1, quantity) : 1
+  const safeQuantity = Number.isInteger(quantity) ? Math.min(9999, Math.max(1, quantity)) : 1
   return items.map(item => item.productId === productId ? { ...item, quantity: safeQuantity } : item)
 }
 
@@ -44,12 +55,43 @@ export function removeCatalogRequestItem(items: CatalogRequestItem[], productId:
 export function validateCatalogRequest(items: CatalogRequestItem[], form: CatalogRequestForm, today = localDateString()): CatalogRequestErrors {
   const errors: CatalogRequestErrors = {}
   if (!items.length) errors.items = 'Agrega al menos un producto a tu solicitud.'
-  if (items.some(item => !Number.isInteger(item.quantity) || item.quantity < 1)) errors.items = 'Revisa las cantidades de tus productos.'
+  if (items.length > 50) errors.items = 'Puedes incluir hasta 50 productos distintos por solicitud.'
+  if (items.some(item => !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 9999)) errors.items = 'Cada cantidad debe estar entre 1 y 9999.'
   const customerName = form.customerName.trim()
   if (customerName.length < 2 || customerName.length > 100) errors.customerName = 'Escribe un nombre de 2 a 100 caracteres.'
   if (form.desiredDate && (!isDateOnly(form.desiredDate) || form.desiredDate < today)) errors.desiredDate = 'Elige una fecha de hoy o posterior.'
   if (form.details.length > 1000) errors.details = 'Las observaciones pueden tener hasta 1000 caracteres.'
   return errors
+}
+
+export function buildCatalogRequestSubmissionPayload(args: {
+  slug: string
+  requestKey: string
+  form: CatalogRequestForm
+  items: CatalogRequestItem[]
+}): CatalogRequestSubmissionPayload {
+  return {
+    p_slug: args.slug,
+    p_client_request_key: args.requestKey,
+    p_customer_name: args.form.customerName.trim(),
+    p_customer_phone: '',
+    p_desired_date: args.form.desiredDate || null,
+    p_details: args.form.details.trim(),
+    p_items: args.items.map(item => ({ product_id: item.productId, quantity: item.quantity })),
+  }
+}
+
+export async function submitCatalogRequest(payload: CatalogRequestSubmissionPayload): Promise<CatalogRequestSubmission> {
+  const args: { p_slug: string; p_client_request_key: string; p_customer_name: string; p_customer_phone: string | null; p_desired_date: string | null; p_details: string | null; p_items: Json } = payload
+  const { data, error } = await client().rpc('ejnexa_submit_catalog_request', args)
+  if (error) throw error
+  const result = data?.[0]
+  if (!result || typeof result.id !== 'string' || !result.id || typeof result.request_number !== 'string' || !result.request_number || typeof result.submitted_at !== 'string' || !result.submitted_at || !isCatalogRequestStatus(result.status)) throw new Error('Submission response could not be confirmed')
+  return { id: result.id, requestNumber: result.request_number, status: result.status, submittedAt: result.submitted_at }
+}
+
+export function isCatalogRequestStatus(value: string): value is CatalogRequestStatus {
+  return value === 'new' || value === 'reviewing' || value === 'converted' || value === 'declined' || value === 'archived'
 }
 
 export function calculateCatalogReference(items: CatalogRequestItem[]) {
@@ -71,11 +113,13 @@ export function buildQuoteRequestMessage(args: {
   details: string
   catalogUrl: string
   currencySymbol: string
+  requestNumber?: string
 }) {
   const lines = [
     'Hola 👋',
     '',
     `Mi nombre es ${args.customerName.trim()}.`,
+    ...(args.requestNumber ? [`Número de solicitud: ${args.requestNumber}`] : []),
     '',
     `Vi el catálogo de ${args.businessName} y me gustaría solicitar una cotización.`,
     '',
