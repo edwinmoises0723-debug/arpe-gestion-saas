@@ -32,7 +32,7 @@ async function mockBackend(page: Page) {
   await page.route('**/rest/v1/arpe_catalog_requests*', async route => {
     if (route.request().method() === 'HEAD') {
       const count = requestsState.filter(request => request.status === 'new').length
-      return route.fulfill({ status: 200, headers: { 'content-range': `*/${count}` }, body: '' })
+      return route.fulfill({ status: 200, headers: { 'content-range': `*/${count}`, 'access-control-expose-headers': 'content-range' }, body: '' })
     }
     const query = new URL(route.request().url()).searchParams
     const rows = query.get('business_id') === `eq.${businessId}` ? requestsState : []
@@ -73,6 +73,7 @@ async function openInbox(page: Page) {
   await page.getByRole('button', { name: 'Entrar a mi negocio' }).click()
   await expect(page.getByRole('button', { name: 'Abrir menú' })).toBeVisible()
   await page.getByRole('button', { name: 'Abrir menú' }).click()
+  await expect(page.locator('.workspace-request-count')).toHaveText('1')
   await page.getByRole('link', { name: /Solicitudes/ }).click()
   await expect(page.getByRole('heading', { name: 'Solicitudes.' })).toBeVisible()
 }
@@ -85,7 +86,6 @@ async function expectNoHorizontalOverflow(page: Page) {
 test('inbox muestra snapshots, filtros y detalle sin overflow en móvil, Fold y desktop', async ({ page }) => {
   await mockBackend(page)
   await openInbox(page)
-  await expect(page.getByText('1', { exact: true }).first()).toBeVisible()
   await expect(page.getByRole('button', { name: /SOL-2026-0001/ })).toBeVisible()
   await page.getByLabel('Buscar por número o cliente').fill('maria gomez')
   await expect(page.getByRole('button', { name: /SOL-2026-0001/ })).toBeVisible()
@@ -119,7 +119,7 @@ test('marca en revisión, actualiza badge y prepara una cotización editable des
   await expect(page.getByLabel('Nombre del cliente')).toHaveValue('María Gómez')
   await expect(page.getByLabel('Fecha')).toHaveValue('2026-11-02')
   await expect(page.getByLabel('Observaciones generales')).toHaveValue('Sin nueces')
-  await expect(page.getByLabel('Producto').first()).toHaveValue('Pastel de Chocolate')
+  await expect(page.getByRole('textbox', { name: 'Producto' }).first()).toHaveValue('Pastel de Chocolate')
   await expect(page.getByText(/Precio pendiente de definir: Topper personalizado/i)).toBeVisible()
   await page.getByRole('button', { name: 'Guardar cotización' }).click()
   await expect(page.getByRole('alert')).toContainText('Define un precio mayor que cero para: Topper personalizado.')
