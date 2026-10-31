@@ -243,7 +243,7 @@
   padding: 7px max(12px, env(safe-area-inset-right)) calc(7px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
   border-top-color: var(--color-border);
   background: color-mix(in srgb, var(--color-surface-elevated) 94%, transparent);
-  box-shadow: 0 -4px 18px rgb(31 41 55 / 4%);
+  box-shadow: 0 -4px 18px var(--color-shadow);
 }
 
 .bottom-nav a {
@@ -482,3 +482,14 @@
     display: none !important;
   }
 }
+/* Local appearance preference; secondary to workspace navigation. */
+.theme-switcher{display:grid;gap:8px;min-width:0;margin:20px 0;color:var(--color-text-secondary)}
+.theme-switcher-label{font-size:.75rem;font-weight:600}
+.theme-switcher-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:4px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-surface-secondary)}
+.theme-switcher-options button{display:flex;align-items:center;justify-content:center;gap:6px;min-width:0;min-height:44px;padding:8px 6px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--color-text-secondary);font-size:.75rem;transition:background-color 160ms ease,color 160ms ease}
+.theme-switcher-options button[aria-pressed=true]{border-color:var(--color-border-strong);background:var(--color-surface-elevated);color:var(--color-accent-primary);font-weight:600;box-shadow:var(--shadow-sm)}
+.theme-switcher-options button:focus-visible{outline:2px solid var(--color-focus);outline-offset:2px}
+.auth-panel>.theme-switcher{width:min(100%,420px);margin:24px auto 8px}
+.onboarding .theme-switcher{width:min(100%,420px);margin:0 0 22px}
+.workspace-menu{overflow-y:auto}
+@media(prefers-reduced-motion:reduce){.theme-switcher-options button{transition:none}}

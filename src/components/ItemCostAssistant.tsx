@@ -3,7 +3,7 @@ import { costItemCategories } from '../lib/costs'
 import { calculateItemCost, suggestedUnitPrice } from '../lib/products'
 import { formatCurrency } from '../lib/quotes'
 
-export function ItemCostAssistant({ item, business, onChange }: { item: QuoteBundleItem; business: Business; onChange: (item: QuoteBundleItem) => void }) {
+export function ItemCostAssistant({ item, business, onChange, pricePending = false }: { pricePending?: boolean; item: QuoteBundleItem; business: Business; onChange: (item: QuoteBundleItem) => void }) {
   if (!item.cost) return null
   const cost = item.cost
   const calculated = calculateItemCost(item)
@@ -31,13 +31,13 @@ export function ItemCostAssistant({ item, business, onChange }: { item: QuoteBun
       <div><dt>Costo interno de este ítem</dt><dd>{amount(calculated.production_cost)}</dd></div>
       <div><dt>Precio sugerido para la línea</dt><dd>{amount(calculated.suggested_product_price)}</dd></div>
       <div><dt>Precio sugerido unitario</dt><dd>{item.quantity > 0 ? `${amount(suggestedUnitPrice(item))}/${item.unit_label}` : 'Indica una cantidad'}</dd></div>
-      <div><dt>Ganancia estimada de la línea</dt><dd>{amount(calculated.estimated_profit)}</dd></div>
-      <div><dt>Margen real sobre venta</dt><dd>{calculated.real_margin_percent.toFixed(2)}%</dd></div>
+      <div><dt>Ganancia estimada de la línea</dt><dd>{pricePending ? 'Precio pendiente' : amount(calculated.estimated_profit)}</dd></div>
+      <div><dt>Margen real sobre venta</dt><dd>{pricePending ? 'Precio pendiente' : `${calculated.real_margin_percent.toFixed(2)}%`}</dd></div>
     </dl>
     <p className="field-hint">El margen real compara la ganancia con el precio elegido. La ganancia sobre costo construye el precio sugerido.</p>
     <button type="button" className="primary" disabled={item.quantity <= 0} onClick={() => onChange({ ...item, unit_price: suggestedUnitPrice(item) })}>Usar precio sugerido</button>
     <p className="field-hint">Dividimos el precio sugerido entre la cantidad y redondeamos el precio unitario a dos decimales. El subtotal puede variar unos centavos.</p>
-    {calculated.final_price < calculated.total_internal_cost && <p className="cost-warning" role="status">Este precio no cubre el costo estimado de producción.</p>}
+    {!pricePending && calculated.final_price < calculated.total_internal_cost && <p className="cost-warning" role="status">Este precio no cubre el costo estimado de producción.</p>}
     <p className="cost-private-note">Información interna. No aparece en documentos para el cliente.</p>
   </section>
 }

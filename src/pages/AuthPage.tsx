@@ -4,6 +4,7 @@ import { Brand, Credit } from '../components/Brand'
 import { Notice } from '../components/Feedback'
 import { client, errorMessage } from '../lib/supabase'
 import { useAuth } from '../auth/useAuth'
+import { ThemeSwitcher } from '../components/ThemeSwitcher'
 
 export function AuthPage({ recovery = false }: { recovery?: boolean }) {
   const { finishRecovery } = useAuth()
@@ -58,7 +59,7 @@ export function AuthPage({ recovery = false }: { recovery?: boolean }) {
           {mode === 'reset' && <button className="text-button full" type="button" onClick={() => switchMode('login')}>Volver a iniciar sesión</button>}
         </form>
         <div className="secure-note"><LockKeyhole size={15} /> Tu espacio privado. Tus ideas protegidas.</div>
-      </div><Credit />
+      </div><ThemeSwitcher /><Credit />
     </section>
   </main>
 }

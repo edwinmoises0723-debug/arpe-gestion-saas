@@ -1,0 +1,114 @@
+/* Palette values live here. Domain styles consume roles, never theme-specific hex. */
+:root {
+  --color-background: #f5f7fb;
+  --color-surface: #ffffff;
+  --color-surface-secondary: #edf2f8;
+  --color-surface-elevated: #ffffff;
+  --color-text-primary: #16243a;
+  --color-text-secondary: #40536c;
+  --color-text-muted: #596b82;
+  --color-border: #dce4ef;
+  --color-border-strong: #a8b8cd;
+  --color-accent-primary: #174fb4;
+  --color-accent-secondary: #087e94;
+  --color-accent-tertiary: #117d87;
+  --color-brand-primary: var(--color-accent-primary);
+  --color-brand-accent: var(--color-accent-secondary);
+  --color-brand-solid: #174fc6;
+  --color-brand-hover: #103c9b;
+  --color-brand-surface: #eaf1fe;
+  --color-on-solid: #ffffff;
+  --color-inverse-surface: #10294b;
+  --color-inverse-text: #f0f6ff;
+  --color-inverse-muted: #c6d9f0;
+  --color-inverse-accent: #67dcef;
+  --color-success: #226b4b;
+  --color-success-surface: #e9f5ee;
+  --color-warning: #80591b;
+  --color-warning-surface: #fff3df;
+  --color-danger: #a83d39;
+  --color-danger-surface: #fceeed;
+  --color-danger-solid: #ae3834;
+  --color-info: #285c99;
+  --color-info-surface: #eaf2fc;
+  --color-chart-primary: #386ee3;
+  --color-chart-secondary: #1299b2;
+  --color-chart-track: #e7edf6;
+  --color-focus: #147dbe;
+  --color-shadow: rgb(15 35 65 / 9%);
+  --color-overlay: rgb(8 20 40 / 48%);
+  --color-selection: #cce6ff;
+  --color-decoration: #d3e2f5;
+}
+
+:root[data-theme='dark'] {
+  --color-background: #0b1321;
+  --color-surface: #121f33;
+  --color-surface-secondary: #1a2b43;
+  --color-surface-elevated: #17273e;
+  --color-text-primary: #edf3fd;
+  --color-text-secondary: #c1cfe3;
+  --color-text-muted: #a6b7ce;
+  --color-border: #30435e;
+  --color-border-strong: #617897;
+  --color-accent-primary: #9bc0ff;
+  --color-accent-secondary: #6bd7e9;
+  --color-accent-tertiary: #6bd7cf;
+  --color-brand-solid: #255dc7;
+  --color-brand-hover: #1d4da9;
+  --color-brand-surface: #20395e;
+  --color-success: #88d8ad;
+  --color-success-surface: #183a32;
+  --color-warning: #efcb86;
+  --color-warning-surface: #3c321f;
+  --color-danger: #ffb0a9;
+  --color-danger-surface: #442a30;
+  --color-danger-solid: #b83f3b;
+  --color-info: #9fcaff;
+  --color-info-surface: #203a56;
+  --color-chart-primary: #7ca7ff;
+  --color-chart-secondary: #4dc8dd;
+  --color-chart-track: #2b3b53;
+  --color-focus: #72d6f1;
+  --color-shadow: rgb(0 0 0 / 24%);
+  --color-overlay: rgb(0 6 17 / 68%);
+  --color-selection: #254b76;
+  --color-decoration: #344d70;
+}
+
+/* Commercial surfaces are tenant-facing and always use their approved light palette.
+   Reset inherited roles as well as native form controls, including export clones. */
+.public-catalog, .client-document {
+  color-scheme: light;
+  --color-background: #f8f7f3;
+  --color-surface: #ffffff;
+  --color-surface-secondary: #f2f4f1;
+  --color-surface-elevated: #fffefa;
+  --color-text-primary: #273d35;
+  --color-text-secondary: #455468;
+  --color-text-muted: #59665e;
+  --color-border: #e6e8e1;
+  --color-border-strong: #cbd3cf;
+  --color-accent-primary: #304d43;
+  --color-accent-secondary: #53775c;
+  --color-accent-tertiary: #53775c;
+  --color-brand-primary: var(--color-accent-primary);
+  --color-brand-accent: var(--color-accent-secondary);
+  --color-brand-solid: #304d43;
+  --color-brand-hover: #203e32;
+  --color-brand-surface: #eef3e8;
+  --color-success: #287653;
+  --color-success-surface: #eaf5ee;
+  --color-warning: #8a5e1a;
+  --color-warning-surface: #fbf2e3;
+  --color-danger: #a6423a;
+  --color-danger-surface: #faecea;
+  --color-info: #3d628b;
+  --color-info-surface: #eaf1f8;
+  --color-focus: #527146;
+  --green: #304d43;
+  --muted: #69756e;
+  --line: #e6e8e1;
+  --gold: #d8bd88;
+  --surface: #ffffff;
+}

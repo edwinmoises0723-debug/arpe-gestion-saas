@@ -1,0 +1,27 @@
+:root {
+  --font-family-ui: 'DM Sans', system-ui, sans-serif;
+  --font-family-heading: 'Manrope', system-ui, sans-serif;
+  --font-size-body: 1rem;
+  --font-size-caption: 0.75rem;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --shadow-sm: 0 1px 3px var(--color-shadow);
+  --shadow-md: 0 5px 16px var(--color-shadow);
+  --shadow-lg: 0 12px 32px var(--color-shadow);
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--color-focus) 25%, transparent);
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --green: var(--color-accent-primary);
+  --muted: var(--color-text-muted);
+  --line: var(--color-border);
+  --gold: var(--color-accent-secondary);
+  --surface: var(--color-surface);
+  --radius: var(--radius-xl)
+}

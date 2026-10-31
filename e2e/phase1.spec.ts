@@ -221,7 +221,7 @@ for (const width of [320, 360, 390, 768, 884, 1440]) {
     const navigation = page.getByRole('navigation', { name: 'Navegación principal' })
     await expect(navigation.getByRole('link')).toHaveCount(5)
     await expect(navigation.getByRole('link', { name: 'Inicio', exact: true })).toHaveClass(/active/)
-    await expect(navigation.getByRole('link', { name: 'Inicio', exact: true })).toHaveCSS('color', 'rgb(10, 45, 107)')
+    await expect(navigation.getByRole('link', { name: 'Inicio', exact: true })).toHaveCSS('color', 'rgb(23, 79, 180)')
     await page.screenshot({ path: `verification/dashboard-${width}.png`, fullPage: true })
   })
 }
@@ -536,3 +536,93 @@ test('payments: received money, running balance, void audit and cancelled warnin
   await expect(page.getByText('Este pedido está cancelado y tiene pagos registrados')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Registrar pago' })).toHaveCount(0)
 })
+test('appearance persists, follows system changes and remains a local preference', async ({ page }) => {
+  await mockBackend(page, true)
+  await page.emulateMedia({ colorScheme: 'light' })
+  await login(page)
+  await expectDashboardLoaded(page, 'Dulce Encanto')
+  await page.getByRole('button', { name: 'Abrir menú' }).click()
+  await page.getByRole('button', { name: 'Oscuro', exact: true }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await page.reload()
+  await expectDashboardLoaded(page, 'Dulce Encanto')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  expect(await page.evaluate(() => localStorage.getItem('ejnexa-theme'))).toBe('dark')
+  await page.getByRole('button', { name: 'Abrir menú' }).click()
+  await page.getByRole('button', { name: 'Claro', exact: true }).click()
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+  await page.getByRole('button', { name: 'Sistema', exact: true }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await page.emulateMedia({ colorScheme: 'light' })
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+})
+
+test('login theme controls stay readable and responsive', async ({ page }, testInfo) => {
+  const errors: string[] = []
+  page.on('pageerror', error => errors.push(error.message))
+  await mockBackend(page)
+  await page.emulateMedia({ colorScheme: 'light' })
+  await page.addInitScript(() => localStorage.setItem('ejnexa-theme', 'dark'))
+  await page.goto('/')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await expect(page.getByLabel('Correo electrónico')).toBeVisible()
+  await expect(page.getByRole('group', { name: 'Apariencia' })).toBeVisible()
+  for (const width of [320, 360, 390, 400, 768, 884, 1440]) {
+    await page.setViewportSize({ width, height: 960 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Login overflow at ${width}px`).toBe(true)
+    if ([360, 1440].includes(width)) await page.screenshot({ path: testInfo.outputPath(`login-dark-${width}.png`), fullPage: true })
+  }
+  await expect(page.getByRole('button', { name: 'Claro' })).toHaveCSS('min-height', '44px')
+  expect(errors).toEqual([])
+})
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`design system ${theme}: responsive modules and visual evidence`, async ({ page }, testInfo) => {
+    const errors: string[] = []
+    page.on('pageerror', error => errors.push(error.message))
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' })
+    await mockBackend(page, true, true, true)
+    await login(page)
+    await expectDashboardLoaded(page, 'Dulce Encanto')
+    for (const width of [320, 360, 390, 400, 768, 884, 1440]) {
+      await page.setViewportSize({ width, height: 960 })
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Dashboard overflow at ${width}px in ${theme}`).toBe(true)
+      if ([320, 360, 884, 1440].includes(width)) {
+        await page.getByRole('button', { name: 'Abrir menú' }).click()
+        const menu = page.getByRole('dialog', { name: 'Menú del negocio' })
+        await expect(menu).toBeVisible()
+        const bounds = await menu.evaluate(element => ({ left: element.getBoundingClientRect().left, right: element.getBoundingClientRect().right, viewport: innerWidth }))
+        expect(bounds.left).toBeGreaterThanOrEqual(0)
+        expect(bounds.right).toBeLessThanOrEqual(bounds.viewport)
+        await expect(menu.getByRole('group', { name: 'Apariencia' })).toBeVisible()
+        await page.keyboard.press('Escape')
+        await expect(menu).not.toBeVisible()
+      }
+      if ([360, 884, 1440].includes(width)) await page.screenshot({ path: testInfo.outputPath(`dashboard-${theme}-${width}.png`), fullPage: true })
+    }
+
+    const visit = async (route: string) => {
+      const bottomNavLinks: Record<string, string> = { '/': 'Inicio', '/cotizar': 'Cotizar', '/pedidos': 'Pedidos', '/pagos': 'Pagos', '/agenda': 'Agenda' }
+      if (bottomNavLinks[route]) {
+        await page.getByRole('navigation', { name: 'Navegación principal' }).getByRole('link', { name: bottomNavLinks[route], exact: true }).click()
+      } else {
+        const menuLabels: Record<string, string> = { '/solicitudes': 'Solicitudes', '/reportes': 'Reportes', '/catalogo': 'Catálogo', '/configuracion': 'Configuración' }
+        await page.getByRole('button', { name: 'Abrir menú' }).click()
+        await page.getByRole('dialog', { name: 'Menú del negocio' }).getByRole('link', { name: new RegExp(menuLabels[route]) }).click()
+      }
+      await expect(page).toHaveURL(new RegExp(`${route.replaceAll('/', '\\/')}$`))
+      await expect(page.locator('.app-shell h1').first()).toBeVisible()
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+    }
+    for (const route of ['/solicitudes', '/reportes', '/cotizar', '/pedidos', '/pagos', '/agenda', '/catalogo', '/configuracion']) {
+      await visit(route)
+      for (const width of [360, 884]) {
+        await page.setViewportSize({ width, height: 960 })
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${route} overflow at ${width}px in ${theme}`).toBe(true)
+        if (['/solicitudes', '/cotizar'].includes(route)) await page.screenshot({ path: testInfo.outputPath(`${route.slice(1)}-${theme}-${width}.png`), fullPage: true })
+      }
+    }
+    expect(errors).toEqual([])
+  })
+}
