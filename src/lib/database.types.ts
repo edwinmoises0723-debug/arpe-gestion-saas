@@ -335,6 +335,9 @@ export type Database = {
         }
         Returns: Array<Pick<CatalogRequest, 'id' | 'request_number' | 'status' | 'submitted_at'>>
       }
+      ejnexa_mark_catalog_request_reviewing: { Args: { p_request_id: string }; Returns: string }
+      ejnexa_decline_catalog_request: { Args: { p_request_id: string }; Returns: string }
+      ejnexa_archive_catalog_request: { Args: { p_request_id: string }; Returns: string }
     }
     Enums: { [_ in never]: never }
     CompositeTypes: { [_ in never]: never }
