@@ -629,15 +629,17 @@ for (const theme of ['light', 'dark'] as const) {
 
 for (const theme of ['light', 'dark'] as const) {
   test(`welcome and cost calculator are clear and responsive in ${theme}`, async ({ page }) => {
+    const hour = theme === 'light' ? 9 : 20
     await page.emulateMedia({ colorScheme: theme, reducedMotion: 'no-preference' })
     await page.addInitScript(savedTheme => localStorage.setItem('ejnexa-theme', savedTheme), theme)
-    await page.addInitScript(() => { Date.prototype.getHours = function () { return 9 } })
+    await page.addInitScript(localHour => { Date.prototype.getHours = function () { return localHour } }, hour)
     await mockBackend(page, true)
     await login(page)
     await expectDashboardLoaded(page, 'Dulce Encanto')
 
     const welcome = page.locator('.welcome-card')
-    await expect(welcome.getByRole('heading', { name: 'Buenos días', exact: true })).toBeVisible()
+    await expect(welcome.getByRole('heading', { name: hour < 12 ? 'Buenos días' : 'Buenas noches', exact: true })).toBeVisible()
+    await expect(welcome.locator('.welcome-card-eyebrow')).toHaveText(hour < 12 ? 'UN NUEVO DÍA PARA AVANZAR' : 'CIERRA EL DÍA CON CLARIDAD')
     await expect(welcome).toContainText('Todo listo para avanzar con Dulce Encanto.')
     await expect(welcome).not.toHaveAttribute('aria-live', /.+/)
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
@@ -661,18 +663,42 @@ for (const theme of ['light', 'dark'] as const) {
 
     const menu = page.getByRole('dialog', { name: 'Menú del negocio' })
     await expect(menu).toBeVisible()
-    const menuLinks = menu.getByRole('link')
+    const menuNavigation = menu.getByRole('navigation', { name: 'Módulos complementarios' })
+    const menuLinks = menuNavigation.getByRole('link')
+    await expect(menuLinks).toHaveCount(5)
     await expect(menuLinks.nth(2)).toHaveText('Calculadora de costo')
     const calculatorTarget = await menuLinks.nth(2).boundingBox()
     expect(calculatorTarget?.height).toBeGreaterThanOrEqual(44)
-    await menuLinks.nth(2).click()
-    await expect(page).toHaveURL(/\/calculadora-costos$/)
-    await expect(page.getByRole('heading', { name: 'Calculadora de costo' })).toBeVisible()
-    await expect(page.getByText('Los cálculos realizados aquí no crean una cotización ni un pedido automáticamente.')).toBeVisible()
-    await expect(page.getByText('Próximamente').first()).toBeVisible()
-    const bottomNavigation = page.getByRole('navigation', { name: 'Navegación principal' })
-    await expect(bottomNavigation.getByRole('link')).toHaveCount(5)
+    const menuRoutes = ['/solicitudes', '/catalogo', '/calculadora-costos', '/reportes', '/configuracion']
+    for (const route of menuRoutes) {
+      await menuNavigation.locator(`a[href="${route}"]`).click()
+      await expect(page).toHaveURL(new URL(route, page.url()).href)
 
+      if (route === '/calculadora-costos') {
+        await expect(page.getByRole('heading', { name: 'Calculadora de costo' })).toBeVisible()
+        await expect(page.getByText('Los cálculos realizados aquí no crean una cotización ni un pedido automáticamente.')).toBeVisible()
+        await expect(page.getByText('Próximamente').first()).toBeVisible()
+        const bottomNavigation = page.getByRole('navigation', { name: 'Navegación principal' })
+        await expect(bottomNavigation.getByRole('link')).toHaveCount(5)
+      }
+
+      await page.getByRole('button', { name: 'Abrir menú' }).click()
+      await expect(menu).toBeVisible()
+      const activeLinks = menuNavigation.locator('a[aria-current="page"]')
+      await expect(activeLinks).toHaveCount(1)
+      await expect(activeLinks).toHaveAttribute('href', route)
+
+      for (const width of [320, 360, 390, 400, 768, 884, 1440]) {
+        await page.setViewportSize({ width, height: 900 })
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Menu overflow at ${width}px in ${theme} on ${route}`).toBe(true)
+        expect(await menu.evaluate(element => element.scrollWidth <= element.clientWidth), `Menu panel overflow at ${width}px in ${theme} on ${route}`).toBe(true)
+        await expect(activeLinks).toHaveCount(1)
+        await expect(activeLinks).toHaveAttribute('href', route)
+        await expect(menuNavigation.locator('a[href="/calculadora-costos"]')).toContainText('Calculadora de costo')
+      }
+    }
+
+    await menu.getByRole('button', { name: 'Cerrar menú' }).click()
     await page.emulateMedia({ reducedMotion: 'reduce' })
     const calculatorButton = page.getByRole('button', { name: 'Abrir menú' })
     const reducedMotionBounds = await calculatorButton.boundingBox()
@@ -681,10 +707,5 @@ for (const theme of ['light', 'dark'] as const) {
     await page.mouse.down()
     expect(await calculatorButton.evaluate(element => getComputedStyle(element).transform)).toBe('none')
     await page.mouse.up()
-
-    for (const width of [320, 360, 390, 400, 768, 884, 1440]) {
-      await page.setViewportSize({ width, height: 900 })
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Calculator overflow at ${width}px in ${theme}`).toBe(true)
-    }
   })
 }

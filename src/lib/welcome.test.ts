@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { getDailyWelcomeMessage, getWelcomeFirstName, getWelcomeGreeting } from './welcome'
+import { getDailyWelcomeMessage, getWelcomeEyebrow, getWelcomeFirstName, getWelcomeGreeting } from './welcome'
 
 describe('dashboard welcome', () => {
   it.each([
-    [0, 'Buenas noches'], [4, 'Buenas noches'], [5, 'Buenos días'], [11, 'Buenos días'],
-    [12, 'Buenas tardes'], [17, 'Buenas tardes'], [18, 'Buenas noches'], [23, 'Buenas noches'],
-  ])('uses local hour %i for the greeting', (hour, expected) => {
-    expect(getWelcomeGreeting(hour)).toBe(expected)
+    [0, 'Buenas noches', 'CIERRA EL DÍA CON CLARIDAD'],
+    [4, 'Buenas noches', 'CIERRA EL DÍA CON CLARIDAD'],
+    [5, 'Buenos días', 'UN NUEVO DÍA PARA AVANZAR'],
+    [11, 'Buenos días', 'UN NUEVO DÍA PARA AVANZAR'],
+    [12, 'Buenas tardes', 'SIGAMOS AVANZANDO'],
+    [17, 'Buenas tardes', 'SIGAMOS AVANZANDO'],
+    [18, 'Buenas noches', 'CIERRA EL DÍA CON CLARIDAD'],
+    [23, 'Buenas noches', 'CIERRA EL DÍA CON CLARIDAD'],
+  ])('uses local hour %i for matching greeting and eyebrow', (hour, greeting, eyebrow) => {
+    expect(getWelcomeGreeting(hour)).toBe(greeting)
+    expect(getWelcomeEyebrow(hour)).toBe(eyebrow)
   })
 
   it('keeps one original message for a local calendar day', () => {
