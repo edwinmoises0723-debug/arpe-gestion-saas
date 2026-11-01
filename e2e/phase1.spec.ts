@@ -676,8 +676,13 @@ for (const theme of ['light', 'dark'] as const) {
 
       if (route === '/calculadora-costos') {
         await expect(page.getByRole('heading', { name: 'Calculadora de costo' })).toBeVisible()
-        await expect(page.getByText('Los cálculos realizados aquí no crean una cotización ni un pedido automáticamente.')).toBeVisible()
-        await expect(page.getByText('Próximamente').first()).toBeVisible()
+        await expect(page.getByText('Estos datos solo se usan en este cálculo.')).toBeVisible()
+        await expect(page.getByText('Parámetros aplicados')).toBeVisible()
+        await expect(page.getByLabel('Merma (%)')).toHaveValue('12')
+        await expect(page.getByLabel('Gastos indirectos (%)')).toHaveValue('12')
+        await expect(page.getByLabel('Costo por hora')).toHaveValue('100')
+        await expect(page.getByLabel('Ganancia sobre costo (%)')).toHaveValue('60')
+        await expect(page.getByText('Agrega tus costos para ver el resultado.')).toBeVisible()
         const bottomNavigation = page.getByRole('navigation', { name: 'Navegación principal' })
         await expect(bottomNavigation.getByRole('link')).toHaveCount(5)
       }
@@ -707,5 +712,76 @@ for (const theme of ['light', 'dark'] as const) {
     await page.mouse.down()
     expect(await calculatorButton.evaluate(element => getComputedStyle(element).transform)).toBe('none')
     await page.mouse.up()
+  })
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`quick cost calculator calculates locally and resets in ${theme}`, async ({ page }) => {
+    const pageErrors: string[] = []
+    const calculatorWrites: string[] = []
+    page.on('pageerror', error => pageErrors.push(error.message))
+    await page.emulateMedia({ colorScheme: theme })
+    await page.addInitScript(savedTheme => localStorage.setItem('ejnexa-theme', savedTheme), theme)
+    await mockBackend(page, true)
+    await login(page)
+    await expectDashboardLoaded(page, 'Dulce Encanto')
+
+    const trackCalculatorWrites = (request: { url(): string; method(): string }) => {
+      const url = request.url()
+      if (request.method() !== 'GET' && /\/rest\/v1\/|\/rpc\//.test(url)) calculatorWrites.push(`${request.method()} ${url}`)
+    }
+    page.on('request', trackCalculatorWrites)
+    await page.getByRole('button', { name: 'Abrir menú' }).click()
+    await page.getByRole('navigation', { name: 'Módulos complementarios' }).getByRole('link', { name: 'Calculadora de costo' }).click()
+    await expect(page).toHaveURL(/\/calculadora-costos$/)
+    await expect(page.getByLabel('Merma (%)')).toHaveValue('12')
+    await expect(page.getByLabel('Gastos indirectos (%)')).toHaveValue('12')
+    await expect(page.getByLabel('Costo por hora')).toHaveValue('100')
+    await expect(page.getByLabel('Ganancia sobre costo (%)')).toHaveValue('60')
+    await expect(page.getByText('Agrega tus costos para ver el resultado.')).toBeVisible()
+    await expect(page.locator('.cost-inline-result')).toHaveCount(0)
+    await expect(page.getByRole('navigation', { name: 'Navegación principal' }).getByRole('link')).toHaveCount(5)
+
+    const formatNio = (amount: number) => `C$ ${new Intl.NumberFormat('es', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)}`
+    await page.getByLabel('Nombre del producto').fill('Cupcakes de vainilla')
+    await page.getByLabel('Cantidad o rendimiento').fill('24')
+    await page.getByLabel('Unidad').fill('cupcakes')
+    await page.getByLabel('Costo total de ingredientes').fill('420')
+    await page.getByLabel('Horas estimadas de trabajo').fill('2')
+    await page.getByRole('button', { name: 'Agregar gasto' }).click()
+    await page.getByLabel('Categoría del gasto').selectOption('packaging')
+    await page.getByLabel('Descripción del gasto').fill('Caja')
+    await page.getByLabel('Costo del gasto').fill('80')
+    await page.getByLabel('Costo interno de entrega').fill('100')
+    await page.getByLabel('Cobro de entrega al cliente').fill('150')
+    const productionCostRow = page.locator('.cost-result-row').filter({ hasText: 'Costo de producción' })
+    await expect(productionCostRow).toContainText(formatNio(840.45))
+    await expect(page.locator('.cost-suggested-price')).toContainText(formatNio(1344.72))
+    await expect(page.locator('.cost-suggested-price')).toContainText(`${formatNio(56.03)} / cupcakes`)
+    await expect(page.getByText('Indica un precio final para conocer tu ganancia y margen real.')).toBeVisible()
+    await expect(page.getByText('Ganancia estimada', { exact: true })).toHaveCount(0)
+
+    await page.getByLabel('Precio que piensas cobrar').fill('1600')
+    await expect(page.getByText('Ganancia estimada', { exact: true }).locator('..')).toContainText(formatNio(659.55))
+    await expect(page.getByText('Margen real sobre venta', { exact: true }).locator('..')).toContainText('41.22%')
+    await page.getByLabel('Precio que piensas cobrar').fill('900')
+    await expect(page.getByText('Este precio no cubre el costo estimado.')).toBeVisible()
+    await page.getByLabel('Ganancia sobre costo (%)').fill('80')
+    await expect(page.locator('.cost-suggested-price')).toContainText(formatNio(1512.81))
+    await page.getByRole('button', { name: 'Restablecer' }).click()
+    await expect(page.getByLabel('Nombre del producto')).toHaveValue('')
+    await expect(page.getByLabel('Cantidad o rendimiento')).toHaveValue('1')
+    await expect(page.getByLabel('Unidad')).toHaveValue('unidad')
+    await expect(page.getByLabel('Costo total de ingredientes')).toHaveValue('')
+    await expect(page.getByLabel('Ganancia sobre costo (%)')).toHaveValue('60')
+    await expect(page.getByText('Agrega tus costos para ver el resultado.')).toBeVisible()
+
+    for (const width of [320, 360, 390, 400, 768, 884, 1440]) {
+      await page.setViewportSize({ width, height: 900 })
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Calculator overflow at ${width}px in ${theme}`).toBe(true)
+    }
+    page.off('request', trackCalculatorWrites)
+    expect(calculatorWrites).toEqual([])
+    expect(pageErrors).toEqual([])
   })
 }
