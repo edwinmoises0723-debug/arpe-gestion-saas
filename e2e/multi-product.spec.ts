@@ -111,7 +111,15 @@ test('mobile catalog, independent lines, local cost snapshot, save/reload and se
   await expect(drawer.locator('.menu-business-copy')).toContainText('Negocio activo')
   const activeCatalogLink = drawer.getByRole('link', { name: 'Catálogo', exact: true })
   await expect(activeCatalogLink).toHaveAttribute('aria-current', 'page')
-  await expect(activeCatalogLink).toHaveCSS('background-color', 'rgb(234, 242, 252)')
+  const expectedBrandSurface = await page.evaluate(() => {
+    const probe = document.createElement('div')
+    probe.style.backgroundColor = 'var(--color-brand-surface)'
+    document.body.appendChild(probe)
+    const value = getComputedStyle(probe).backgroundColor
+    probe.remove()
+    return value
+  })
+  await expect(activeCatalogLink).toHaveCSS('background-color', expectedBrandSurface)
   await expect(drawer.getByRole('button', { name: 'Cerrar sesión' })).toBeVisible()
   const logoutTop = await drawer.locator('.logout').evaluate(element => element.getBoundingClientRect().top)
   const menuBottom = await drawer.locator('nav').evaluate(element => element.getBoundingClientRect().bottom)
