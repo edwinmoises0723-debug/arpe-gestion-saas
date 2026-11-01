@@ -1,6 +1,6 @@
 import { summarizeOrderProducts } from '../lib/products'
 import { useEffect, useState } from 'react'
-import { Activity, AlertTriangle, ArrowRight, Banknote, CalendarDays, Check, ClipboardList, Clock3, FilePenLine, PackageCheck, RefreshCw, Settings, ShoppingBag, Wallet } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Banknote, CalendarDays, ChartNoAxesCombined, Check, CircleDollarSign, ClipboardList, Clock3, FilePenLine, PackageCheck, RefreshCw, Settings, ShoppingBag, Wallet } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { Business } from '../lib/database.types'
 import { currencies } from '../lib/business'
@@ -16,23 +16,18 @@ import { Loading, Notice } from '../components/Feedback'
 import { BusinessLogo } from '../components/BusinessLogo'
 import { InlineBarChart } from '../components/InlineBarChart'
 import { OrderStatusDonut } from '../components/OrderStatusDonut'
+import { WelcomeCard } from '../components/WelcomeCard'
 import { sections } from '../lib/navigation'
 
 const orderStatusLabels = {
   confirmed: 'Confirmados', in_preparation: 'En preparación', ready: 'Listos', delivered: 'Entregados', cancelled: 'Cancelados',
 } as const
 
-function greeting(hour: number) {
-  if (hour < 12) return 'Buenos días'
-  if (hour < 19) return 'Buenas tardes'
-  return 'Buenas noches'
-}
-
 function localDateLabel(dateKey: string) {
   return new Intl.DateTimeFormat('es', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(localCalendarDate(dateKey))
 }
 
-export function Dashboard({ business }: { business: Business }) {
+export function Dashboard({ business, userName }: { business: Business; userName?: string }) {
   const [loadedData, setLoadedData] = useState<(DashboardData & { businessId: string }) | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const [refreshing, setRefreshing] = useState(true)
@@ -63,7 +58,7 @@ export function Dashboard({ business }: { business: Business }) {
   const completedProfileFields = [business.name, business.logo_path, business.slogan, business.description, business.whatsapp, business.email, business.address].filter(Boolean).length
 
   if (!data && (refreshing || Boolean(loadedData && loadedData.businessId !== business.id))) return <Loading text="Cargando el resumen de tu negocio…" />
-  if (!data) return <div className="dashboard-page"><DashboardHeading businessName={business.name} today={today} hour={now.getHours()} onRefresh={refreshDashboard} refreshing={refreshing} />{error && <Notice error>{error}</Notice>}<section className="panel dashboard-load-error"><AlertTriangle size={22} /><div><h2>No pudimos cargar tus indicadores</h2><p>Revisa tu conexión e inténtalo de nuevo. No mostraremos cifras hasta tener los datos actualizados.</p></div><button type="button" className="secondary-button" onClick={refreshDashboard}>Reintentar</button></section></div>
+  if (!data) return <div className="dashboard-page"><DashboardHeading today={today} onRefresh={refreshDashboard} refreshing={refreshing} /><WelcomeCard businessName={business.name} userName={userName} now={now} />{error && <Notice error>{error}</Notice>}<section className="panel dashboard-load-error"><AlertTriangle size={22} /><div><h2>No pudimos cargar tus indicadores</h2><p>Revisa tu conexión e inténtalo de nuevo. No mostraremos cifras hasta tener los datos actualizados.</p></div><button type="button" className="secondary-button" onClick={refreshDashboard}>Reintentar</button></section></div>
 
   const financial = getDashboardFinancialMetrics(data.orders, data.payments)
   const orderMetrics = getDashboardOrderMetrics(data.orders, today)
@@ -79,13 +74,14 @@ export function Dashboard({ business }: { business: Business }) {
   const profileCurrency = currency ? `${currency.code} · ${currency.symbol}` : business.currency
 
   return <div className="dashboard-page">
-    <DashboardHeading businessName={business.name} today={today} hour={now.getHours()} onRefresh={refreshDashboard} refreshing={refreshing} />
+    <DashboardHeading today={today} onRefresh={refreshDashboard} refreshing={refreshing} />
+    <WelcomeCard businessName={business.name} userName={userName} now={now} />
     {error && <Notice error>{error} Se conservan los últimos datos cargados. <button type="button" className="dashboard-inline-retry" onClick={refreshDashboard}>Reintentar</button></Notice>}
 
     <section className="dashboard-financial-grid" aria-label="Indicadores financieros principales">
       <MetricCard icon={<Banknote size={19} />} label="Ventas registradas" value={formatCurrency(financial.registeredSales, business)} help="Valor total de tus pedidos no cancelados." tone="green" />
       <MetricCard icon={<Wallet size={19} />} label="Dinero cobrado" value={formatCurrency(financial.collectedMoney, business)} help="Dinero que realmente has recibido." tone="cream" />
-      <MetricCard icon={<Activity size={19} />} label="Saldo por cobrar" value={formatCurrency(financial.receivableBalance, business)} help="Dinero que todavía está pendiente de recibir." tone="sand" />
+      <MetricCard icon={<CircleDollarSign size={19} />} label="Saldo por cobrar" value={formatCurrency(financial.receivableBalance, business)} help="Dinero que todavía está pendiente de recibir." tone="sand" />
       <MetricCard icon={<PackageCheck size={19} />} label="Pedidos activos" value={String(orderMetrics.active)} help="Confirmados, en preparación o listos." tone="sage" />
     </section>
 
@@ -164,7 +160,7 @@ export function Dashboard({ business }: { business: Business }) {
       </section>
 
       <section className="panel dashboard-profit">
-        <SectionHeading icon={<Activity size={18} />} eyebrow="INFORMACIÓN INTERNA" title="Utilidad estimada" />
+        <SectionHeading icon={<ChartNoAxesCombined size={18} />} eyebrow="INFORMACIÓN INTERNA" title="Utilidad estimada" />
         {financial.estimatedProfit === null ? <><DashboardEmpty title="Aún no podemos calcular tu utilidad" text="Completa el costeo de tus pedidos para conocer la utilidad estimada. Solo se incluyen pedidos no cancelados con costos registrados." /><Link className="dashboard-text-link dashboard-cost-settings-link" to="/configuracion">Completar costos <ArrowRight size={15} /></Link></> : <>
           <strong className="dashboard-profit-value">{formatCurrency(financial.estimatedProfit, business)}</strong>
           <p>Utilidad estimada de pedidos no cancelados con costeo completo.</p>
@@ -191,8 +187,8 @@ export function Dashboard({ business }: { business: Business }) {
   </div>
 }
 
-function DashboardHeading({ businessName, today, hour, onRefresh, refreshing }: { businessName: string; today: string; hour: number; onRefresh: () => void; refreshing: boolean }) {
-  return <header className="dashboard-heading"><div><span className="eyebrow accent">TU NEGOCIO, EN UN VISTAZO</span><h1>{greeting(hour)}.</h1><p className="muted">Así va <strong>{businessName}</strong> hoy.</p><span className="dashboard-local-date">{localDateLabel(today)}</span></div><button type="button" className="dashboard-refresh" onClick={onRefresh} disabled={refreshing} aria-label={refreshing ? 'Actualizando indicadores' : 'Actualizar indicadores'}><RefreshCw size={16} className={refreshing ? 'is-refreshing' : ''} />{refreshing ? 'Actualizando…' : 'Actualizar'}</button></header>
+function DashboardHeading({ today, onRefresh, refreshing }: { today: string; onRefresh: () => void; refreshing: boolean }) {
+  return <header className="dashboard-heading"><div><span className="eyebrow accent">TU NEGOCIO, EN UN VISTAZO</span><h1>Resumen de hoy<span className="heading-dot">.</span></h1><p className="muted">Indicadores, entregas y actividad reciente.</p><span className="dashboard-local-date">{localDateLabel(today)}</span></div><button type="button" className="dashboard-refresh" onClick={onRefresh} disabled={refreshing} aria-label={refreshing ? 'Actualizando indicadores' : 'Actualizar indicadores'}><RefreshCw size={16} className={refreshing ? 'is-refreshing' : ''} />{refreshing ? 'Actualizando…' : 'Actualizar'}</button></header>
 }
 
 function MetricCard({ icon, label, value, help, tone }: { icon: React.ReactNode; label: string; value: string; help: string; tone: 'green' | 'cream' | 'sand' | 'sage' }) {

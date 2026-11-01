@@ -139,7 +139,7 @@ async function login(page: Page) {
 
 async function expectDashboardLoaded(page: Page, businessName: string) {
   await expect(page.locator('.app-header').getByRole('link', { name: 'EJNEXA Business Inicio' })).toBeVisible()
-  await expect(page.locator('.dashboard-heading h1')).toHaveText(/Buenos días\.|Buenas tardes\.|Buenas noches\./)
+  await expect(page.locator('.welcome-card h2')).toHaveText(/^(Buenos días|Buenas tardes|Buenas noches)(, .+)?$/)
   await expect(page.locator('.dashboard-business-heading h2')).toHaveText(businessName)
 }
 
@@ -607,7 +607,7 @@ for (const theme of ['light', 'dark'] as const) {
       if (bottomNavLinks[route]) {
         await page.getByRole('navigation', { name: 'Navegación principal' }).getByRole('link', { name: bottomNavLinks[route], exact: true }).click()
       } else {
-        const menuLabels: Record<string, string> = { '/solicitudes': 'Solicitudes', '/reportes': 'Reportes', '/catalogo': 'Catálogo', '/configuracion': 'Configuración' }
+        const menuLabels: Record<string, string> = { '/solicitudes': 'Solicitudes', '/reportes': 'Reportes', '/catalogo': 'Catálogo', '/calculadora-costos': 'Calculadora de costo', '/configuracion': 'Configuración' }
         await page.getByRole('button', { name: 'Abrir menú' }).click()
         await page.getByRole('dialog', { name: 'Menú del negocio' }).getByRole('link', { name: new RegExp(menuLabels[route]) }).click()
       }
@@ -615,7 +615,7 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(page.locator('.app-shell h1').first()).toBeVisible()
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
     }
-    for (const route of ['/solicitudes', '/reportes', '/cotizar', '/pedidos', '/pagos', '/agenda', '/catalogo', '/configuracion']) {
+    for (const route of ['/solicitudes', '/reportes', '/cotizar', '/pedidos', '/pagos', '/agenda', '/catalogo', '/calculadora-costos', '/configuracion']) {
       await visit(route)
       for (const width of [360, 884]) {
         await page.setViewportSize({ width, height: 960 })
@@ -624,5 +624,67 @@ for (const theme of ['light', 'dark'] as const) {
       }
     }
     expect(errors).toEqual([])
+  })
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`welcome and cost calculator are clear and responsive in ${theme}`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'no-preference' })
+    await page.addInitScript(savedTheme => localStorage.setItem('ejnexa-theme', savedTheme), theme)
+    await page.addInitScript(() => { Date.prototype.getHours = function () { return 9 } })
+    await mockBackend(page, true)
+    await login(page)
+    await expectDashboardLoaded(page, 'Dulce Encanto')
+
+    const welcome = page.locator('.welcome-card')
+    await expect(welcome.getByRole('heading', { name: 'Buenos días', exact: true })).toBeVisible()
+    await expect(welcome).toContainText('Todo listo para avanzar con Dulce Encanto.')
+    await expect(welcome).not.toHaveAttribute('aria-live', /.+/)
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+
+    for (const width of [320, 360, 390, 400, 768, 884, 1440]) {
+      await page.setViewportSize({ width, height: 900 })
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Welcome overflow at ${width}px in ${theme}`).toBe(true)
+      await expect(welcome).toBeVisible()
+    }
+
+    await page.setViewportSize({ width: 320, height: 720 })
+    const menuButton = page.getByRole('button', { name: 'Abrir menú' })
+    const buttonSize = await menuButton.evaluate(element => [element.offsetWidth, element.offsetHeight])
+    const buttonBounds = await menuButton.boundingBox()
+    if (!buttonBounds) throw new Error('No se encontró el botón de menú.')
+    await page.mouse.move(buttonBounds.x + buttonBounds.width / 2, buttonBounds.y + buttonBounds.height / 2)
+    await page.mouse.down()
+    expect(await menuButton.evaluate(element => getComputedStyle(element).transform)).not.toBe('none')
+    expect(await menuButton.evaluate(element => [element.offsetWidth, element.offsetHeight])).toEqual(buttonSize)
+    await page.mouse.up()
+
+    const menu = page.getByRole('dialog', { name: 'Menú del negocio' })
+    await expect(menu).toBeVisible()
+    const menuLinks = menu.getByRole('link')
+    await expect(menuLinks.nth(2)).toHaveText('Calculadora de costo')
+    const calculatorTarget = await menuLinks.nth(2).boundingBox()
+    expect(calculatorTarget?.height).toBeGreaterThanOrEqual(44)
+    await menuLinks.nth(2).click()
+    await expect(page).toHaveURL(/\/calculadora-costos$/)
+    await expect(page.getByRole('heading', { name: 'Calculadora de costo' })).toBeVisible()
+    await expect(page.getByText('Los cálculos realizados aquí no crean una cotización ni un pedido automáticamente.')).toBeVisible()
+    await expect(page.getByText('Próximamente').first()).toBeVisible()
+    const bottomNavigation = page.getByRole('navigation', { name: 'Navegación principal' })
+    await expect(bottomNavigation.getByRole('link')).toHaveCount(5)
+
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    const calculatorButton = page.getByRole('button', { name: 'Abrir menú' })
+    const reducedMotionBounds = await calculatorButton.boundingBox()
+    if (!reducedMotionBounds) throw new Error('No se encontró el botón de menú con movimiento reducido.')
+    await page.mouse.move(reducedMotionBounds.x + reducedMotionBounds.width / 2, reducedMotionBounds.y + reducedMotionBounds.height / 2)
+    await page.mouse.down()
+    expect(await calculatorButton.evaluate(element => getComputedStyle(element).transform)).toBe('none')
+    await page.mouse.up()
+
+    for (const width of [320, 360, 390, 400, 768, 884, 1440]) {
+      await page.setViewportSize({ width, height: 900 })
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Calculator overflow at ${width}px in ${theme}`).toBe(true)
+    }
   })
 }
