@@ -166,6 +166,7 @@
 }
 
 .workspace-menu nav a {
+  position: relative;
   min-height: 48px;
   gap: 13px;
   padding: 11px 13px;
@@ -177,20 +178,36 @@
   transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease, transform 150ms ease;
 }
 
+.workspace-menu nav a::before {
+  position: absolute;
+  inset: 11px auto 11px 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--color-accent-primary);
+  content: '';
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease;
+}
+
 .workspace-menu nav a > svg {
   width: 20px;
   height: 20px;
   color: var(--color-text-muted);
 }
 
-.workspace-menu nav a.active {
-  border-color: color-mix(in srgb, var(--color-accent-primary) 12%, transparent);
-  background: var(--color-info-surface);
+.workspace-menu nav a[aria-current='page'] {
+  border-color: color-mix(in srgb, var(--color-accent-primary) 22%, var(--color-border));
+  background: var(--color-brand-surface);
   color: var(--color-accent-primary);
   font-weight: 650;
 }
 
-.workspace-menu nav a.active > svg {
+.workspace-menu nav a[aria-current='page']::before {
+  opacity: 1;
+}
+
+.workspace-menu nav a[aria-current='page'] > svg {
   color: var(--color-accent-primary);
 }
 
@@ -447,8 +464,8 @@
     color: var(--color-accent-primary);
   }
 
-  .workspace-menu nav a.active:hover {
-    background: var(--color-info-surface);
+  .workspace-menu nav a[aria-current='page']:hover {
+    background: var(--color-brand-surface);
   }
 
   .workspace-menu .logout .text-button:hover {

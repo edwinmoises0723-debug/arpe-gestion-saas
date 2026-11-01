@@ -1,5 +1,5 @@
 import { Moon, Sun, Sunrise } from 'lucide-react'
-import { getDailyWelcomeMessage, getWelcomeGreeting } from '../lib/welcome'
+import { getDailyWelcomeMessage, getWelcomeEyebrow, getWelcomeGreeting } from '../lib/welcome'
 
 export function WelcomeCard({ businessName, userName, now = new Date() }: { businessName: string; userName?: string; now?: Date }) {
   const hour = now.getHours()
@@ -9,7 +9,7 @@ export function WelcomeCard({ businessName, userName, now = new Date() }: { busi
   return <section className="welcome-card" aria-labelledby="welcome-card-title">
     <span className="welcome-card-icon" aria-hidden="true"><GreetingIcon size={22} strokeWidth={1.8} /></span>
     <div className="welcome-card-content">
-      <span className="welcome-card-eyebrow">UN NUEVO DÍA PARA AVANZAR</span>
+      <span className="welcome-card-eyebrow">{getWelcomeEyebrow(hour)}</span>
       <h2 id="welcome-card-title">{getWelcomeGreeting(hour)}{firstName ? `, ${firstName}` : ''}</h2>
       <p className="welcome-card-business">Todo listo para avanzar con <strong>{businessName}</strong>.</p>
       <p className="welcome-card-message">{getDailyWelcomeMessage(now)}</p>

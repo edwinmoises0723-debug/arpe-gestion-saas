@@ -21,10 +21,28 @@ const dailyMessages = [
   'Un registro claro mantiene cada tarea en perspectiva.',
 ] as const
 
+type WelcomePeriod = 'morning' | 'afternoon' | 'night'
+
+function getWelcomePeriod(hour: number): WelcomePeriod {
+  if (hour < 5 || hour >= 18) return 'night'
+  if (hour < 12) return 'morning'
+  return 'afternoon'
+}
+
 export function getWelcomeGreeting(hour: number): string {
-  if (hour < 5 || hour >= 18) return 'Buenas noches'
-  if (hour < 12) return 'Buenos días'
-  return 'Buenas tardes'
+  return {
+    morning: 'Buenos días',
+    afternoon: 'Buenas tardes',
+    night: 'Buenas noches',
+  }[getWelcomePeriod(hour)]
+}
+
+export function getWelcomeEyebrow(hour: number): string {
+  return {
+    morning: 'UN NUEVO DÍA PARA AVANZAR',
+    afternoon: 'SIGAMOS AVANZANDO',
+    night: 'CIERRA EL DÍA CON CLARIDAD',
+  }[getWelcomePeriod(hour)]
 }
 
 export function getDailyWelcomeMessage(date: Date): string {
