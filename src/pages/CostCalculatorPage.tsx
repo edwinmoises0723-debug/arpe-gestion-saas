@@ -131,7 +131,7 @@ export function CostCalculatorPage({ business }: { business: Business }) {
         </section>
 
         <section className="panel form-section cost-step" aria-labelledby="quick-cost-production-title">
-          <div className="section-title"><span className="section-icon"><BookOpen size={20} /></span><div><h2 id="quick-cost-production-title">Costos de producción</h2><p>Escribe lo que sabes; ARPE calcula los totales.</p></div></div>
+          <div className="section-title"><span className="section-icon"><BookOpen size={20} /></span><div><h2 id="quick-cost-production-title">Costos de producción</h2><p>Escribe lo que sabes; EJNEXA hace los cálculos.</p></div></div>
           <label>Costo total de ingredientes<input aria-label="Costo total de ingredientes" type="number" min="0" step="0.01" inputMode="decimal" value={numberInput(draft.ingredientsCost)} onChange={event => setField('ingredientsCost', parseNumber(event.target.value))} onBlur={() => setShowValidation(true)} /><small className="field-hint">Para toda la cantidad indicada, no por unidad.</small></label>
           {errorFor('ingredientsCost') && <p className="cost-field-error">{errorFor('ingredientsCost')}</p>}
           {draft.ingredientsCost > 0 && <div className="cost-inline-result"><span>Merma estimada <small>Se calcula automáticamente con {draft.settings.waste_percent}%</small></span><strong>{currency(calculation.costs.waste_amount)}</strong></div>}

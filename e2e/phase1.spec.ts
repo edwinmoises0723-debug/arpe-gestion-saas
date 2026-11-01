@@ -758,8 +758,14 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(productionCostRow).toContainText(formatNio(840.45))
     await expect(page.locator('.cost-suggested-price')).toContainText(formatNio(1344.72))
     await expect(page.locator('.cost-suggested-price')).toContainText(`${formatNio(56.03)} / cupcakes`)
+    await expect(page.locator('.cost-suggested-total')).toContainText(formatNio(1494.72))
     await expect(page.getByText('Indica un precio final para conocer tu ganancia y margen real.')).toBeVisible()
     await expect(page.getByText('Ganancia estimada', { exact: true })).toHaveCount(0)
+
+    await page.getByRole('button', { name: 'Usar precio sugerido' }).click()
+    await expect(page.getByLabel('Precio que piensas cobrar')).toHaveValue('1494.72')
+    await expect(page.getByText('Ganancia estimada', { exact: true })).toBeVisible()
+    await expect(page.getByText('Margen real sobre venta', { exact: true })).toBeVisible()
 
     await page.getByLabel('Precio que piensas cobrar').fill('1600')
     await expect(page.getByText('Ganancia estimada', { exact: true }).locator('..')).toContainText(formatNio(659.55))
