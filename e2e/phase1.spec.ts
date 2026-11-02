@@ -734,6 +734,12 @@ for (const theme of ['light', 'dark'] as const) {
     await page.getByRole('button', { name: 'Abrir menú' }).click()
     await page.getByRole('navigation', { name: 'Módulos complementarios' }).getByRole('link', { name: 'Calculadora de costo' }).click()
     await expect(page).toHaveURL(/\/calculadora-costos$/)
+    await expect(page.getByText('Merma', { exact: false }).first()).toBeVisible()
+    await expect(page.getByLabel('Ganancia sobre costo (%)')).toHaveCount(0)
+    await expect(page.getByText('Ninguno agregado')).toBeVisible()
+    await expect(page.getByText('Sin entrega')).toBeVisible()
+    await expect(page.getByLabel('Costo interno de entrega')).toHaveCount(0)
+    await page.getByRole('button', { name: 'Editar parámetros' }).click()
     await expect(page.getByLabel('Merma (%)')).toHaveValue('12')
     await expect(page.getByLabel('Gastos indirectos (%)')).toHaveValue('12')
     await expect(page.getByLabel('Costo por hora')).toHaveValue('100')
@@ -752,6 +758,7 @@ for (const theme of ['light', 'dark'] as const) {
     await page.getByLabel('Categoría del gasto').selectOption('packaging')
     await page.getByLabel('Descripción del gasto').fill('Caja')
     await page.getByLabel('Costo del gasto').fill('80')
+    await page.getByRole('button', { name: 'Configurar' }).click()
     await page.getByLabel('Costo interno de entrega').fill('100')
     await page.getByLabel('Cobro de entrega al cliente').fill('150')
     const productionCostRow = page.locator('.cost-result-row').filter({ hasText: 'Costo de producción' })
@@ -779,15 +786,86 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(page.getByLabel('Cantidad o rendimiento')).toHaveValue('1')
     await expect(page.getByLabel('Unidad')).toHaveValue('unidad')
     await expect(page.getByLabel('Costo total de ingredientes')).toHaveValue('')
+    await expect(page.getByLabel('Ganancia sobre costo (%)')).toHaveCount(0)
+    await page.getByRole('button', { name: 'Editar parámetros' }).click()
     await expect(page.getByLabel('Ganancia sobre costo (%)')).toHaveValue('60')
     await expect(page.getByText('Agrega tus costos para ver el resultado.')).toBeVisible()
 
-    for (const width of [320, 360, 390, 400, 768, 884, 1440]) {
-      await page.setViewportSize({ width, height: 900 })
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Calculator overflow at ${width}px in ${theme}`).toBe(true)
-    }
     page.off('request', trackCalculatorWrites)
     expect(calculatorWrites).toEqual([])
     expect(pageErrors).toEqual([])
+  })
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`quick cost calculator layout is clear at target sizes in ${theme}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 320, height: 739 })
+    await page.emulateMedia({ colorScheme: theme })
+    await page.addInitScript(savedTheme => localStorage.setItem('ejnexa-theme', savedTheme), theme)
+    await mockBackend(page, true)
+    await login(page)
+    await expectDashboardLoaded(page, 'Dulce Encanto')
+    await page.goto('/calculadora-costos')
+    await expect(page.getByRole('heading', { name: 'Calculadora de costo.' })).toBeVisible()
+    await page.getByRole('button', { name: 'Editar parámetros' }).click()
+    await page.getByLabel('Costo total de ingredientes').fill('420')
+    await page.getByRole('button', { name: 'Agregar gasto' }).click()
+    await page.getByLabel('Descripción del gasto').fill('Caja')
+    await page.getByLabel('Costo del gasto').fill('80')
+    await page.getByRole('button', { name: 'Configurar' }).click()
+    await page.getByLabel('Costo interno de entrega').fill('100')
+    await page.getByLabel('Cobro de entrega al cliente').fill('150')
+    await page.getByRole('button', { name: 'Usar precio sugerido' }).click()
+    await page.locator('.quick-cost-breakdown > summary').click()
+
+    const calculatorViewports = [[320, 739], [360, 800], [390, 844], [400, 739], [768, 1024], [884, 1024], [1440, 900]] as const
+    for (const [width, height] of calculatorViewports) {
+      await page.setViewportSize({ width, height })
+      await page.evaluate(() => window.scrollTo(0, 0))
+      const geometry = await page.evaluate(() => {
+        const overlaps: string[] = []
+        for (const label of Array.from(document.querySelectorAll('.cost-calculator-page label'))) {
+          const control = label.querySelector('input,select,textarea')
+          if (!control) continue
+          const controlBox = control.getBoundingClientRect()
+          const walker = document.createTreeWalker(label, NodeFilter.SHOW_TEXT)
+          let node: Node | null
+          while ((node = walker.nextNode())) {
+            if (!node.textContent?.trim() || (node.parentElement && node.parentElement.closest('small'))) continue
+            const range = document.createRange()
+            range.selectNodeContents(node)
+            for (const textBox of Array.from(range.getClientRects())) {
+              if (textBox.width > 0 && textBox.height > 0 && textBox.bottom > controlBox.top + 1 && textBox.top < controlBox.bottom - 1) {
+                overlaps.push(`label/input: ${label.textContent?.trim().slice(0, 42)}`)
+              }
+            }
+          }
+        }
+        for (const section of Array.from(document.querySelectorAll('.cost-calculator-page .cost-step, .cost-calculator-page .quick-cost-settings'))) {
+          const heading = section.querySelector('.section-title, .quick-cost-settings-heading')
+          const control = section.querySelector('input,select,textarea')
+          if (!heading || !control) continue
+          if (heading.getBoundingClientRect().bottom > control.getBoundingClientRect().top + 1) overlaps.push(`heading/input: ${section.className}`)
+        }
+        return { scrollWidth: document.documentElement.scrollWidth, viewportWidth: innerWidth, overlaps }
+      })
+      expect(geometry.scrollWidth, `Calculator overflow at ${width}px in ${theme}`).toBeLessThanOrEqual(geometry.viewportWidth)
+      expect(geometry.overlaps, `Calculator content overlaps at ${width}px in ${theme}`).toEqual([])
+      await page.screenshot({ path: testInfo.outputPath(`quick-cost-${theme}-${width}x${height}.png`) })
+      if ([320, 400, 768, 1440].includes(width)) {
+        await page.locator('.cost-calculator-results').evaluate(element => {
+          window.scrollTo(0, element.getBoundingClientRect().top + window.scrollY - 12)
+        })
+        await page.screenshot({ path: testInfo.outputPath(`quick-cost-result-${theme}-${width}x${height}.png`) })
+        await page.evaluate(() => window.scrollTo(0, 0))
+      }
+    }
+
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+    const bottomSpacing = await page.evaluate(() => ({
+      contentBottom: document.querySelector('.cost-calculator-roadmap')?.getBoundingClientRect().bottom ?? 0,
+      navTop: document.querySelector('.bottom-nav')?.getBoundingClientRect().top ?? innerHeight,
+    }))
+    expect(bottomSpacing.contentBottom, `Bottom navigation covers calculator content in ${theme}`).toBeLessThanOrEqual(bottomSpacing.navTop)
   })
 }
