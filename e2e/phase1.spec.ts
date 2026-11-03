@@ -735,6 +735,55 @@ test('cost settings save tenant rates, profiles, water and overhead in normalize
   expect((savedConfig?.overhead_items as { monthly_cost: number }[])[0].monthly_cost).toBe(12500)
 })
 
+test('legacy costing schema loads basic settings without v1 reads or writes', async ({ page }) => {
+  await mockBackend(page, true)
+  const legacySettings = { business_id: business.id, waste_percent: 12, indirect_percent: 12, labor_hourly_rate: 100, markup_percent: 60, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+  const selectedColumns: string[] = []
+  const writes: Record<string, unknown>[] = []
+  await page.route('**/rest/v1/arpe_cost_settings*', async route => {
+    const request = route.request()
+    if (request.method() === 'GET') {
+      const select = new URL(request.url()).searchParams.get('select') ?? ''
+      selectedColumns.push(select)
+      if (select.includes('costing_model_version') || select.includes('costing_config')) {
+        await route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ code: 'PGRST204', message: "Could not find the 'costing_model_version' column of 'arpe_cost_settings' in the schema cache" }) })
+        return
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(legacySettings) })
+      return
+    }
+    const payload = request.postDataJSON() as Record<string, unknown>
+    writes.push(payload)
+    await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ ...legacySettings, ...payload }) })
+  })
+
+  await login(page)
+  await expectDashboardLoaded(page, 'Dulce Encanto')
+  await page.goto('/calculadora-costos')
+  await expect(page.getByText('No pudimos leer tus valores guardados')).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Consumos de producción' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Editar parámetros' }).click()
+  await expect(page.getByLabel('Merma (%)')).toHaveValue('12')
+  await expect(page.getByLabel('Gastos indirectos (%)')).toHaveValue('12')
+  await expect(page.getByLabel('Costo por hora')).toHaveValue('100')
+  await expect(page.getByLabel('Ganancia sobre costo (%)')).toHaveValue('60')
+  await expect(page.getByRole('alert')).toHaveCount(0)
+
+  await page.goto('/configuracion')
+  await expect(page.getByLabel('Gastos indirectos (%)')).toHaveValue('12')
+  await expect(page.getByRole('heading', { name: 'Electricidad' })).toHaveCount(0)
+  await page.getByLabel('Gastos indirectos (%)').fill('18')
+  await page.getByRole('button', { name: 'Guardar configuración' }).click()
+  await expect(page.getByText('Configuración de costeo guardada.')).toBeVisible()
+
+  expect(selectedColumns.some(select => select.includes('costing_model_version'))).toBe(true)
+  expect(selectedColumns.some(select => !select.includes('costing_model_version') && !select.includes('costing_config'))).toBe(true)
+  expect(writes).toHaveLength(1)
+  expect(writes[0]).toMatchObject({ business_id: business.id, waste_percent: 12, indirect_percent: 18, labor_hourly_rate: 100, markup_percent: 60 })
+  expect(writes[0]).not.toHaveProperty('costing_model_version')
+  expect(writes[0]).not.toHaveProperty('costing_config')
+})
+
 for (const theme of ['light', 'dark'] as const) {
   test(`welcome and cost calculator are clear and responsive in ${theme}`, async ({ page }) => {
     const hour = theme === 'light' ? 9 : 20

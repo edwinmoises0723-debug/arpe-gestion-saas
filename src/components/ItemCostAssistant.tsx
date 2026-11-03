@@ -1,4 +1,5 @@
 import type { Business, QuoteBundleItem } from '../lib/database.types'
+import type { CostingCapabilities } from '../lib/costs'
 import { costItemCategories } from '../lib/costs'
 import { calculateItemCost, suggestedUnitPrice } from '../lib/products'
 import { formatCurrency } from '../lib/quotes'
@@ -6,13 +7,14 @@ import { quickCostExpensePresets } from '../lib/quick-cost'
 import { defaultCostingConfig, validateCostingInputs } from '../lib/costing-engine'
 import { Zap, Flame, Droplets } from 'lucide-react'
 
-export function ItemCostAssistant({ item, business, onChange, pricePending = false }: { pricePending?: boolean; item: QuoteBundleItem; business: Business; onChange: (item: QuoteBundleItem) => void }) {
+export function ItemCostAssistant({ item, business, capabilities, onChange, pricePending = false }: { pricePending?: boolean; item: QuoteBundleItem; business: Business; capabilities: CostingCapabilities; onChange: (item: QuoteBundleItem) => void }) {
   if (!item.cost) return null
   const cost = item.cost
+  const supportsV1 = capabilities.supportsTraceSnapshots && cost.costing_model_version === 1
   const calculated = calculateItemCost(item)
   const costingConfig = cost.costing_snapshot?.costing_config ?? cost.costing_config ?? defaultCostingConfig
   const utilities = cost.utilities ?? cost.costing_snapshot?.utilities ?? []
-  const utilityErrors = validateCostingInputs(utilities, costingConfig)
+  const utilityErrors = supportsV1 ? validateCostingInputs(utilities, costingConfig) : []
   const amount = (n: number) => formatCurrency(n, business)
   const field = (key: 'ingredients_cost' | 'waste_percent' | 'labor_hours' | 'labor_hourly_rate' | 'markup_percent', label: string, help: string, step = '0.01', max?: number) => <label>{label}<small className="field-hint">{help}</small><input type="number" min="0" max={max} step={step} required value={cost[key]} onChange={e => onChange({ ...item, cost: { ...cost, [key]: Number(e.target.value) } })} /></label>
   return <section className="cost-assistant item-cost-assistant" aria-label={`Costos de ${item.product || 'producto'}`}>
@@ -28,10 +30,10 @@ export function ItemCostAssistant({ item, business, onChange, pricePending = fal
     </div>)}
     <div className="quick-cost-presets">{quickCostExpensePresets.map(preset => <button key={preset.id} type="button" className="secondary-button" onClick={() => onChange({ ...item, direct_costs: [...item.direct_costs, { category: preset.category, name: preset.description || 'Otro gasto', cost: 0 }] })}>{preset.label}</button>)}</div>
     <div className="calculated-row"><span>Total gastos directos</span><strong>{amount(calculated.direct_costs_total)}</strong></div>
-    <h4>Mano de obra y overhead</h4>
+    <h4>{supportsV1 ? 'Mano de obra y overhead' : 'Mano de obra y gastos indirectos'}</h4>
     <div className="form-grid">{field('labor_hours', 'Horas estimadas de trabajo', 'Tiempo para preparar toda esta cantidad.')}{field('labor_hourly_rate', 'Tarifa por hora', 'Este ajuste solo aplica a la mano de obra.')}{field('markup_percent', 'Ganancia sobre costo (%)', 'Porcentaje usado para construir el precio sugerido; no modifica la configuración del negocio.')}</div>
     <p className="field-hint">{cost.labor_hours} horas × {amount(cost.labor_hourly_rate)}/h = {amount(calculated.labor_cost)}</p>
-    <details className="item-cost-utilities"><summary>Consumos de producción y overhead</summary><p className="field-hint">Los consumos se calculan por lote. No agregues aquí importes que también hayas puesto como gasto directo.</p>
+    {supportsV1 && <details className="item-cost-utilities"><summary>Consumos de producción y overhead</summary><p className="field-hint">Los consumos se calculan por lote. No agregues aquí importes que también hayas puesto como gasto directo.</p>
       {utilities.map((utility, index) => <div className="quick-cost-item" key={index}>
         {utility.kind === 'water' ? <label>Litros<input type="number" min="0" step="0.1" value={utility.liters} onChange={e => onChange({ ...item, cost: { ...cost, utilities: utilities.map((u, i) => i === index ? { ...utility, liters: Number(e.target.value) || 0 } : u) } })} /></label> : <>
           <label>Equipo<select value={utility.equipment_id} onChange={e => onChange({ ...item, cost: { ...cost, utilities: utilities.map((u, i) => i === index ? { ...utility, equipment_id: e.target.value } : u) } })}><option value="">Selecciona un equipo</option>{(utility.kind === 'electricity' ? costingConfig.electricity_equipment : utility.kind === 'natural_gas' ? costingConfig.natural_gas_equipment : costingConfig.lpg_equipment)?.filter(e => e.active).map(e => <option value={e.id} key={e.id}>{e.name}</option>)}</select></label>
@@ -44,10 +46,10 @@ export function ItemCostAssistant({ item, business, onChange, pricePending = fal
       {utilityErrors.map((message, index) => <p className="cost-warning" role="alert" key={`${message}-${index}`}>{message}</p>)}
       <dl className="order-fields"><div><dt>Consumos directos</dt><dd>{amount(calculated.utilities_total)}</dd></div><div><dt>Overhead asignado</dt><dd>{amount(calculated.overhead_amount)}</dd></div></dl>
       <ul className="cost-trace-list">{calculated.trace.filter(entry => ['electricity','natural_gas','lpg','water','overhead'].includes(entry.key)).map((entry,index) => <li key={`${entry.key}-${index}`}><strong>{entry.label}</strong><span>{entry.formula} = {amount(entry.amount)}</span>{entry.inputs?.map(input => <small key={input.label}>{input.label}: {input.value} {input.unit ?? ''}</small>)}</li>)}</ul>
-    </details>
+    </details>}
     <dl className="order-fields">
       <div><dt>Subtotal de producción</dt><dd>{amount(calculated.production_subtotal)}</dd></div>
-      <div><dt>Overhead asignado</dt><dd>{amount(calculated.overhead_amount)}</dd></div>
+      <div><dt>{supportsV1 ? 'Overhead asignado' : 'Gastos indirectos'}</dt><dd>{amount(supportsV1 ? calculated.overhead_amount : calculated.indirect_amount)}</dd></div>
       <div><dt>Costo interno de este ítem</dt><dd>{amount(calculated.production_cost)}</dd></div>
       <div><dt>Precio sugerido para la línea</dt><dd>{amount(calculated.suggested_product_price)}</dd></div>
       <div><dt>Precio sugerido unitario</dt><dd>{item.quantity > 0 ? `${amount(suggestedUnitPrice(item))}/${item.unit_label}` : 'Indica una cantidad'}</dd></div>

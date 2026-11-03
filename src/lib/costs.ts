@@ -1,4 +1,4 @@
-import type { Business, CostItemCategory, CostSettings, Quote, QuoteCost, QuoteCostItem } from './database.types'
+import type { Business, CostItemCategory, CostSettings, CostSettingsInput, Quote, QuoteCost, QuoteCostItem } from './database.types'
 import { client } from './supabase'
 import { calculateOverheadAllocation, calculateOverheadRate, defaultCostingConfig, utilityCost, type CostTraceEntry, type CostingConfig, type UtilityInput } from './costing-engine'
 
@@ -10,9 +10,88 @@ export const costItemCategories: { value: CostItemCategory; label: string }[] = 
   { value: 'other', label: 'Otro' },
 ]
 
-export const defaultCostSettings = { costing_model_version: 1 as const, waste_percent: 12, indirect_percent: 12, labor_hourly_rate: 0, markup_percent: 60 }
+export type CostingModel = 'legacy' | 'v1'
+export type CostingCapabilities = {
+  model: CostingModel
+  supportsUtilities: boolean
+  supportsOverhead: boolean
+  supportsTraceSnapshots: boolean
+}
 
-export type CostSettingsValues = typeof defaultCostSettings & { costing_config?: CostingConfig }
+export const costingCapabilities: Record<CostingModel, CostingCapabilities> = {
+  legacy: { model: 'legacy', supportsUtilities: false, supportsOverhead: false, supportsTraceSnapshots: false },
+  v1: { model: 'v1', supportsUtilities: true, supportsOverhead: true, supportsTraceSnapshots: true },
+}
+
+export const defaultCostSettings = { waste_percent: 12, indirect_percent: 12, labor_hourly_rate: 0, markup_percent: 60 }
+
+export type CostSettingsValues = typeof defaultCostSettings & {
+  model: CostingModel
+  capabilities: CostingCapabilities
+  costing_model_version?: 1
+  costing_config?: CostingConfig
+}
+export type LoadedCostSettings = CostSettingsValues & Pick<CostSettings, 'business_id' | 'created_at' | 'updated_at'>
+
+export function defaultCostSettingsValues(model: CostingModel = 'legacy'): CostSettingsValues {
+  return model === 'v1'
+    ? { ...defaultCostSettings, model, capabilities: costingCapabilities.v1, costing_model_version: 1, costing_config: structuredClone(defaultCostingConfig) }
+    : { ...defaultCostSettings, model, capabilities: costingCapabilities.legacy }
+}
+
+type CostSettingsRow = Pick<CostSettings, 'business_id' | 'waste_percent' | 'indirect_percent' | 'labor_hourly_rate' | 'markup_percent' | 'created_at' | 'updated_at'> & Partial<Pick<CostSettings, 'costing_model_version' | 'costing_config'>>
+type CostSettingsRead = { model: CostingModel; row: CostSettingsRow | null }
+
+const legacyCostSettingsSelect = 'business_id,waste_percent,indirect_percent,labor_hourly_rate,markup_percent,created_at,updated_at'
+const v1CostSettingsSelect = `${legacyCostSettingsSelect},costing_model_version,costing_config`
+
+/** Only the known missing v1 columns qualify for legacy fallback; other failures stay visible. */
+export function isMissingCostingV1Schema(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const value = error as { code?: unknown; message?: unknown; details?: unknown; hint?: unknown }
+  if (value.code !== '42703' && value.code !== 'PGRST204') return false
+  const diagnostic = [value.message, value.details, value.hint].filter((part): part is string => typeof part === 'string').join(' ')
+  return /\barpe_cost_settings\b/i.test(diagnostic)
+    && /\b(costing_model_version|costing_config)\b/i.test(diagnostic)
+    && /(does not exist|not found|could not find|schema cache|undefined column)/i.test(diagnostic)
+}
+
+async function readCostSettings(businessId: string): Promise<CostSettingsRead> {
+  const api = client()
+  const { data, error } = await api.from('arpe_cost_settings').select(v1CostSettingsSelect).eq('business_id', businessId).maybeSingle()
+  if (!error) return { model: 'v1', row: data as unknown as CostSettingsRow | null }
+  if (!isMissingCostingV1Schema(error)) throw error
+
+  const legacy = await api.from('arpe_cost_settings').select(legacyCostSettingsSelect).eq('business_id', businessId).maybeSingle()
+  if (legacy.error) throw legacy.error
+  return { model: 'legacy', row: legacy.data as unknown as CostSettingsRow | null }
+}
+
+function settingsValues(row: CostSettingsRow | null, model: CostingModel): CostSettingsValues {
+  const defaults = defaultCostSettingsValues(model)
+  const value = (key: keyof typeof defaultCostSettings) => Number(row?.[key])
+  const safe = (key: keyof typeof defaultCostSettings) => {
+    const number = value(key)
+    return Number.isFinite(number) && number >= 0 ? number : defaults[key]
+  }
+  return {
+    ...defaults,
+    waste_percent: safe('waste_percent'),
+    indirect_percent: safe('indirect_percent'),
+    labor_hourly_rate: safe('labor_hourly_rate'),
+    markup_percent: safe('markup_percent'),
+    ...(model === 'v1' ? { costing_config: row?.costing_config ? { ...defaultCostingConfig, ...row.costing_config } : defaultCostingConfig } : {}),
+  }
+}
+
+function loadedSettings(row: CostSettingsRow, model: CostingModel): LoadedCostSettings {
+  return {
+    ...settingsValues(row, model),
+    business_id: row.business_id,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  }
+}
 
 export type CostDraft = {
   costing_model_version?: 1 | 'legacy'
@@ -92,49 +171,49 @@ export function calculateCosts(input: CostDraft, items: (Pick<QuoteCostItem, 'co
   return { ...input, costing_model_version: version, ingredients_cost: ingredients, waste_percent: wastePercent, labor_hours: laborHours, labor_hourly_rate: hourlyRate, indirect_percent: indirectPercent, delivery_internal_cost: deliveryInternal, delivery_customer_charge: deliveryCustomer, markup_percent: markup, final_price: finalPrice, waste_amount: waste, direct_costs_total: direct, labor_cost: labor, production_subtotal: productionSubtotal, indirect_amount: indirect, production_cost: production, total_internal_cost: internal, suggested_product_price: suggestedProduct, suggested_customer_total: suggestedTotal, estimated_profit: profit, real_margin_percent: finalPrice > 0 ? money(profit / finalPrice * 100) : 0, utilities_total: utilitiesTotal, overhead_rate_per_hour: overheadRate, overhead_allocation_hours: allocationHours, overhead_amount: overheadAmount, trace }
 }
 
-export async function getCostSettings(businessId: string): Promise<CostSettings> {
-  const api = client()
-  const { data, error } = await api.from('arpe_cost_settings').select('*').eq('business_id', businessId).maybeSingle()
+export async function getCostSettings(businessId: string): Promise<LoadedCostSettings> {
+  const result = await readCostSettings(businessId)
+  if (result.row) return loadedSettings(result.row, result.model)
+
+  const defaults = defaultCostSettingsValues(result.model)
+  const payload: CostSettingsInput = {
+    business_id: businessId,
+    waste_percent: defaults.waste_percent,
+    indirect_percent: defaults.indirect_percent,
+    labor_hourly_rate: defaults.labor_hourly_rate,
+    markup_percent: defaults.markup_percent,
+    ...(result.model === 'v1' ? { costing_model_version: 1, costing_config: defaults.costing_config } : {}),
+  }
+  const select = result.model === 'v1' ? '*' : legacyCostSettingsSelect
+  const { data, error } = await client().from('arpe_cost_settings').upsert(payload, { onConflict: 'business_id' }).select(select).single()
   if (error) throw error
-  if (data) return data
-  const { data: created, error: createError } = await api.from('arpe_cost_settings').upsert({ business_id: businessId, ...defaultCostSettings, costing_config: defaultCostingConfig }, { onConflict: 'business_id' }).select().single()
-  if (createError) throw createError
-  return created
+  return loadedSettings(data as unknown as CostSettingsRow, result.model)
 }
 
 /** Reads saved business defaults without creating a row when none exists. */
 export async function loadCostSettingsValues(businessId: string): Promise<CostSettingsValues> {
-  const { data, error } = await client()
-    .from('arpe_cost_settings')
-    .select('waste_percent,indirect_percent,labor_hourly_rate,markup_percent,costing_model_version,costing_config')
-    .eq('business_id', businessId)
-    .maybeSingle()
-  if (error) throw error
-  if (!data) return { ...defaultCostSettings, costing_config: defaultCostingConfig }
-
-  const values = {
-    costing_model_version: 1 as const,
-    costing_config: data.costing_config ? { ...defaultCostingConfig, ...data.costing_config } : defaultCostingConfig,
-    waste_percent: Number(data.waste_percent),
-    indirect_percent: Number(data.indirect_percent),
-    labor_hourly_rate: Number(data.labor_hourly_rate),
-    markup_percent: Number(data.markup_percent),
-  }
-  return {
-    costing_model_version: 1,
-    costing_config: values.costing_config,
-    waste_percent: Number.isFinite(values.waste_percent) && values.waste_percent >= 0 ? values.waste_percent : defaultCostSettings.waste_percent,
-    indirect_percent: Number.isFinite(values.indirect_percent) && values.indirect_percent >= 0 ? values.indirect_percent : defaultCostSettings.indirect_percent,
-    labor_hourly_rate: Number.isFinite(values.labor_hourly_rate) && values.labor_hourly_rate >= 0 ? values.labor_hourly_rate : defaultCostSettings.labor_hourly_rate,
-    markup_percent: Number.isFinite(values.markup_percent) && values.markup_percent >= 0 ? values.markup_percent : defaultCostSettings.markup_percent,
-  }
+  const result = await readCostSettings(businessId)
+  return settingsValues(result.row, result.model)
 }
 
 export async function saveCostSettings(businessId: string, values: Pick<CostDraft, 'waste_percent' | 'indirect_percent' | 'labor_hourly_rate' | 'markup_percent'> & { costing_config?: CostingConfig }) {
-  const payload = { business_id: businessId, costing_model_version: 1, waste_percent: nonNegative(values.waste_percent), indirect_percent: nonNegative(values.indirect_percent), labor_hourly_rate: nonNegative(values.labor_hourly_rate), markup_percent: nonNegative(values.markup_percent), ...(values.costing_config ? { costing_config: values.costing_config } : {}) }
-  const { data, error } = await client().from('arpe_cost_settings').upsert(payload, { onConflict: 'business_id' }).select().single()
+  const current = await readCostSettings(businessId)
+  if (current.model === 'legacy' && values.costing_config) throw new Error('La configuración avanzada de costos estará disponible cuando se active el modelo v1.')
+  const payload: CostSettingsInput = {
+    business_id: businessId,
+    waste_percent: nonNegative(values.waste_percent),
+    indirect_percent: nonNegative(values.indirect_percent),
+    labor_hourly_rate: nonNegative(values.labor_hourly_rate),
+    markup_percent: nonNegative(values.markup_percent),
+    ...(current.model === 'v1' ? {
+      costing_model_version: 1,
+      costing_config: values.costing_config ?? (current.row?.costing_config ? { ...defaultCostingConfig, ...current.row.costing_config } : defaultCostingConfig),
+    } : {}),
+  }
+  const select = current.model === 'v1' ? '*' : legacyCostSettingsSelect
+  const { data, error } = await client().from('arpe_cost_settings').upsert(payload, { onConflict: 'business_id' }).select(select).single()
   if (error) throw error
-  return data
+  return loadedSettings(data as unknown as CostSettingsRow, current.model)
 }
 
 export async function getQuoteCost(quoteId: string, businessId: string) {

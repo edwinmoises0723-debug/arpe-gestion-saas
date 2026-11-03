@@ -1,5 +1,5 @@
 import type { CatalogProduct, CatalogProductInput, CostSettings, ItemCostInput, OrderItem, QuoteBundleHeader, QuoteBundleItem, QuoteItem } from './database.types'
-import { calculateCosts, defaultCostSettings } from './costs'
+import { calculateCosts, defaultCostSettingsValues, type CostingModel } from './costs'
 import { defaultCostingConfig, validateCostingInputs } from './costing-engine'
 import { calculateDeposit } from './quotes'
 import { client } from './supabase'
@@ -33,9 +33,10 @@ export function removeProduct<T>(items: T[], index: number): T[] {
   if (items.length <= 1) throw new Error('La cotización necesita al menos un producto.')
   return items.filter((_, i) => i !== index)
 }
-export function newItemCost(settings: Pick<CostSettings, 'waste_percent' | 'indirect_percent' | 'labor_hourly_rate' | 'markup_percent'> & Partial<Pick<CostSettings, 'costing_config'>> = defaultCostSettings): ItemCostInput {
+export function newItemCost(settings: Pick<CostSettings, 'waste_percent' | 'indirect_percent' | 'labor_hourly_rate' | 'markup_percent'> & Partial<Pick<CostSettings, 'costing_config'>> & { model?: CostingModel } = defaultCostSettingsValues('legacy')): ItemCostInput {
+  const model = settings.model ?? 'legacy'
   const costingConfig = (settings as CostSettings).costing_config ?? defaultCostingConfig
-  return { costing_model_version: 1, costing_snapshot: { version: 1, costing_config: structuredClone(costingConfig) }, waste_percent: Number(settings.waste_percent), indirect_percent: Number(settings.indirect_percent), labor_hourly_rate: Number(settings.labor_hourly_rate), markup_percent: Number(settings.markup_percent), ingredients_cost: 0, labor_hours: 0 }
+  return { ...(model === 'v1' ? { costing_model_version: 1, costing_snapshot: { version: 1 as const, costing_config: structuredClone(costingConfig) } } : {}), waste_percent: Number(settings.waste_percent), indirect_percent: Number(settings.indirect_percent), labor_hourly_rate: Number(settings.labor_hourly_rate), markup_percent: Number(settings.markup_percent), ingredients_cost: 0, labor_hours: 0 }
 }
 export function calculateItemCost(item: QuoteBundleItem) {
   const cost = item.cost ?? newItemCost()
@@ -43,7 +44,9 @@ export function calculateItemCost(item: QuoteBundleItem) {
   const config = snapshot?.costing_config ?? ('costing_config' in cost ? cost.costing_config : undefined) ?? defaultCostingConfig
   const utilities = cost.utilities ?? snapshot?.utilities ?? []
   const invalid = validateCostingInputs(utilities, config).length > 0
-  return calculateCosts({ ...cost, costing_model_version: cost.costing_model_version === 0 ? 'legacy' : 1, costing_config: invalid ? { ...config, monthly_overhead_total: 0 } : config, utilities: invalid ? [] : utilities, costing_snapshot: snapshot, delivery_internal_cost: 0, delivery_customer_charge: 0, final_price: lineTotal(item) }, item.direct_costs)
+  const modelVersion = cost.costing_model_version === 1 ? 1 : 'legacy'
+  const hasV1CostInputs = modelVersion === 1
+  return calculateCosts({ ...cost, costing_model_version: modelVersion, costing_config: hasV1CostInputs && invalid ? { ...config, monthly_overhead_total: 0 } : hasV1CostInputs ? config : undefined, utilities: hasV1CostInputs ? invalid ? [] : utilities : undefined, costing_snapshot: snapshot, delivery_internal_cost: 0, delivery_customer_charge: 0, final_price: lineTotal(item) }, item.direct_costs)
 }
 export function suggestedUnitPrice(item: QuoteBundleItem) {
   if (!Number.isFinite(item.quantity) || item.quantity <= 0) throw new Error('Indica una cantidad mayor que cero.')

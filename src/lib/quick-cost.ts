@@ -1,10 +1,10 @@
 import type { CostItemCategory } from './database.types'
-import { calculateCosts, type CostCalculation, type CostDraft } from './costs'
+import { calculateCosts, type CostCalculation, type CostDraft, type CostingCapabilities, type CostingModel } from './costs'
 import { money } from './products'
 import type { CostingConfig, UtilityInput } from './costing-engine'
 import { validateCostingInputs } from './costing-engine'
 
-export type QuickCostSettings = Pick<CostDraft, 'waste_percent' | 'indirect_percent' | 'labor_hourly_rate' | 'markup_percent'> & { costing_model_version?: 1 }
+export type QuickCostSettings = Pick<CostDraft, 'waste_percent' | 'indirect_percent' | 'labor_hourly_rate' | 'markup_percent'> & { model?: CostingModel; capabilities?: CostingCapabilities }
 export type QuickCostItem = { category: CostItemCategory; name: string; cost: number }
 export type QuickCostDraft = {
   productName: string
@@ -40,6 +40,7 @@ const numericFields: { field: QuickCostValidationField; label: string; value: (d
   { field: 'ingredientsCost', label: 'El costo de ingredientes', value: draft => draft.ingredientsCost },
   { field: 'laborHours', label: 'Las horas estimadas', value: draft => draft.laborHours },
   { field: 'settings.waste_percent', label: 'La merma', value: draft => draft.settings.waste_percent },
+  { field: 'settings.indirect_percent', label: 'Los gastos indirectos', value: draft => draft.settings.indirect_percent },
   { field: 'settings.labor_hourly_rate', label: 'El costo por hora', value: draft => draft.settings.labor_hourly_rate },
   { field: 'settings.markup_percent', label: 'La ganancia sobre costo', value: draft => draft.settings.markup_percent },
   { field: 'deliveryInternalCost', label: 'El costo interno de entrega', value: draft => draft.deliveryInternalCost },
@@ -64,13 +65,16 @@ export function validateQuickCost(draft: QuickCostDraft): QuickCostValidationErr
     if (!Number.isFinite(item.cost) || item.cost < 0) errors.push({ field: 'directCostCost', message: 'El costo de cada gasto adicional debe ser igual o mayor que cero.' })
     if (item.cost > 0 && !item.name.trim()) errors.push({ field: 'directCostName', message: 'Describe el gasto adicional que agregaste.' })
   }
-  for (const message of validateCostingInputs(draft.utilities, draft.costingConfig)) errors.push({ field: 'utilities', message })
+  if (draft.settings.model === 'v1') {
+    for (const message of validateCostingInputs(draft.utilities, draft.costingConfig)) errors.push({ field: 'utilities', message })
+  }
   return errors
 }
 
 export function calculateQuickCost(draft: QuickCostDraft): QuickCostCalculation {
-  const invalidProductionInputs = validateQuickCost(draft).some(error => error.field === 'utilities')
-  const invalidOverhead = Boolean(draft.costingConfig?.monthly_overhead_total && draft.costingConfig.productive_hours_per_month <= 0)
+  const supportsV1 = draft.settings.model === 'v1'
+  const invalidProductionInputs = supportsV1 && validateQuickCost(draft).some(error => error.field === 'utilities')
+  const invalidOverhead = supportsV1 && Boolean(draft.costingConfig?.monthly_overhead_total && draft.costingConfig.productive_hours_per_month <= 0)
   const costs = calculateCosts({
     ingredients_cost: draft.ingredientsCost,
     waste_percent: draft.settings.waste_percent,
@@ -81,10 +85,10 @@ export function calculateQuickCost(draft: QuickCostDraft): QuickCostCalculation 
     delivery_customer_charge: draft.deliveryCustomerCharge,
     markup_percent: draft.settings.markup_percent,
     final_price: draft.finalPrice ?? 0,
-    costing_model_version: 1,
-    utilities: invalidProductionInputs ? [] : draft.utilities,
-    costing_config: invalidOverhead ? { ...(draft.costingConfig as CostingConfig), monthly_overhead_total: 0 } : draft.costingConfig,
-    overhead_allocation_hours: draft.overheadAllocationHours ?? draft.laborHours,
+    costing_model_version: supportsV1 ? 1 : 'legacy',
+    utilities: supportsV1 ? invalidProductionInputs ? [] : draft.utilities : undefined,
+    costing_config: supportsV1 ? invalidOverhead ? { ...(draft.costingConfig as CostingConfig), monthly_overhead_total: 0 } : draft.costingConfig : undefined,
+    overhead_allocation_hours: supportsV1 ? draft.overheadAllocationHours ?? draft.laborHours : undefined,
   }, draft.directCosts)
   const hasQuantity = Number.isFinite(draft.quantity) && draft.quantity > 0
   return {
@@ -100,8 +104,13 @@ export function buildQuickCostSummary(draft: QuickCostDraft, result: QuickCostCa
   lines.push('', `Costo interno total: ${formatAmount(costs.total_internal_cost)}`)
   lines.push(`Ingredientes: ${formatAmount(costs.ingredients_cost)}`, `Merma estimada: ${formatAmount(costs.waste_amount)}`)
   lines.push(`Gastos directos: ${formatAmount(costs.direct_costs_total)}`, `Mano de obra: ${formatAmount(costs.labor_cost)}`)
-  lines.push(`Consumos de producción: ${formatAmount(costs.utilities_total)}`, `Overhead asignado: ${formatAmount(costs.overhead_amount)}`)
-  lines.push(`Subtotal antes de overhead: ${formatAmount(costs.production_subtotal)}`)
+  if (draft.settings.model === 'v1') {
+    lines.push(`Consumos de producción: ${formatAmount(costs.utilities_total)}`, `Overhead asignado: ${formatAmount(costs.overhead_amount)}`)
+    lines.push(`Subtotal antes de overhead: ${formatAmount(costs.production_subtotal)}`)
+  } else {
+    lines.push(`Gastos indirectos (${costs.indirect_percent}%): ${formatAmount(costs.indirect_amount)}`)
+    lines.push(`Subtotal de producción: ${formatAmount(costs.production_subtotal)}`)
+  }
   lines.push(`Costo de producción: ${formatAmount(costs.production_cost)}`)
   if (costs.delivery_internal_cost > 0) lines.push(`Entrega — costo interno: ${formatAmount(costs.delivery_internal_cost)}`)
   if (result.costPerUnit !== null) lines.push(`Costo por ${draft.unit.trim() || 'unidad'}: ${formatAmount(result.costPerUnit)}`)

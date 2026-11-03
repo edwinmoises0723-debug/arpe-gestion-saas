@@ -37,7 +37,7 @@ describe('productos independientes y catálogo', () => {
     expect(() => removeProduct([items[0]], 0)).toThrow('La cotización necesita al menos un producto.')
   })
   it('costs the full quantity and adds delivery only to the global internal cost', () => {
-    const item = { ...fromCatalog(catalog), quantity: 24, cost: { ...newItemCost(), ingredients_cost: 700, labor_hours: 3, labor_hourly_rate: 100 }, direct_costs: [{ category: 'packaging' as const, name: 'Caja', cost: 150 }] }
+    const item = { ...fromCatalog(catalog), quantity: 24, cost: { ...newItemCost({ waste_percent: 12, indirect_percent: 12, labor_hourly_rate: 0, markup_percent: 60, model: 'v1' }), ingredients_cost: 700, labor_hours: 3, labor_hourly_rate: 100 }, direct_costs: [{ category: 'packaging' as const, name: 'Caja', cost: 150 }] }
     expect(calculateItemCost(item)).toMatchObject({ waste_amount: 84, direct_costs_total: 150, labor_cost: 300, production_subtotal: 1234, indirect_amount: 0, overhead_amount: 0, production_cost: 1234, total_internal_cost: 1234, suggested_product_price: 1974.4 })
     expect(suggestedUnitPrice(item)).toBe(82.27)
     const summary = calculateBundle(header, [{ ...item, unit_price: 100 }])
@@ -54,10 +54,17 @@ describe('productos independientes y catálogo', () => {
   })
   it('snapshots configured overhead on new quote items instead of following later setting changes', () => {
     const config = { ...defaultCostingConfig, monthly_overhead_total: 1000, productive_hours_per_month: 100 }
-    const cost = newItemCost({ waste_percent: 0, indirect_percent: 12, labor_hourly_rate: 50, markup_percent: 60, costing_config: config })
+    const cost = newItemCost({ waste_percent: 0, indirect_percent: 12, labor_hourly_rate: 50, markup_percent: 60, costing_config: config, model: 'v1' })
     const item = { ...fromCatalog(catalog), cost: { ...cost, ingredients_cost: 100, labor_hours: 2 } }
     config.monthly_overhead_total = 10000
     expect(calculateItemCost(item).overhead_amount).toBe(20)
     expect(item.cost.costing_snapshot?.costing_config?.monthly_overhead_total).toBe(1000)
+  })
+  it('creates legacy item costs without v1 fields and applies the legacy indirect percentage', () => {
+    const cost = newItemCost({ waste_percent: 12, indirect_percent: 12, labor_hourly_rate: 100, markup_percent: 60, model: 'legacy' })
+    expect(cost).not.toHaveProperty('costing_model_version')
+    expect(cost).not.toHaveProperty('costing_snapshot')
+    const item = { ...fromCatalog(catalog), cost: { ...cost, ingredients_cost: 100, labor_hours: 1 } }
+    expect(calculateItemCost(item)).toMatchObject({ costing_model_version: 'legacy', production_subtotal: 212, indirect_amount: 25.44, utilities_total: 0, overhead_amount: 0, production_cost: 237.44 })
   })
 })

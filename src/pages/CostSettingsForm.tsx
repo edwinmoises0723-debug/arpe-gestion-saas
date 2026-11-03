@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Check, CircleDollarSign, Plus, Save, Trash2 } from 'lucide-react'
 import type { Business } from '../lib/database.types'
-import { defaultCostSettings, getCostSettings, saveCostSettings } from '../lib/costs'
+import { defaultCostSettingsValues, getCostSettings, saveCostSettings, type CostSettingsValues } from '../lib/costs'
 import { defaultCostingConfig, poundsToKilograms, type CostingConfig, type ElectricityEquipment, type LpgEquipment, type NaturalGasEquipment } from '../lib/costing-engine'
 import { errorMessage } from '../lib/supabase'
 import { Notice } from '../components/Feedback'
@@ -10,7 +10,7 @@ const id = () => crypto.randomUUID()
 const emptyConfig = (): CostingConfig => structuredClone(defaultCostingConfig)
 
 export function CostSettingsForm({ business }: { business: Business }) {
-  const [values, setValues] = useState(defaultCostSettings)
+  const [values, setValues] = useState<CostSettingsValues>(() => defaultCostSettingsValues('legacy'))
   const [config, setConfig] = useState<CostingConfig>(emptyConfig)
   const [lpgWeightUnit, setLpgWeightUnit] = useState<'kg' | 'lb'>('kg')
   const [busy, setBusy] = useState(true)
@@ -20,12 +20,12 @@ export function CostSettingsForm({ business }: { business: Business }) {
     let active = true
     void getCostSettings(business.id).then(settings => {
       if (!active) return
-      setValues({ waste_percent: Number(settings.waste_percent), indirect_percent: Number(settings.indirect_percent), labor_hourly_rate: Number(settings.labor_hourly_rate), markup_percent: Number(settings.markup_percent), costing_model_version: 1 })
-      setConfig({ ...emptyConfig(), ...(settings.costing_config ?? {}) })
+      setValues(settings)
+      setConfig({ ...emptyConfig(), ...(settings.model === 'v1' ? settings.costing_config ?? {} : {}) })
     }).catch(e => { if (active) setError(errorMessage(e)) }).finally(() => { if (active) setBusy(false) })
     return () => { active = false }
   }, [business.id])
-  function basicField(key: 'waste_percent' | 'labor_hourly_rate' | 'markup_percent', value: string) { setValues(current => ({ ...current, [key]: Number(value) || 0 })); setSaved(false) }
+  function basicField(key: 'waste_percent' | 'indirect_percent' | 'labor_hourly_rate' | 'markup_percent', value: string) { setValues(current => ({ ...current, [key]: Number(value) || 0 })); setSaved(false) }
   function configField<K extends keyof CostingConfig>(key: K, value: CostingConfig[K]) { setConfig(current => ({ ...current, [key]: value })); setSaved(false) }
   function changeEquipment<T extends { id: string }>(key: 'electricity_equipment' | 'natural_gas_equipment' | 'lpg_equipment', itemId: string, update: Partial<T>) {
     setConfig(current => ({ ...current, [key]: ((current[key] as unknown as T[] | undefined) ?? []).map(item => item.id === itemId ? { ...item, ...update } : item) }))
@@ -40,11 +40,11 @@ export function CostSettingsForm({ business }: { business: Business }) {
     event.preventDefault(); setBusy(true); setError(''); setSaved(false)
     try {
       if (values.waste_percent > 100) throw new Error('La merma no puede superar el 100%.')
-      if (config.monthly_overhead_total > 0 && config.productive_hours_per_month <= 0) throw new Error('Las horas productivas deben ser mayores que cero cuando hay overhead mensual.')
-      if (config.lpg_cylinder_price > 0 && config.lpg_net_kg <= 0) throw new Error('Indica el peso neto en kg del cilindro de GLP.')
-      const overheadTotal = (config.overhead_items ?? []).filter(item => item.active).reduce((sum, item) => sum + Math.max(0, item.monthly_cost), 0)
-      await saveCostSettings(business.id, { ...values, costing_config: { ...config, monthly_overhead_total: overheadTotal } })
-      setConfig(current => ({ ...current, monthly_overhead_total: overheadTotal }))
+      if (values.model === 'v1' && config.monthly_overhead_total > 0 && config.productive_hours_per_month <= 0) throw new Error('Las horas productivas deben ser mayores que cero cuando hay overhead mensual.')
+      if (values.model === 'v1' && config.lpg_cylinder_price > 0 && config.lpg_net_kg <= 0) throw new Error('Indica el peso neto en kg del cilindro de GLP.')
+      const overheadTotal = values.model === 'v1' ? (config.overhead_items ?? []).filter(item => item.active).reduce((sum, item) => sum + Math.max(0, item.monthly_cost), 0) : 0
+      await saveCostSettings(business.id, { ...values, ...(values.model === 'v1' ? { costing_config: { ...config, monthly_overhead_total: overheadTotal } } : {}) })
+      if (values.model === 'v1') setConfig(current => ({ ...current, monthly_overhead_total: overheadTotal }))
       setSaved(true)
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
@@ -52,9 +52,11 @@ export function CostSettingsForm({ business }: { business: Business }) {
   return <form className="cost-settings-form" onSubmit={submit}>
     <section className="panel form-section"><div className="section-title"><span className="section-icon"><CircleDollarSign size={20} /></span><div><h2>Costeo básico</h2><p>Parámetros reutilizables para nuevos cálculos y cotizaciones.</p></div></div><fieldset disabled={busy}><div className="form-grid">
       <label>Merma predeterminada (%)<input type="number" min="0" max="100" step="0.01" value={values.waste_percent} onChange={e => basicField('waste_percent', e.target.value)} /><small className="field-hint">Costo ingredientes × porcentaje. Cubre desperdicio y pérdidas normales.</small></label>
+      {values.model === 'legacy' && <label>Gastos indirectos (%)<input type="number" min="0" step="0.01" value={values.indirect_percent} onChange={e => basicField('indirect_percent', e.target.value)} /><small className="field-hint">Ayuda a cubrir gastos generales del negocio.</small></label>}
       <label>Costo por hora de trabajo<input type="number" min="0" step="0.01" value={values.labor_hourly_rate} onChange={e => basicField('labor_hourly_rate', e.target.value)} /><small className="field-hint">Solo calcula mano de obra; no cambia utilities ni overhead.</small></label>
       <label>Ganancia sobre costo / markup (%)<input type="number" min="0" step="0.01" value={values.markup_percent} onChange={e => basicField('markup_percent', e.target.value)} /><small className="field-hint">Se aplica al costo de producción para sugerir un precio.</small></label>
-    </div></fieldset></section>
+    </div>{values.model === 'legacy' && <p className="field-hint">Configuración clásica: aquí puedes guardar los parámetros básicos del negocio.</p>}</fieldset></section>
+    {values.model === 'v1' && <>
     <section className="panel form-section"><div className="section-title"><span className="section-icon">⚡</span><div><h2>Electricidad</h2><p>Tarifa y equipos; puedes usar consumo estimado o medido.</p></div></div><fieldset disabled={busy}><label>Tarifa eléctrica por kWh<input type="number" min="0" step="0.0001" value={config.electricity_rate_per_kwh || ''} onChange={e => configField('electricity_rate_per_kwh', Number(e.target.value) || 0)} /><small className="field-hint">Usa la tarifa efectiva de tu factura, no un valor universal.</small></label>
       {(config.electricity_equipment ?? []).map(item => <div className="quick-cost-item" key={item.id}><label>Nombre<input value={item.name} onChange={e => changeEquipment<ElectricityEquipment>('electricity_equipment', item.id, { name: e.target.value })} /></label><label>Potencia (W)<input type="number" min="0" step="1" value={item.power_kw ? item.power_kw * 1000 : ''} onChange={e => changeEquipment<ElectricityEquipment>('electricity_equipment', item.id, { power_kw: (Number(e.target.value) || 0) / 1000 })} /><small className="field-hint">Se guarda normalizada en kW.</small></label><label>Modo<select value={item.calculation_mode} onChange={e => changeEquipment<ElectricityEquipment>('electricity_equipment', item.id, { calculation_mode: e.target.value as ElectricityEquipment['calculation_mode'] })}><option value="estimated">Estimado por potencia</option><option value="measured">Medido por ciclo</option></select></label>{item.calculation_mode === 'measured' && <label>kWh medidos por ciclo<input type="number" min="0" step="0.001" value={item.measured_kwh_per_cycle ?? ''} onChange={e => changeEquipment<ElectricityEquipment>('electricity_equipment', item.id, { measured_kwh_per_cycle: Number(e.target.value) || 0 })} /><small className="field-hint">Este valor medido tiene prioridad sobre la estimación por potencia.</small></label>}<label className="cost-toggle">Activo<input type="checkbox" checked={item.active} onChange={e => changeEquipment<ElectricityEquipment>('electricity_equipment', item.id, { active: e.target.checked })} /></label><button type="button" className="icon-button" aria-label={`Eliminar equipo ${item.name}`} onClick={() => remove<ElectricityEquipment>('electricity_equipment', item.id)}><Trash2 size={16} /></button></div>)}
       <button type="button" className="secondary-button" onClick={() => addEquipment('electricity')}><Plus size={16} /> Agregar equipo eléctrico</button></fieldset></section>
@@ -65,6 +67,7 @@ export function CostSettingsForm({ business }: { business: Business }) {
     <section className="panel form-section"><div className="section-title"><span className="section-icon">▤</span><div><h2>Overhead mensual</h2><p>Gastos generales compartidos que no asignas directamente a un producto.</p></div></div><fieldset disabled={busy}>
       {(config.overhead_items ?? []).map((item, index) => <div className="quick-cost-item" key={`${item.name}-${index}`}><label>Concepto<input value={item.name} onChange={e => configField('overhead_items', (config.overhead_items ?? []).map((row, i) => i === index ? { ...row, name: e.target.value } : row))} /></label><label>Categoría<input value={item.category} onChange={e => configField('overhead_items', (config.overhead_items ?? []).map((row, i) => i === index ? { ...row, category: e.target.value } : row))} placeholder="Renta, software…" /></label><label>Costo mensual<input type="number" min="0" step="0.01" value={item.monthly_cost || ''} onChange={e => configField('overhead_items', (config.overhead_items ?? []).map((row, i) => i === index ? { ...row, monthly_cost: Number(e.target.value) || 0 } : row))} /></label><label className="cost-toggle">Activo<input type="checkbox" checked={item.active} onChange={e => configField('overhead_items', (config.overhead_items ?? []).map((row, i) => i === index ? { ...row, active: e.target.checked } : row))} /></label><button type="button" className="icon-button" aria-label={`Eliminar gasto ${item.name}`} onClick={() => configField('overhead_items', (config.overhead_items ?? []).filter((_, i) => i !== index))}><Trash2 size={16} /></button></div>)}
       <button type="button" className="secondary-button" onClick={() => configField('overhead_items', [...(config.overhead_items ?? []), { name: '', category: '', monthly_cost: 0, active: true }])}><Plus size={16} /> Agregar gasto mensual</button><div className="form-grid"><label>Horas productivas mensuales<input type="number" min="0" step="0.25" value={config.productive_hours_per_month || ''} onChange={e => configField('productive_hours_per_month', Number(e.target.value) || 0)} /><small className="field-hint">Total realista de horas de producción disponibles en el mes.</small></label><label>Overhead por hora<input readOnly value={config.productive_hours_per_month > 0 ? ((config.overhead_items ?? []).filter(item => item.active).reduce((sum, item) => sum + item.monthly_cost, 0) / config.productive_hours_per_month).toFixed(2) : '—'} /></label></div><p className="field-hint">No incluyas aquí electricidad, gas o agua que EJNEXA ya calcula directamente por producto, para evitar contarlos dos veces. No agregues gastos fijos si decides tratarlos como overhead.</p></fieldset></section>
+    </>}
     <div className="form-actions">{error && <Notice error>{error}</Notice>}{saved && <Notice><Check size={17} /> Configuración de costeo guardada.</Notice>}<button className="primary" disabled={busy}>{busy ? 'Cargando…' : 'Guardar configuración'}<Save size={18} /></button></div>
   </form>
 }

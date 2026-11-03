@@ -4,19 +4,14 @@ import { money } from './products'
 import { buildQuickCostSummary, calculateQuickCost, quickCostExpensePresets, validateQuickCost, type QuickCostDraft } from './quick-cost'
 import { defaultCostingConfig } from './costing-engine'
 
-const draft = (overrides: Partial<QuickCostDraft> = {}): QuickCostDraft => ({
-  productName: '',
-  quantity: 1,
-  unit: 'unidad',
-  ingredientsCost: 0,
-  laborHours: 0,
-  settings: { ...defaultCostSettings },
-  directCosts: [],
-  deliveryInternalCost: 0,
-  deliveryCustomerCharge: 0,
-  finalPrice: null,
-  ...overrides,
-})
+const draft = (overrides: Partial<QuickCostDraft> = {}): QuickCostDraft => {
+  const base: QuickCostDraft = {
+    productName: '', quantity: 1, unit: 'unidad', ingredientsCost: 0, laborHours: 0,
+    settings: { ...defaultCostSettings, model: 'v1' }, directCosts: [], deliveryInternalCost: 0,
+    deliveryCustomerCharge: 0, finalPrice: null,
+  }
+  return { ...base, ...overrides, settings: { ...base.settings, ...overrides.settings } }
+}
 
 describe('calculadora rápida de costos', () => {
   it('usa calculateCosts como fuente del cálculo', () => {
@@ -31,6 +26,22 @@ describe('calculadora rápida de costos', () => {
     expect(result.costs).toEqual(expected)
     expect(result.costs.production_cost).toBe(150)
     expect(result.costs.suggested_product_price).toBe(225)
+  })
+
+  it('mantiene el cálculo clásico de indirectos cuando el esquema es legacy', () => {
+    const input = draft({
+      ingredientsCost: 100,
+      settings: { waste_percent: 12, indirect_percent: 12, labor_hourly_rate: 0, markup_percent: 60, model: 'legacy' },
+    })
+    const result = calculateQuickCost(input)
+    expect(result.costs.costing_model_version).toBe('legacy')
+    expect(result.costs.waste_amount).toBe(12)
+    expect(result.costs.production_subtotal).toBe(112)
+    expect(result.costs.indirect_amount).toBe(13.44)
+    expect(result.costs.production_cost).toBe(125.44)
+    expect(result.costs.utilities_total).toBe(0)
+    expect(result.costs.overhead_amount).toBe(0)
+    expect(buildQuickCostSummary(input, result, amount => `C$ ${amount.toFixed(2)}`)).toContain('Gastos indirectos (12%): C$ 13.44')
   })
 
   it('calcula el costo y el precio sugerido por unidad sin incluir la entrega', () => {
@@ -59,7 +70,7 @@ describe('calculadora rápida de costos', () => {
 
   it('valida cantidad, unidad, merma y valores negativos o no numéricos', () => {
     const errors = validateQuickCost(draft({ quantity: 0, unit: ' ', ingredientsCost: -1, laborHours: Number.NaN, settings: { waste_percent: 101, indirect_percent: -1, labor_hourly_rate: 0, markup_percent: 0 } }))
-    expect(errors.map(error => error.field)).toEqual(expect.arrayContaining(['quantity', 'unit', 'ingredientsCost', 'laborHours', 'settings.waste_percent']))
+    expect(errors.map(error => error.field)).toEqual(expect.arrayContaining(['quantity', 'unit', 'ingredientsCost', 'laborHours', 'settings.waste_percent', 'settings.indirect_percent']))
   })
 
   it('construye un resumen en español con datos opcionales solo cuando están disponibles', () => {

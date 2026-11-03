@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import { Loading, Notice } from '../components/Feedback'
 import type { Business, CostItemCategory } from '../lib/database.types'
 import { calculateQuickCost, buildQuickCostSummary, validateQuickCost, type QuickCostDraft, type QuickCostSettings } from '../lib/quick-cost'
-import { costItemCategories, defaultCostSettings, loadCostSettingsValues, saveCostSettings } from '../lib/costs'
+import { costItemCategories, defaultCostSettingsValues, loadCostSettingsValues, saveCostSettings } from '../lib/costs'
 import { defaultCostingConfig, type UtilityInput } from '../lib/costing-engine'
 import { quickCostExpensePresets } from '../lib/quick-cost'
 import { formatCurrency } from '../lib/quotes'
@@ -19,8 +19,8 @@ function numberInput(value: number, showZero = false) {
 }
 
 export function CostCalculatorPage({ business }: { business: Business }) {
-  const [defaults, setDefaults] = useState<QuickCostSettings>({ ...defaultCostSettings })
-  const [draft, setDraft] = useState<QuickCostDraft>(() => newDraft(defaultCostSettings))
+  const [defaults, setDefaults] = useState<QuickCostSettings>(() => defaultCostSettingsValues('legacy'))
+  const [draft, setDraft] = useState<QuickCostDraft>(() => newDraft(defaultCostSettingsValues('legacy')))
   const [loading, setLoading] = useState(true)
   const [settingsWarning, setSettingsWarning] = useState('')
   const [savingDefaults, setSavingDefaults] = useState(false)
@@ -42,7 +42,7 @@ export function CostCalculatorPage({ business }: { business: Business }) {
       })
       .catch(error => {
         if (!active) return
-        const fallback = { ...defaultCostSettings }
+        const fallback = defaultCostSettingsValues('legacy')
         setDefaults(fallback)
         setDraft({ ...newDraft(fallback), costingConfig: defaultCostingConfig })
         setSettingsWarning(`No pudimos leer tus valores guardados. Este cálculo usará los valores predeterminados: ${errorMessage(error)}`)
@@ -59,7 +59,8 @@ export function CostCalculatorPage({ business }: { business: Business }) {
 
   const calculation = useMemo(() => calculateQuickCost(draft), [draft])
   const errors = validateQuickCost(draft)
-  const hasCosts = draft.ingredientsCost > 0 || draft.laborHours > 0 || draft.directCosts.some(item => item.cost > 0) || (draft.utilities ?? []).length > 0 || draft.deliveryInternalCost > 0
+  const supportsV1 = draft.settings.model === 'v1'
+  const hasCosts = draft.ingredientsCost > 0 || draft.laborHours > 0 || draft.directCosts.some(item => item.cost > 0) || (supportsV1 && (draft.utilities ?? []).length > 0) || draft.deliveryInternalCost > 0
   const valid = errors.length === 0
   const currency = (amount: number) => formatCurrency(amount, business)
   const setField = <K extends keyof QuickCostDraft>(key: K, value: QuickCostDraft[K]) => {
@@ -198,7 +199,7 @@ export function CostCalculatorPage({ business }: { business: Business }) {
           </div>}
         </section>
 
-        <section className="panel form-section cost-step" aria-labelledby="quick-cost-utilities-title">
+        {supportsV1 && <section className="panel form-section cost-step" aria-labelledby="quick-cost-utilities-title">
           <div className="section-title"><span className="section-icon"><Zap size={20} /></span><div><h2 id="quick-cost-utilities-title">Consumos de producción</h2><p>Agrega solo consumos de este lote; no se duplican en overhead.</p></div></div>
           {!(draft.utilities?.length) && <div className="quick-cost-collapsed-summary"><div><strong>Sin consumos agregados</strong></div></div>}
           {(draft.utilities ?? []).map((utility, index) => <div className="quick-cost-item" key={index}>
@@ -211,7 +212,7 @@ export function CostCalculatorPage({ business }: { business: Business }) {
           </div>)}
           <div className="quick-cost-presets"><button type="button" className="secondary-button" disabled={!draft.costingConfig?.electricity_equipment?.some(item => item.active)} onClick={() => addUtility('electricity')}><Zap size={15} /> Electricidad</button><button type="button" className="secondary-button" disabled={!draft.costingConfig?.natural_gas_equipment?.some(item => item.active)} onClick={() => addUtility('natural_gas')}><Flame size={15} /> Gas natural</button><button type="button" className="secondary-button" disabled={!draft.costingConfig?.lpg_equipment?.some(item => item.active)} onClick={() => addUtility('lpg')}><Flame size={15} /> GLP / Propano</button><button type="button" className="secondary-button" onClick={() => addUtility('water')}><Droplets size={15} /> Agua</button><Link className="text-link" to="/configuracion">Configurar consumos</Link></div>
           {visibleErrors.filter(item => item.field === 'utilities').map((item, index) => <p className="cost-field-error" role="alert" key={`${item.message}-${index}`}>{item.message}</p>)}
-        </section>
+        </section>}
 
         <section className="panel form-section cost-step cost-step-delivery" aria-labelledby="quick-cost-delivery-title">
           <div className="section-title"><span className="section-icon"><Truck size={20} /></span><div><h2 id="quick-cost-delivery-title">Entrega <span className="optional">Opcional</span></h2><p>Separa lo que te cuesta de lo que cobras al cliente.</p></div></div>
@@ -232,17 +233,17 @@ export function CostCalculatorPage({ business }: { business: Business }) {
         <section className={`panel quick-cost-settings${settingsOpen ? ' is-open' : ''}`} aria-labelledby="quick-cost-settings-title">
           <div className="quick-cost-settings-heading"><div><h2 id="quick-cost-settings-title">Parámetros aplicados</h2><p>Valores de tu negocio; los cambios solo aplican a este cálculo.</p></div><button type="button" className="secondary-button quick-cost-disclosure" aria-expanded={settingsOpen} aria-controls="quick-cost-setting-fields" onClick={() => setSettingsOpen(open => !open)}>{settingsOpen ? 'Ocultar' : 'Editar parámetros'}</button></div>
           {!settingsOpen && <div className="quick-cost-setting-chips" aria-label="Valores aplicados">
-            <span>Merma <strong>{draft.settings.waste_percent}%</strong></span><span>Overhead/h <strong>{currency(calculation.costs.overhead_rate_per_hour)}</strong></span><span>Costo/hora <strong>{currency(draft.settings.labor_hourly_rate)}</strong></span><span>Ganancia <strong>{draft.settings.markup_percent}%</strong></span>
+            <span>Merma <strong>{draft.settings.waste_percent}%</strong></span>{supportsV1 ? <span>Overhead/h <strong>{currency(calculation.costs.overhead_rate_per_hour)}</strong></span> : <span>Indirectos <strong>{draft.settings.indirect_percent}%</strong></span>}<span>Costo/hora <strong>{currency(draft.settings.labor_hourly_rate)}</strong></span><span>Ganancia <strong>{draft.settings.markup_percent}%</strong></span>
           </div>}
           {!settingsOpen && <div id="quick-cost-setting-fields" hidden />}
           {settingsOpen && <div id="quick-cost-setting-fields" className="quick-cost-expanded-content">
             <div className="form-grid cost-fields-grid quick-cost-setting-grid">
               <label>Merma (%)<input type="number" min="0" max="100" step="0.01" value={numberInput(draft.settings.waste_percent, true)} onChange={event => updateSetting('waste_percent', event.target.value)} onBlur={() => setShowValidation(true)} /><small className="field-hint">Cubre sobrantes, desperdicios y pequeñas pérdidas.</small></label>
-              <p className="field-hint">El overhead se asigna por horas productivas. Configura gastos generales y horas mensuales en Configuración.</p>
+              {supportsV1 ? <p className="field-hint">El overhead se asigna por horas productivas. Configura gastos generales y horas mensuales en Configuración.</p> : <label>Gastos indirectos (%)<input type="number" min="0" step="0.01" value={numberInput(draft.settings.indirect_percent, true)} onChange={event => updateSetting('indirect_percent', event.target.value)} onBlur={() => setShowValidation(true)} /><small className="field-hint">Porcentaje aplicado al subtotal de producción para cubrir gastos generales.</small></label>}
               <label>Costo por hora<input type="number" min="0" step="0.01" value={numberInput(draft.settings.labor_hourly_rate, true)} onChange={event => updateSetting('labor_hourly_rate', event.target.value)} onBlur={() => setShowValidation(true)} /><small className="field-hint">Lo que deseas reconocer por cada hora de trabajo.</small></label>
               <label>Ganancia sobre costo (%)<input type="number" min="0" step="0.01" value={numberInput(draft.settings.markup_percent, true)} onChange={event => updateSetting('markup_percent', event.target.value)} onBlur={() => setShowValidation(true)} /><small className="field-hint">Porcentaje usado para construir el precio sugerido.</small></label>
             </div>
-            <details className="cost-allocation-advanced"><summary>Asignación avanzada de overhead</summary><label>Horas productivas asignadas<input type="number" min="0" step="0.25" value={numberInput(draft.overheadAllocationHours ?? draft.laborHours, true)} onChange={event => setField('overheadAllocationHours', parseNumber(event.target.value))} /><small className="field-hint">Por defecto usa las horas de mano de obra. Cambiar la tarifa por hora no modifica esta asignación.</small></label><button type="button" className="text-button" onClick={() => setField('overheadAllocationHours', undefined)}>Usar horas de mano de obra</button></details>
+            {supportsV1 && <details className="cost-allocation-advanced"><summary>Asignación avanzada de overhead</summary><label>Horas productivas asignadas<input type="number" min="0" step="0.25" value={numberInput(draft.overheadAllocationHours ?? draft.laborHours, true)} onChange={event => setField('overheadAllocationHours', parseNumber(event.target.value))} /><small className="field-hint">Por defecto usa las horas de mano de obra. Cambiar la tarifa por hora no modifica esta asignación.</small></label><button type="button" className="text-button" onClick={() => setField('overheadAllocationHours', undefined)}>Usar horas de mano de obra</button></details>}
             {draft.laborHours > 0 && draft.settings.labor_hourly_rate === 0 && <div className="cost-loss-warning" role="status"><strong>Mano de obra no incluida</strong><p>Indicaste horas de trabajo, pero tu costo por hora está configurado en {currency(0)}.</p><Link className="text-link" to="/configuracion">Editar parámetros</Link></div>}
             <div className="quick-cost-setting-footer"><span>Estos cambios solo aplican a este cálculo.</span><button type="button" className="secondary-button" disabled={savingDefaults} onClick={() => void saveDefaults()}>{savingDefaults ? 'Guardando…' : 'Guardar como predeterminados'} <Save size={15} /></button><Link className="text-link" to="/configuracion">Configuración completa</Link></div>
             {defaultsMessage && <p role="status">{defaultsMessage}</p>}
@@ -271,8 +272,7 @@ export function CostCalculatorPage({ business }: { business: Business }) {
               <ResultRow label="Gastos adicionales" value={currency(calculation.costs.direct_costs_total)} />
               <ResultRow label="Mano de obra" value={currency(calculation.costs.labor_cost)} />
               <ResultRow label="Subtotal de producción" value={currency(calculation.costs.production_subtotal)} />
-              <ResultRow label="Consumos de producción" value={currency(calculation.costs.utilities_total)} />
-              <ResultRow label="Overhead asignado" value={currency(calculation.costs.overhead_amount)} />
+              {supportsV1 ? <><ResultRow label="Consumos de producción" value={currency(calculation.costs.utilities_total)} /><ResultRow label="Overhead asignado" value={currency(calculation.costs.overhead_amount)} /></> : <ResultRow label={`Gastos indirectos (${calculation.costs.indirect_percent}%)`} value={currency(calculation.costs.indirect_amount)} />}
               <ResultRow label="Entrega — costo interno" value={currency(calculation.costs.delivery_internal_cost)} />
             </dl>
             <ul className="cost-trace-list">{calculation.costs.trace.map((entry, index) => <li key={`${entry.key}-${index}`}><strong>{entry.label}</strong><span>{entry.formula ?? 'Valor registrado'} = {currency(entry.amount)} · {entry.sourceType === 'measured' ? 'Medido' : entry.sourceType === 'estimated' ? 'Estimado' : entry.sourceType === 'configured' ? 'Configurado' : 'Calculado'}</span>{entry.inputs?.map(input => <small key={input.label}>{input.label}: {input.value} {input.unit ?? ''}</small>)}</li>)}</ul>
