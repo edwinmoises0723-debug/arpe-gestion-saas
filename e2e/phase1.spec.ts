@@ -678,6 +678,8 @@ for (const theme of ['light', 'dark'] as const) {
         await expect(page.getByRole('heading', { name: 'Calculadora de costo' })).toBeVisible()
         await expect(page.getByText('Estos datos solo se usan en este cálculo.')).toBeVisible()
         await expect(page.getByText('Parámetros aplicados')).toBeVisible()
+        await expect(page.getByLabel('Merma (%)')).toHaveCount(0)
+        await page.getByRole('button', { name: 'Editar parámetros' }).click()
         await expect(page.getByLabel('Merma (%)')).toHaveValue('12')
         await expect(page.getByLabel('Gastos indirectos (%)')).toHaveValue('12')
         await expect(page.getByLabel('Costo por hora')).toHaveValue('100')
@@ -719,6 +721,7 @@ for (const theme of ['light', 'dark'] as const) {
   test(`quick cost calculator calculates locally and resets in ${theme}`, async ({ page }) => {
     const pageErrors: string[] = []
     const calculatorWrites: string[] = []
+    const writeMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
     page.on('pageerror', error => pageErrors.push(error.message))
     await page.emulateMedia({ colorScheme: theme })
     await page.addInitScript(savedTheme => localStorage.setItem('ejnexa-theme', savedTheme), theme)
@@ -728,7 +731,7 @@ for (const theme of ['light', 'dark'] as const) {
 
     const trackCalculatorWrites = (request: { url(): string; method(): string }) => {
       const url = request.url()
-      if (request.method() !== 'GET' && /\/rest\/v1\/|\/rpc\//.test(url)) calculatorWrites.push(`${request.method()} ${url}`)
+      if (writeMethods.has(request.method()) && /\/rest\/v1\/|\/rpc\//.test(url)) calculatorWrites.push(`${request.method()} ${url}`)
     }
     page.on('request', trackCalculatorWrites)
     await page.getByRole('button', { name: 'Abrir menú' }).click()
