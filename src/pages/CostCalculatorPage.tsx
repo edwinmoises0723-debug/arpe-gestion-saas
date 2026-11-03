@@ -19,8 +19,8 @@ function numberInput(value: number, showZero = false) {
 }
 
 export function CostCalculatorPage({ business }: { business: Business }) {
-  const [defaults, setDefaults] = useState<QuickCostSettings>(() => defaultCostSettingsValues('legacy'))
-  const [draft, setDraft] = useState<QuickCostDraft>(() => newDraft(defaultCostSettingsValues('legacy')))
+  const [defaults, setDefaults] = useState<QuickCostSettings>(() => defaultCostSettingsValues())
+  const [draft, setDraft] = useState<QuickCostDraft>(() => newDraft(defaultCostSettingsValues()))
   const [loading, setLoading] = useState(true)
   const [settingsWarning, setSettingsWarning] = useState('')
   const [savingDefaults, setSavingDefaults] = useState(false)
@@ -42,7 +42,7 @@ export function CostCalculatorPage({ business }: { business: Business }) {
       })
       .catch(error => {
         if (!active) return
-        const fallback = defaultCostSettingsValues('legacy')
+        const fallback = defaultCostSettingsValues()
         setDefaults(fallback)
         setDraft({ ...newDraft(fallback), costingConfig: defaultCostingConfig })
         setSettingsWarning(`No pudimos leer tus valores guardados. Este cálculo usará los valores predeterminados: ${errorMessage(error)}`)
@@ -59,7 +59,8 @@ export function CostCalculatorPage({ business }: { business: Business }) {
 
   const calculation = useMemo(() => calculateQuickCost(draft), [draft])
   const errors = validateQuickCost(draft)
-  const supportsV1 = draft.settings.model === 'v1'
+  const supportsV1 = draft.settings.activeModel === 'v1'
+  const preparedForV1 = draft.settings.schemaCapability === 'v1-schema' && draft.settings.activeModel === 'legacy'
   const hasCosts = draft.ingredientsCost > 0 || draft.laborHours > 0 || draft.directCosts.some(item => item.cost > 0) || (supportsV1 && (draft.utilities ?? []).length > 0) || draft.deliveryInternalCost > 0
   const valid = errors.length === 0
   const currency = (amount: number) => formatCurrency(amount, business)
@@ -149,6 +150,7 @@ export function CostCalculatorPage({ business }: { business: Business }) {
     </header>
 
     {settingsWarning && <Notice error>{settingsWarning}</Notice>}
+    {preparedForV1 && <p className="field-hint" role="status">Modelo actual: Clásico. La configuración avanzada está disponible en Configuración, pero este cálculo continúa usando la fórmula clásica.</p>}
 
     <div className="cost-calculator-layout">
       <div className="cost-calculator-form">

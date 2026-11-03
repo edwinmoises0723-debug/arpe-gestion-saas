@@ -122,6 +122,18 @@ Cada costo del desglose debe responder qué es, de dónde salió, qué valor y u
 
 Los datos derivados de una cotización son snapshots. Un cambio posterior de configuración no debe reescribir cálculos históricos. Los registros anteriores al Modelo EJNEXA v1.0 conservan la fórmula histórica de gastos indirectos por porcentaje para poder interpretarse; nuevos cálculos deben indicar explícitamente su versión.
 
+## Migración y activación
+
+La capacidad del esquema y el modelo activo son conceptos distintos. La capacidad indica si la base de datos ya tiene los campos de configuración avanzada; el modelo activo indica qué fórmula utiliza cada negocio. Que los campos v1 existan no activa por sí solo ese modelo.
+
+La migración agrega `costing_model_version` con valor predeterminado `0` y permite las versiones `0` y `1`. Por eso, al aplicar la migración, los negocios existentes conservan sus porcentajes y tarifas actuales y permanecen en el modelo Clásico. Los nuevos registros también comienzan en Clásico hasta que una persona encargada lo active. En `arpe_cost_settings`, `0` significa Clásico y `1` significa Modelo EJNEXA v1.
+
+Cuando el esquema permite v1 pero el negocio aún está en Clásico, Configuración permite preparar y guardar electricidad, equipos, gas, agua y gastos generales. Guardar esos datos no cambia la fórmula: la Calculadora y las nuevas cotizaciones continúan usando el porcentaje de gastos indirectos clásico. Las utilities que el negocio no utiliza no necesitan configurarse.
+
+La activación es explícita y requiere guardar primero la configuración. Antes de activarla, ARPE valida porcentajes y tarifas, coherencia de equipos activos y horas productivas cuando hay gastos generales. La confirmación cambia únicamente la versión activa del negocio a `1`; no modifica la configuración guardada ni reescribe cotizaciones o pedidos.
+
+Cada nueva cotización conserva su versión y los parámetros usados al crear el costo. Las cotizaciones y pedidos históricos con versión `0` siguen calculándose con la fórmula clásica aunque el negocio active v1 más adelante. No se recalculan ni reinterpretan snapshots existentes.
+
 ## Parámetros predeterminados
 
 Guardar parámetros reutilizables actualiza únicamente la configuración del negocio elegida para reutilización, como merma, tarifa de mano de obra y markup, además de los parámetros globales expresamente incluidos en la pantalla. No guarda el nombre del producto, ingredientes del pedido, horas del lote, gastos directos, consumos del pedido, entrega ni precio final.

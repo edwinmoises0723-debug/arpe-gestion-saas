@@ -4,10 +4,10 @@ import { money } from './products'
 import { buildQuickCostSummary, calculateQuickCost, quickCostExpensePresets, validateQuickCost, type QuickCostDraft } from './quick-cost'
 import { defaultCostingConfig } from './costing-engine'
 
-const draft = (overrides: Partial<QuickCostDraft> = {}): QuickCostDraft => {
+const draft = (overrides: Omit<Partial<QuickCostDraft>, 'settings'> & { settings?: Partial<QuickCostDraft['settings']> } = {}): QuickCostDraft => {
   const base: QuickCostDraft = {
     productName: '', quantity: 1, unit: 'unidad', ingredientsCost: 0, laborHours: 0,
-    settings: { ...defaultCostSettings, model: 'v1' }, directCosts: [], deliveryInternalCost: 0,
+    settings: { ...defaultCostSettings, activeModel: 'v1', schemaCapability: 'v1-schema', capabilities: { schemaCapability: 'v1-schema', supportsUtilities: true, supportsOverhead: true, supportsTraceSnapshots: true } }, directCosts: [], deliveryInternalCost: 0,
     deliveryCustomerCharge: 0, finalPrice: null,
   }
   return { ...base, ...overrides, settings: { ...base.settings, ...overrides.settings } }
@@ -31,7 +31,7 @@ describe('calculadora rápida de costos', () => {
   it('mantiene el cálculo clásico de indirectos cuando el esquema es legacy', () => {
     const input = draft({
       ingredientsCost: 100,
-      settings: { waste_percent: 12, indirect_percent: 12, labor_hourly_rate: 0, markup_percent: 60, model: 'legacy' },
+      settings: { waste_percent: 12, indirect_percent: 12, labor_hourly_rate: 0, markup_percent: 60, activeModel: 'legacy', schemaCapability: 'v1-schema', capabilities: { schemaCapability: 'v1-schema', supportsUtilities: true, supportsOverhead: true, supportsTraceSnapshots: true } },
     })
     const result = calculateQuickCost(input)
     expect(result.costs.costing_model_version).toBe('legacy')
@@ -42,6 +42,22 @@ describe('calculadora rápida de costos', () => {
     expect(result.costs.utilities_total).toBe(0)
     expect(result.costs.overhead_amount).toBe(0)
     expect(buildQuickCostSummary(input, result, amount => `C$ ${amount.toFixed(2)}`)).toContain('Gastos indirectos (12%): C$ 13.44')
+  })
+
+  it('switches formulas only when the active model is explicitly changed', () => {
+    const legacy = draft({
+      ingredientsCost: 100,
+      laborHours: 1,
+      settings: { waste_percent: 12, indirect_percent: 12, labor_hourly_rate: 0, markup_percent: 60, activeModel: 'legacy' },
+      costingConfig: { ...defaultCostingConfig, monthly_overhead_total: 100, productive_hours_per_month: 100 },
+    })
+    const beforeActivation = calculateQuickCost(legacy)
+    expect(beforeActivation.costs.costing_model_version).toBe('legacy')
+    expect(beforeActivation.costs.production_cost).toBe(125.44)
+
+    const afterActivation = calculateQuickCost({ ...legacy, settings: { ...legacy.settings, activeModel: 'v1' } })
+    expect(afterActivation.costs.costing_model_version).toBe(1)
+    expect(afterActivation.costs.production_cost).toBe(113)
   })
 
   it('calcula el costo y el precio sugerido por unidad sin incluir la entrega', () => {

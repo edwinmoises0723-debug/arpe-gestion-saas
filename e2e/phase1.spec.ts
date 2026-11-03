@@ -680,17 +680,34 @@ test('cost settings save tenant rates, profiles, water and overhead in normalize
     overhead_items: [], electricity_equipment: [], natural_gas_equipment: [], lpg_equipment: [],
   }
   let savedConfig: Record<string, unknown> | null = null
-  const settingsRow = { business_id: business.id, waste_percent: 12, indirect_percent: 12, labor_hourly_rate: 100, markup_percent: 60, costing_model_version: 1, costing_config: initialConfig }
+  let activationPayload: Record<string, unknown> | null = null
+  let settingsRow: Record<string, unknown> = { business_id: business.id, waste_percent: 12, indirect_percent: 12, labor_hourly_rate: 100, markup_percent: 60, costing_model_version: 0, costing_config: initialConfig }
   await page.route('**/rest/v1/arpe_cost_settings*', async route => {
-    if (route.request().method() === 'GET') {
+    const method = route.request().method()
+    if (method === 'GET') {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(settingsRow) })
       return
     }
-    savedConfig = (route.request().postDataJSON() as { costing_config: Record<string, unknown> }).costing_config
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...settingsRow, ...route.request().postDataJSON() }) })
+    const payload = route.request().postDataJSON() as Record<string, unknown>
+    if (method === 'POST') {
+      savedConfig = payload.costing_config as Record<string, unknown>
+      settingsRow = { ...settingsRow, ...payload }
+    } else if (method === 'PATCH' && Object.keys(payload).length === 1 && payload.costing_model_version === 1) {
+      activationPayload = payload
+      settingsRow = { ...settingsRow, ...payload }
+    } else if (method === 'PATCH') {
+      savedConfig = payload.costing_config as Record<string, unknown>
+      settingsRow = { ...settingsRow, ...payload }
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(settingsRow) })
   })
   await login(page)
-  await page.goto('/configuracion')
+  await expectDashboardLoaded(page, 'Dulce Encanto')
+  const openModule = async (label: string) => {
+    await page.getByRole('button', { name: 'Abrir menú' }).click()
+    await page.getByRole('dialog', { name: 'Menú del negocio' }).getByRole('link', { name: new RegExp(label) }).click()
+  }
+  await openModule('Configuración')
   await expect(page.getByRole('heading', { name: 'Configuración' })).toBeVisible()
 
   await page.getByLabel('Tarifa eléctrica por kWh').fill('10.82')
@@ -733,6 +750,26 @@ test('cost settings save tenant rates, profiles, water and overhead in normalize
   expect(savedConfig?.monthly_overhead_total).toBe(12500)
   expect(savedConfig?.productive_hours_per_month).toBe(250)
   expect((savedConfig?.overhead_items as { monthly_cost: number }[])[0].monthly_cost).toBe(12500)
+  expect(settingsRow.costing_model_version).toBe(0)
+
+  await openModule('Calculadora de costo')
+  await expect(page.locator('.cost-calculator-page [role="status"]')).toContainText('Modelo actual: Clásico')
+  await expect(page.getByRole('heading', { name: 'Consumos de producción' })).toHaveCount(0)
+  await page.getByLabel('Costo total de ingredientes').fill('100')
+  await page.locator('.quick-cost-breakdown > summary').click()
+  await expect(page.locator('.cost-detailed-summary')).toContainText('Gastos indirectos (12%)')
+  await openModule('Configuración')
+  await expect(page.getByRole('heading', { name: 'Configuración' })).toBeVisible()
+  await page.getByRole('button', { name: 'Activar Modelo EJNEXA v1' }).click()
+  const activationDialog = page.getByRole('alertdialog', { name: 'Activar Modelo EJNEXA v1' })
+  await expect(activationDialog).toContainText('Tus cotizaciones y pedidos históricos conservarán los costos con los que fueron creados.')
+  await activationDialog.getByRole('button', { name: 'Activar modelo v1' }).click()
+  await expect(page.getByText('Modelo EJNEXA v1 activo. Configuración de costeo guardada.')).toBeVisible()
+  expect(activationPayload).toEqual({ costing_model_version: 1 })
+  expect(settingsRow.costing_model_version).toBe(1)
+  expect(settingsRow.costing_config).toEqual(savedConfig)
+  await openModule('Calculadora de costo')
+  await expect(page.getByRole('heading', { name: 'Consumos de producción' })).toBeVisible()
 })
 
 test('legacy costing schema loads basic settings without v1 reads or writes', async ({ page }) => {
@@ -740,6 +777,7 @@ test('legacy costing schema loads basic settings without v1 reads or writes', as
   const legacySettings = { business_id: business.id, waste_percent: 12, indirect_percent: 12, labor_hourly_rate: 100, markup_percent: 60, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
   const selectedColumns: string[] = []
   const writes: Record<string, unknown>[] = []
+  const writeUrls: string[] = []
   await page.route('**/rest/v1/arpe_cost_settings*', async route => {
     const request = route.request()
     if (request.method() === 'GET') {
@@ -754,6 +792,7 @@ test('legacy costing schema loads basic settings without v1 reads or writes', as
     }
     const payload = request.postDataJSON() as Record<string, unknown>
     writes.push(payload)
+    writeUrls.push(request.url())
     await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ ...legacySettings, ...payload }) })
   })
 
@@ -779,7 +818,8 @@ test('legacy costing schema loads basic settings without v1 reads or writes', as
   expect(selectedColumns.some(select => select.includes('costing_model_version'))).toBe(true)
   expect(selectedColumns.some(select => !select.includes('costing_model_version') && !select.includes('costing_config'))).toBe(true)
   expect(writes).toHaveLength(1)
-  expect(writes[0]).toMatchObject({ business_id: business.id, waste_percent: 12, indirect_percent: 18, labor_hourly_rate: 100, markup_percent: 60 })
+  expect(writes[0]).toMatchObject({ waste_percent: 12, indirect_percent: 18, labor_hourly_rate: 100, markup_percent: 60 })
+  expect(new URL(writeUrls[0]).searchParams.get('business_id')).toBe(`eq.${business.id}`)
   expect(writes[0]).not.toHaveProperty('costing_model_version')
   expect(writes[0]).not.toHaveProperty('costing_config')
 })
@@ -883,6 +923,19 @@ for (const theme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: theme })
     await page.addInitScript(savedTheme => localStorage.setItem('ejnexa-theme', savedTheme), theme)
     await mockBackend(page, true)
+    let calculatorSettings = {
+      business_id: business.id,
+      waste_percent: 12,
+      indirect_percent: 12,
+      labor_hourly_rate: 100,
+      markup_percent: 60,
+      costing_model_version: 1,
+      costing_config: {},
+    }
+    await page.route('**/rest/v1/arpe_cost_settings*', async route => {
+      if (route.request().method() !== 'GET') calculatorSettings = { ...calculatorSettings, ...route.request().postDataJSON() }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(calculatorSettings) })
+    })
     await login(page)
     await expectDashboardLoaded(page, 'Dulce Encanto')
 

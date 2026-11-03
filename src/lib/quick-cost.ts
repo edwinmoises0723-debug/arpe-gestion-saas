@@ -1,10 +1,10 @@
 import type { CostItemCategory } from './database.types'
-import { calculateCosts, type CostCalculation, type CostDraft, type CostingCapabilities, type CostingModel } from './costs'
+import { calculateCosts, type ActiveCostingModel, type CostCalculation, type CostDraft, type CostingCapabilities, type CostingSchemaCapability } from './costs'
 import { money } from './products'
 import type { CostingConfig, UtilityInput } from './costing-engine'
 import { validateCostingInputs } from './costing-engine'
 
-export type QuickCostSettings = Pick<CostDraft, 'waste_percent' | 'indirect_percent' | 'labor_hourly_rate' | 'markup_percent'> & { model?: CostingModel; capabilities?: CostingCapabilities }
+export type QuickCostSettings = Pick<CostDraft, 'waste_percent' | 'indirect_percent' | 'labor_hourly_rate' | 'markup_percent'> & { activeModel: ActiveCostingModel; schemaCapability: CostingSchemaCapability; capabilities: CostingCapabilities }
 export type QuickCostItem = { category: CostItemCategory; name: string; cost: number }
 export type QuickCostDraft = {
   productName: string
@@ -65,14 +65,14 @@ export function validateQuickCost(draft: QuickCostDraft): QuickCostValidationErr
     if (!Number.isFinite(item.cost) || item.cost < 0) errors.push({ field: 'directCostCost', message: 'El costo de cada gasto adicional debe ser igual o mayor que cero.' })
     if (item.cost > 0 && !item.name.trim()) errors.push({ field: 'directCostName', message: 'Describe el gasto adicional que agregaste.' })
   }
-  if (draft.settings.model === 'v1') {
+  if (draft.settings.activeModel === 'v1') {
     for (const message of validateCostingInputs(draft.utilities, draft.costingConfig)) errors.push({ field: 'utilities', message })
   }
   return errors
 }
 
 export function calculateQuickCost(draft: QuickCostDraft): QuickCostCalculation {
-  const supportsV1 = draft.settings.model === 'v1'
+  const supportsV1 = draft.settings.activeModel === 'v1'
   const invalidProductionInputs = supportsV1 && validateQuickCost(draft).some(error => error.field === 'utilities')
   const invalidOverhead = supportsV1 && Boolean(draft.costingConfig?.monthly_overhead_total && draft.costingConfig.productive_hours_per_month <= 0)
   const costs = calculateCosts({
@@ -104,7 +104,7 @@ export function buildQuickCostSummary(draft: QuickCostDraft, result: QuickCostCa
   lines.push('', `Costo interno total: ${formatAmount(costs.total_internal_cost)}`)
   lines.push(`Ingredientes: ${formatAmount(costs.ingredients_cost)}`, `Merma estimada: ${formatAmount(costs.waste_amount)}`)
   lines.push(`Gastos directos: ${formatAmount(costs.direct_costs_total)}`, `Mano de obra: ${formatAmount(costs.labor_cost)}`)
-  if (draft.settings.model === 'v1') {
+  if (draft.settings.activeModel === 'v1') {
     lines.push(`Consumos de producción: ${formatAmount(costs.utilities_total)}`, `Overhead asignado: ${formatAmount(costs.overhead_amount)}`)
     lines.push(`Subtotal antes de overhead: ${formatAmount(costs.production_subtotal)}`)
   } else {

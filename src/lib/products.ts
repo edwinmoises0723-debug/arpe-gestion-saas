@@ -1,5 +1,5 @@
 import type { CatalogProduct, CatalogProductInput, CostSettings, ItemCostInput, OrderItem, QuoteBundleHeader, QuoteBundleItem, QuoteItem } from './database.types'
-import { calculateCosts, defaultCostSettingsValues, type CostingModel } from './costs'
+import { calculateCosts, defaultCostSettingsValues, type ActiveCostingModel, type CostingSchemaCapability } from './costs'
 import { defaultCostingConfig, validateCostingInputs } from './costing-engine'
 import { calculateDeposit } from './quotes'
 import { client } from './supabase'
@@ -33,10 +33,16 @@ export function removeProduct<T>(items: T[], index: number): T[] {
   if (items.length <= 1) throw new Error('La cotización necesita al menos un producto.')
   return items.filter((_, i) => i !== index)
 }
-export function newItemCost(settings: Pick<CostSettings, 'waste_percent' | 'indirect_percent' | 'labor_hourly_rate' | 'markup_percent'> & Partial<Pick<CostSettings, 'costing_config'>> & { model?: CostingModel } = defaultCostSettingsValues('legacy')): ItemCostInput {
-  const model = settings.model ?? 'legacy'
+type NewItemCostSettings = Pick<CostSettings, 'waste_percent' | 'indirect_percent' | 'labor_hourly_rate' | 'markup_percent'> & Partial<Pick<CostSettings, 'costing_config'>> & { activeModel?: ActiveCostingModel; schemaCapability?: CostingSchemaCapability }
+export function newItemCost(settings: NewItemCostSettings = defaultCostSettingsValues()): ItemCostInput {
+  const activeModel = settings.activeModel ?? 'legacy'
+  const schemaCapability = settings.schemaCapability ?? (activeModel === 'v1' ? 'v1-schema' : 'legacy-schema')
   const costingConfig = (settings as CostSettings).costing_config ?? defaultCostingConfig
-  return { ...(model === 'v1' ? { costing_model_version: 1, costing_snapshot: { version: 1 as const, costing_config: structuredClone(costingConfig) } } : {}), waste_percent: Number(settings.waste_percent), indirect_percent: Number(settings.indirect_percent), labor_hourly_rate: Number(settings.labor_hourly_rate), markup_percent: Number(settings.markup_percent), ingredients_cost: 0, labor_hours: 0 }
+  return {
+    ...(schemaCapability === 'v1-schema' ? { costing_model_version: activeModel === 'v1' ? 1 : 0 } : {}),
+    ...(activeModel === 'v1' ? { costing_snapshot: { version: 1 as const, costing_config: structuredClone(costingConfig) } } : {}),
+    waste_percent: Number(settings.waste_percent), indirect_percent: Number(settings.indirect_percent), labor_hourly_rate: Number(settings.labor_hourly_rate), markup_percent: Number(settings.markup_percent), ingredients_cost: 0, labor_hours: 0,
+  }
 }
 export function calculateItemCost(item: QuoteBundleItem) {
   const cost = item.cost ?? newItemCost()

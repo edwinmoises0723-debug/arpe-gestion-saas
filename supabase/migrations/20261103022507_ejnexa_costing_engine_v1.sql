@@ -1,7 +1,8 @@
 -- EJNEXA Costing Model v1. Additive columns preserve every legacy quote snapshot.
 alter table public.arpe_cost_settings
-  add column costing_model_version smallint not null default 1 check (costing_model_version = 1),
+  add column costing_model_version smallint not null default 0 check (costing_model_version in (0,1)),
   add column costing_config jsonb not null default '{"electricity_rate_per_kwh":0,"natural_gas_rate_per_therm":0,"lpg_cylinder_price":0,"lpg_net_kg":0,"water_rate_per_liter":0,"monthly_overhead_total":0,"productive_hours_per_month":0,"overhead_items":[],"electricity_equipment":[],"natural_gas_equipment":[],"lpg_equipment":[]}'::jsonb;
+comment on column public.arpe_cost_settings.costing_model_version is '0 = Clásico; 1 = Modelo EJNEXA v1. La activación es explícita por negocio.';
 alter table public.arpe_cost_settings add constraint arpe_cost_settings_config_object check (jsonb_typeof(costing_config)='object');
 
 create or replace function private.validate_arpe_cost_settings() returns trigger

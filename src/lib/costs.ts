@@ -10,37 +10,46 @@ export const costItemCategories: { value: CostItemCategory; label: string }[] = 
   { value: 'other', label: 'Otro' },
 ]
 
-export type CostingModel = 'legacy' | 'v1'
+export type ActiveCostingModel = 'legacy' | 'v1'
+export type CostingModel = ActiveCostingModel
+export type CostingSchemaCapability = 'legacy-schema' | 'v1-schema'
 export type CostingCapabilities = {
-  model: CostingModel
+  schemaCapability: CostingSchemaCapability
   supportsUtilities: boolean
   supportsOverhead: boolean
   supportsTraceSnapshots: boolean
 }
 
-export const costingCapabilities: Record<CostingModel, CostingCapabilities> = {
-  legacy: { model: 'legacy', supportsUtilities: false, supportsOverhead: false, supportsTraceSnapshots: false },
-  v1: { model: 'v1', supportsUtilities: true, supportsOverhead: true, supportsTraceSnapshots: true },
+export const costingCapabilities: Record<CostingSchemaCapability, CostingCapabilities> = {
+  'legacy-schema': { schemaCapability: 'legacy-schema', supportsUtilities: false, supportsOverhead: false, supportsTraceSnapshots: false },
+  'v1-schema': { schemaCapability: 'v1-schema', supportsUtilities: true, supportsOverhead: true, supportsTraceSnapshots: true },
 }
 
 export const defaultCostSettings = { waste_percent: 12, indirect_percent: 12, labor_hourly_rate: 0, markup_percent: 60 }
 
 export type CostSettingsValues = typeof defaultCostSettings & {
-  model: CostingModel
+  schemaCapability: CostingSchemaCapability
+  activeModel: ActiveCostingModel
   capabilities: CostingCapabilities
-  costing_model_version?: 1
+  costing_model_version?: 0 | 1
   costing_config?: CostingConfig
 }
 export type LoadedCostSettings = CostSettingsValues & Pick<CostSettings, 'business_id' | 'created_at' | 'updated_at'>
 
-export function defaultCostSettingsValues(model: CostingModel = 'legacy'): CostSettingsValues {
-  return model === 'v1'
-    ? { ...defaultCostSettings, model, capabilities: costingCapabilities.v1, costing_model_version: 1, costing_config: structuredClone(defaultCostingConfig) }
-    : { ...defaultCostSettings, model, capabilities: costingCapabilities.legacy }
+export function defaultCostSettingsValues(options: { schemaCapability?: CostingSchemaCapability; activeModel?: ActiveCostingModel } = {}): CostSettingsValues {
+  const schemaCapability = options.schemaCapability ?? (options.activeModel === 'v1' ? 'v1-schema' : 'legacy-schema')
+  const activeModel = schemaCapability === 'legacy-schema' ? 'legacy' : options.activeModel ?? 'legacy'
+  return {
+    ...defaultCostSettings,
+    schemaCapability,
+    activeModel,
+    capabilities: costingCapabilities[schemaCapability],
+    ...(schemaCapability === 'v1-schema' ? { costing_model_version: activeModel === 'v1' ? 1 : 0, costing_config: structuredClone(defaultCostingConfig) } : {}),
+  }
 }
 
 type CostSettingsRow = Pick<CostSettings, 'business_id' | 'waste_percent' | 'indirect_percent' | 'labor_hourly_rate' | 'markup_percent' | 'created_at' | 'updated_at'> & Partial<Pick<CostSettings, 'costing_model_version' | 'costing_config'>>
-type CostSettingsRead = { model: CostingModel; row: CostSettingsRow | null }
+type CostSettingsRead = { schemaCapability: CostingSchemaCapability; activeModel: ActiveCostingModel; row: CostSettingsRow | null }
 
 const legacyCostSettingsSelect = 'business_id,waste_percent,indirect_percent,labor_hourly_rate,markup_percent,created_at,updated_at'
 const v1CostSettingsSelect = `${legacyCostSettingsSelect},costing_model_version,costing_config`
@@ -59,16 +68,19 @@ export function isMissingCostingV1Schema(error: unknown): boolean {
 async function readCostSettings(businessId: string): Promise<CostSettingsRead> {
   const api = client()
   const { data, error } = await api.from('arpe_cost_settings').select(v1CostSettingsSelect).eq('business_id', businessId).maybeSingle()
-  if (!error) return { model: 'v1', row: data as unknown as CostSettingsRow | null }
+  if (!error) {
+    const row = data as unknown as CostSettingsRow | null
+    return { schemaCapability: 'v1-schema', activeModel: row?.costing_model_version === 1 ? 'v1' : 'legacy', row }
+  }
   if (!isMissingCostingV1Schema(error)) throw error
 
   const legacy = await api.from('arpe_cost_settings').select(legacyCostSettingsSelect).eq('business_id', businessId).maybeSingle()
   if (legacy.error) throw legacy.error
-  return { model: 'legacy', row: legacy.data as unknown as CostSettingsRow | null }
+  return { schemaCapability: 'legacy-schema', activeModel: 'legacy', row: legacy.data as unknown as CostSettingsRow | null }
 }
 
-function settingsValues(row: CostSettingsRow | null, model: CostingModel): CostSettingsValues {
-  const defaults = defaultCostSettingsValues(model)
+function settingsValues(row: CostSettingsRow | null, schemaCapability: CostingSchemaCapability, activeModel: ActiveCostingModel): CostSettingsValues {
+  const defaults = defaultCostSettingsValues({ schemaCapability, activeModel })
   const value = (key: keyof typeof defaultCostSettings) => Number(row?.[key])
   const safe = (key: keyof typeof defaultCostSettings) => {
     const number = value(key)
@@ -80,13 +92,16 @@ function settingsValues(row: CostSettingsRow | null, model: CostingModel): CostS
     indirect_percent: safe('indirect_percent'),
     labor_hourly_rate: safe('labor_hourly_rate'),
     markup_percent: safe('markup_percent'),
-    ...(model === 'v1' ? { costing_config: row?.costing_config ? { ...defaultCostingConfig, ...row.costing_config } : defaultCostingConfig } : {}),
+    ...(schemaCapability === 'v1-schema' ? {
+      costing_model_version: activeModel === 'v1' ? 1 : 0,
+      costing_config: row?.costing_config ? { ...defaultCostingConfig, ...row.costing_config } : structuredClone(defaultCostingConfig),
+    } : {}),
   }
 }
 
-function loadedSettings(row: CostSettingsRow, model: CostingModel): LoadedCostSettings {
+function loadedSettings(row: CostSettingsRow, schemaCapability: CostingSchemaCapability, activeModel: ActiveCostingModel): LoadedCostSettings {
   return {
-    ...settingsValues(row, model),
+    ...settingsValues(row, schemaCapability, activeModel),
     business_id: row.business_id,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -94,7 +109,7 @@ function loadedSettings(row: CostSettingsRow, model: CostingModel): LoadedCostSe
 }
 
 export type CostDraft = {
-  costing_model_version?: 1 | 'legacy'
+  costing_model_version?: 0 | 1 | 'legacy'
   ingredients_cost: number
   waste_percent: number
   labor_hours: number
@@ -122,7 +137,7 @@ export type CostCalculation = CostDraft & {
   suggested_customer_total: number
   estimated_profit: number
   real_margin_percent: number
-  costing_model_version: 1 | 'legacy'
+  costing_model_version: 0 | 1 | 'legacy'
   utilities_total: number
   overhead_rate_per_hour: number
   overhead_allocation_hours: number
@@ -135,7 +150,8 @@ const nonNegative = (value: number) => Math.max(0, Number.isFinite(value) ? valu
 
 export function calculateCosts(input: CostDraft, items: (Pick<QuoteCostItem, 'cost'> & Partial<Pick<QuoteCostItem, 'name'>>)[] = []): CostCalculation {
   const ingredients = nonNegative(input.ingredients_cost)
-  const version = input.costing_model_version ?? input.costing_snapshot?.version ?? 'legacy'
+  const requestedVersion = input.costing_model_version ?? input.costing_snapshot?.version ?? 'legacy'
+  const version: 1 | 'legacy' = requestedVersion === 1 ? 1 : 'legacy'
   const wastePercent = nonNegative(input.waste_percent)
   const laborHours = nonNegative(input.labor_hours)
   const hourlyRate = nonNegative(input.labor_hourly_rate)
@@ -147,7 +163,7 @@ export function calculateCosts(input: CostDraft, items: (Pick<QuoteCostItem, 'co
   const waste = money(ingredients * wastePercent / 100)
   const labor = money(laborHours * hourlyRate)
   const config = input.costing_config ?? input.costing_snapshot?.costing_config ?? defaultCostingConfig
-  const utilities = (input.utilities ?? input.costing_snapshot?.utilities ?? []).map(item => utilityCost(item, config, input.costing_snapshot?.version === 1))
+  const utilities = version === 1 ? (input.utilities ?? input.costing_snapshot?.utilities ?? []).map(item => utilityCost(item, config, input.costing_snapshot?.version === 1)) : []
   const utilitiesTotal = money(utilities.reduce((sum, item) => sum + item.amount, 0))
   const productionSubtotal = money(ingredients + waste + direct + labor + utilitiesTotal)
   const overheadRate = version === 1 ? calculateOverheadRate(config.monthly_overhead_total, config.productive_hours_per_month) : 0
@@ -173,47 +189,112 @@ export function calculateCosts(input: CostDraft, items: (Pick<QuoteCostItem, 'co
 
 export async function getCostSettings(businessId: string): Promise<LoadedCostSettings> {
   const result = await readCostSettings(businessId)
-  if (result.row) return loadedSettings(result.row, result.model)
+  if (result.row) return loadedSettings(result.row, result.schemaCapability, result.activeModel)
 
-  const defaults = defaultCostSettingsValues(result.model)
+  const defaults = defaultCostSettingsValues({ schemaCapability: result.schemaCapability, activeModel: result.activeModel })
   const payload: CostSettingsInput = {
     business_id: businessId,
     waste_percent: defaults.waste_percent,
     indirect_percent: defaults.indirect_percent,
     labor_hourly_rate: defaults.labor_hourly_rate,
     markup_percent: defaults.markup_percent,
-    ...(result.model === 'v1' ? { costing_model_version: 1, costing_config: defaults.costing_config } : {}),
+    ...(result.schemaCapability === 'v1-schema' ? { costing_model_version: 0, costing_config: defaults.costing_config } : {}),
   }
-  const select = result.model === 'v1' ? '*' : legacyCostSettingsSelect
-  const { data, error } = await client().from('arpe_cost_settings').upsert(payload, { onConflict: 'business_id' }).select(select).single()
-  if (error) throw error
-  return loadedSettings(data as unknown as CostSettingsRow, result.model)
+  const select = result.schemaCapability === 'v1-schema' ? '*' : legacyCostSettingsSelect
+  const { data, error } = await client().from('arpe_cost_settings').insert(payload).select(select).single()
+  if (error) {
+    if ((error as { code?: string }).code === '23505') {
+      const current = await readCostSettings(businessId)
+      if (current.row) return loadedSettings(current.row, current.schemaCapability, current.activeModel)
+    }
+    throw error
+  }
+  return loadedSettings(data as unknown as CostSettingsRow, result.schemaCapability, result.activeModel)
 }
 
 /** Reads saved business defaults without creating a row when none exists. */
 export async function loadCostSettingsValues(businessId: string): Promise<CostSettingsValues> {
   const result = await readCostSettings(businessId)
-  return settingsValues(result.row, result.model)
+  return settingsValues(result.row, result.schemaCapability, result.activeModel)
 }
 
-export async function saveCostSettings(businessId: string, values: Pick<CostDraft, 'waste_percent' | 'indirect_percent' | 'labor_hourly_rate' | 'markup_percent'> & { costing_config?: CostingConfig }) {
-  const current = await readCostSettings(businessId)
-  if (current.model === 'legacy' && values.costing_config) throw new Error('La configuración avanzada de costos estará disponible cuando se active el modelo v1.')
-  const payload: CostSettingsInput = {
+type CostSettingsSaveValues = Pick<CostDraft, 'waste_percent' | 'indirect_percent' | 'labor_hourly_rate' | 'markup_percent'> & { costing_config?: CostingConfig }
+function costSettingsPayload(businessId: string, values: CostSettingsSaveValues, current: CostSettingsRead): CostSettingsInput {
+  return {
     business_id: businessId,
     waste_percent: nonNegative(values.waste_percent),
     indirect_percent: nonNegative(values.indirect_percent),
     labor_hourly_rate: nonNegative(values.labor_hourly_rate),
     markup_percent: nonNegative(values.markup_percent),
-    ...(current.model === 'v1' ? {
-      costing_model_version: 1,
+    ...(current.schemaCapability === 'v1-schema' ? {
+      costing_model_version: current.activeModel === 'v1' ? 1 : 0,
       costing_config: values.costing_config ?? (current.row?.costing_config ? { ...defaultCostingConfig, ...current.row.costing_config } : defaultCostingConfig),
     } : {}),
   }
-  const select = current.model === 'v1' ? '*' : legacyCostSettingsSelect
-  const { data, error } = await client().from('arpe_cost_settings').upsert(payload, { onConflict: 'business_id' }).select(select).single()
+}
+
+async function updateExistingCostSettings(businessId: string, values: CostSettingsSaveValues, current: CostSettingsRead): Promise<LoadedCostSettings> {
+  const payload = costSettingsPayload(businessId, values, current)
+  const { business_id: payloadBusinessId, ...updates } = payload
+  if (payloadBusinessId !== businessId) throw new Error('La configuración pertenece a otro negocio.')
+  const select = current.schemaCapability === 'v1-schema' ? '*' : legacyCostSettingsSelect
+  let query = client().from('arpe_cost_settings').update(updates).eq('business_id', businessId)
+  if (current.schemaCapability === 'v1-schema') query = query.eq('costing_model_version', current.activeModel === 'v1' ? 1 : 0)
+  const { data, error } = await query.select(select).single()
   if (error) throw error
-  return loadedSettings(data as unknown as CostSettingsRow, current.model)
+  return loadedSettings(data as unknown as CostSettingsRow, current.schemaCapability, current.activeModel)
+}
+
+export async function saveCostSettings(businessId: string, values: CostSettingsSaveValues): Promise<LoadedCostSettings> {
+  const current = await readCostSettings(businessId)
+  if (current.row) return updateExistingCostSettings(businessId, values, current)
+  const payload = costSettingsPayload(businessId, values, current)
+  const select = current.schemaCapability === 'v1-schema' ? '*' : legacyCostSettingsSelect
+  const { data, error } = await client().from('arpe_cost_settings').insert(payload).select(select).single()
+  if (error) {
+    if ((error as { code?: string }).code === '23505') {
+      const latest = await readCostSettings(businessId)
+      if (latest.row) return updateExistingCostSettings(businessId, values, latest)
+    }
+    throw error
+  }
+  return loadedSettings(data as unknown as CostSettingsRow, current.schemaCapability, current.activeModel)
+}
+
+export function validateCostingV1Activation(values: Pick<CostDraft, 'waste_percent' | 'labor_hourly_rate' | 'markup_percent'>, config: CostingConfig): string[] {
+  const errors: string[] = []
+  if (!Number.isFinite(values.waste_percent) || values.waste_percent < 0 || values.waste_percent > 100) errors.push('La merma debe estar entre 0% y 100%.')
+  if (!Number.isFinite(values.labor_hourly_rate) || values.labor_hourly_rate < 0) errors.push('El costo por hora no puede ser negativo.')
+  if (!Number.isFinite(values.markup_percent) || values.markup_percent < 0) errors.push('La ganancia sobre costo no puede ser negativa.')
+  const numericConfig: (keyof CostingConfig)[] = ['electricity_rate_per_kwh', 'natural_gas_rate_per_therm', 'lpg_cylinder_price', 'lpg_net_kg', 'water_rate_per_liter', 'monthly_overhead_total', 'productive_hours_per_month']
+  for (const key of numericConfig) {
+    const value = config[key] as number
+    if (!Number.isFinite(value) || value < 0) errors.push('Los valores de servicios y overhead deben ser números iguales o mayores que cero.')
+  }
+  if ((config.overhead_items ?? []).some(item => !Number.isFinite(item.monthly_cost) || item.monthly_cost < 0 || (item.active && !item.name.trim()))) errors.push('Completa el nombre y un costo válido para cada gasto mensual activo.')
+  const activeOverhead = (config.overhead_items ?? []).filter(item => item.active).reduce((sum, item) => sum + item.monthly_cost, 0)
+  if ((activeOverhead > 0 || config.monthly_overhead_total > 0) && config.productive_hours_per_month <= 0) errors.push('Configura horas productivas mensuales mayores que cero para asignar overhead.')
+  if ((config.electricity_equipment ?? []).some(item => item.active && (!item.name.trim() || !Number.isFinite(item.power_kw) || item.power_kw < 0 || (item.calculation_mode === 'estimated' && item.power_kw <= 0) || (item.measured_kwh_per_cycle !== undefined && (!Number.isFinite(item.measured_kwh_per_cycle) || item.measured_kwh_per_cycle < 0))))) errors.push('Completa el nombre y los datos de consumo de cada equipo eléctrico activo que usarás.')
+  if ((config.electricity_equipment ?? []).some(item => item.active) && config.electricity_rate_per_kwh <= 0) errors.push('Configura la tarifa eléctrica por kWh para los equipos activos.')
+  if ((config.natural_gas_equipment ?? []).some(item => item.active && (!item.name.trim() || !Number.isFinite(item.btu_per_hour) || item.btu_per_hour <= 0))) errors.push('Completa el nombre y los BTU/h de cada equipo de gas natural activo que usarás.')
+  if ((config.natural_gas_equipment ?? []).some(item => item.active) && config.natural_gas_rate_per_therm <= 0) errors.push('Configura la tarifa de gas natural por therm para los equipos activos.')
+  if ((config.lpg_equipment ?? []).some(item => item.active && (!item.name.trim() || !Number.isFinite(item.consumption_kg_per_hour) || item.consumption_kg_per_hour <= 0))) errors.push('Completa el nombre y el consumo kg/h de cada equipo GLP activo que usarás.')
+  if ((config.lpg_equipment ?? []).some(item => item.active) && (config.lpg_cylinder_price <= 0 || config.lpg_net_kg <= 0)) errors.push('Configura el precio y el peso neto del cilindro GLP para los equipos activos.')
+  return [...new Set(errors)]
+}
+
+/** Activation is an explicit, audited settings change; historic quote/order snapshots are untouched. */
+export async function activateCostingModelV1(businessId: string): Promise<LoadedCostSettings> {
+  const current = await readCostSettings(businessId)
+  if (current.schemaCapability !== 'v1-schema') throw new Error('El Modelo EJNEXA v1 todavía no está disponible para este negocio.')
+  if (!current.row) throw new Error('Guarda la configuración de costos antes de activar el Modelo EJNEXA v1.')
+  const config = { ...defaultCostingConfig, ...(current.row.costing_config ?? {}) }
+  const validation = validateCostingV1Activation(current.row, config)
+  if (validation.length) throw new Error(validation[0])
+  if (current.activeModel === 'v1') return loadedSettings(current.row, current.schemaCapability, current.activeModel)
+  const { data, error } = await client().from('arpe_cost_settings').update({ costing_model_version: 1 }).eq('business_id', businessId).eq('costing_model_version', 0).select(v1CostSettingsSelect).single()
+  if (error) throw error
+  return loadedSettings(data as unknown as CostSettingsRow, 'v1-schema', 'v1')
 }
 
 export async function getQuoteCost(quoteId: string, businessId: string) {
