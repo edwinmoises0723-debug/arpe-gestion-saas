@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CatalogProduct, QuoteBundleHeader } from './database.types'
 import { calculateBundle, calculateItemCost, duplicateProduct, filterCatalog, fromCatalog, lineTotal, newItemCost, newProduct, removeProduct, suggestedUnitPrice, summarizeProducts, validateBundle } from './products'
+import { defaultCostingConfig } from './costing-engine'
 
 const header: QuoteBundleHeader = { customer_name: 'Cliente de prueba', customer_phone: '', delivery_date: null, delivery_time: null, notes: '', status: 'draft', deposit_type: 'percentage', deposit_value: 50, delivery_internal_cost: 100, delivery_customer_charge: 150 }
 const catalog: CatalogProduct = { id: 'catalog-1', business_id: 'business-1', name: 'Alfajor', category: 'Galletas', description: 'Relleno suave', unit_label: 'unidad', default_unit_price: 35, default_portions: null, default_flavor: 'Chocolate', default_filling: 'Ganache', default_decoration: '', default_extras: '', is_active: true, image_path: null, is_public: false, public_price_mode: 'exact', public_sort_order: 0, created_at: '', updated_at: '' }
@@ -37,10 +38,10 @@ describe('productos independientes y catálogo', () => {
   })
   it('costs the full quantity and adds delivery only to the global internal cost', () => {
     const item = { ...fromCatalog(catalog), quantity: 24, cost: { ...newItemCost(), ingredients_cost: 700, labor_hours: 3, labor_hourly_rate: 100 }, direct_costs: [{ category: 'packaging' as const, name: 'Caja', cost: 150 }] }
-    expect(calculateItemCost(item)).toMatchObject({ waste_amount: 84, direct_costs_total: 150, labor_cost: 300, production_subtotal: 1234, indirect_amount: 148.08, production_cost: 1382.08, total_internal_cost: 1382.08, suggested_product_price: 2211.33 })
-    expect(suggestedUnitPrice(item)).toBe(92.14)
+    expect(calculateItemCost(item)).toMatchObject({ waste_amount: 84, direct_costs_total: 150, labor_cost: 300, production_subtotal: 1234, indirect_amount: 0, overhead_amount: 0, production_cost: 1234, total_internal_cost: 1234, suggested_product_price: 1974.4 })
+    expect(suggestedUnitPrice(item)).toBe(82.27)
     const summary = calculateBundle(header, [{ ...item, unit_price: 100 }])
-    expect(summary).toMatchObject({ internal: 1482.08, total: 2550, profit: 1067.92, margin: 41.88 })
+    expect(summary).toMatchObject({ internal: 1334, total: 2550, profit: 1216, margin: 47.69 })
     expect(calculateBundle(header, [item]).profit).toBeLessThan(0)
     expect(() => suggestedUnitPrice({ ...item, quantity: 0 })).toThrow()
   })
@@ -50,5 +51,13 @@ describe('productos independientes y catálogo', () => {
     for (const invalid of [{ ...item, product: '' }, { ...item, quantity: 0 }, { ...item, quantity: -1 }, { ...item, unit_price: NaN }, { ...item, cost: { ...newItemCost(), waste_percent: 101 } }]) expect(() => validateBundle(header, [invalid])).toThrow()
     expect(calculateBundle(header, [item, { ...item, cost: newItemCost() }]).internal).toBeNull()
     expect(newItemCost({ ...{ business_id: 'extra' }, waste_percent: 12, indirect_percent: 12, labor_hourly_rate: 0, markup_percent: 60 })).not.toHaveProperty('business_id')
+  })
+  it('snapshots configured overhead on new quote items instead of following later setting changes', () => {
+    const config = { ...defaultCostingConfig, monthly_overhead_total: 1000, productive_hours_per_month: 100 }
+    const cost = newItemCost({ waste_percent: 0, indirect_percent: 12, labor_hourly_rate: 50, markup_percent: 60, costing_config: config })
+    const item = { ...fromCatalog(catalog), cost: { ...cost, ingredients_cost: 100, labor_hours: 2 } }
+    config.monthly_overhead_total = 10000
+    expect(calculateItemCost(item).overhead_amount).toBe(20)
+    expect(item.cost.costing_snapshot?.costing_config?.monthly_overhead_total).toBe(1000)
   })
 })

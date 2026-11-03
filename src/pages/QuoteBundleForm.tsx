@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { ArrowLeft, Copy, Plus, Save, Trash2 } from 'lucide-react'
-import type { Business, CatalogProduct, Quote, QuoteBundleHeader, QuoteBundleItem } from '../lib/database.types'
+import type { Business, CatalogProduct, CostSettings, Quote, QuoteBundleHeader, QuoteBundleItem } from '../lib/database.types'
 import { defaultCostSettings, getCostSettings } from '../lib/costs'
 import { calculateBundle, duplicateProduct, fromCatalog, lineTotal, listCatalog, loadQuoteBundle, newItemCost, newProduct, removeProduct, saveQuoteBundle } from '../lib/products'
 import { formatCurrency, getInitialQuoteDeposit, quoteStatuses } from '../lib/quotes'
@@ -16,7 +16,7 @@ export function QuoteForm({ business, quote, preparation, onSaved, onCancel }: {
   const [header, setHeader] = useState<QuoteBundleHeader>(() => ({ customer_name: quote?.customer_name ?? preparation?.header.customer_name ?? '', customer_phone: quote?.customer_phone ?? preparation?.header.customer_phone ?? '', delivery_date: quote?.delivery_date ?? preparation?.header.delivery_date ?? null, delivery_time: quote?.delivery_time ?? null, notes: quote?.notes ?? preparation?.header.notes ?? '', ...getInitialQuoteDeposit(business, quote), status: quote?.status ?? 'draft', delivery_internal_cost: quote?.delivery_internal_cost ?? 0, delivery_customer_charge: quote?.delivery_customer_charge ?? 0 }))
   const [items, setItems] = useState(() => preparation ? preparation.items.map(value => ({ key: crypto.randomUUID(), value: structuredClone(value) })) : [{ key: crypto.randomUUID(), value: newProduct() }])
   const [catalog, setCatalog] = useState<CatalogProduct[]>([])
-  const [settings, setSettings] = useState(defaultCostSettings)
+  const [settings, setSettings] = useState<CostSettings>({ business_id: business.id, ...defaultCostSettings, created_at: '', updated_at: '' })
   const [loading, setLoading] = useState(true)
   const [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState(false)

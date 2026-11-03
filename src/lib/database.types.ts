@@ -80,11 +80,13 @@ export type CostSettings = {
   indirect_percent: number
   labor_hourly_rate: number
   markup_percent: number
+  costing_model_version?: number
+  costing_config?: import('./costing-engine').CostingConfig | null
   created_at: string
   updated_at: string
 }
 
-export type CostSettingsInput = Pick<CostSettings, 'business_id' | 'waste_percent' | 'indirect_percent' | 'labor_hourly_rate' | 'markup_percent'>
+export type CostSettingsInput = Pick<CostSettings, 'business_id' | 'waste_percent' | 'indirect_percent' | 'labor_hourly_rate' | 'markup_percent'> & Partial<Pick<CostSettings, 'costing_model_version' | 'costing_config'>>
 
 export type QuoteCost = {
   quote_id: string
@@ -105,6 +107,10 @@ export type QuoteCost = {
   total_internal_cost: number
   suggested_product_price: number
   suggested_customer_total: number
+  costing_model_version?: number
+  overhead_amount?: number
+  utilities_total?: number
+  costing_snapshot?: { version?: 1 | 'legacy'; utilities?: import('./costing-engine').UtilityInput[]; costing_config?: import('./costing-engine').CostingConfig; config_snapshot?: import('./costing-engine').CostingConfig; overhead_allocation_hours?: number } | null
   created_at: string
   updated_at: string
 }
@@ -233,7 +239,7 @@ export type QuoteItem = ProductFields & {
   id: string; business_id: string; quote_id: string; catalog_product_id: string | null
   position: number; line_total: number; created_at: string; updated_at: string
 }
-export type ItemCostInput = Pick<QuoteCost, 'ingredients_cost' | 'waste_percent' | 'labor_hours' | 'labor_hourly_rate' | 'indirect_percent' | 'markup_percent'>
+export type ItemCostInput = Pick<QuoteCost, 'ingredients_cost' | 'waste_percent' | 'labor_hours' | 'labor_hourly_rate' | 'indirect_percent' | 'markup_percent'> & Partial<Pick<QuoteCost, 'costing_model_version' | 'overhead_amount' | 'utilities_total' | 'costing_snapshot'>> & { costing_config?: import('./costing-engine').CostingConfig; utilities?: import('./costing-engine').UtilityInput[]; overhead_allocation_hours?: number }
 export type DirectCostInput = Pick<QuoteCostItem, 'category' | 'name' | 'cost'>
 export type QuoteItemCost = ItemCostInput & {
   quote_item_id: string; business_id: string; waste_amount: number; labor_cost: number
@@ -247,6 +253,7 @@ export type OrderItem = ProductFields & {
   id: string; business_id: string; order_id: string; source_quote_item_id: string | null
   position: number; line_total: number; internal_cost_total: number | null
   estimated_profit: number | null; real_margin_percent: number | null; created_at: string
+  costing_model_version?: number | null; costing_snapshot?: { version: number; inputs: unknown } | null
 }
 export type QuoteBundleItem = ProductFields & {
   catalog_product_id: string | null; cost: ItemCostInput | null; direct_costs: DirectCostInput[]

@@ -627,6 +627,114 @@ for (const theme of ['light', 'dark'] as const) {
   })
 }
 
+test('EJNEXA costing v1 calculates and traces product utilities with overhead', async ({ page }) => {
+  await page.setViewportSize({ width: 884, height: 1024 })
+  await mockBackend(page, true)
+  const costingConfig = {
+    electricity_rate_per_kwh: 10, natural_gas_rate_per_therm: 2, lpg_cylinder_price: 300, lpg_net_kg: 15,
+    water_rate_per_liter: 0.08, monthly_overhead_total: 12500, productive_hours_per_month: 250,
+    overhead_items: [{ name: 'Renta', category: 'Renta', monthly_cost: 12500, active: true }],
+    electricity_equipment: [{ id: 'oven', name: 'Horno eléctrico', active: true, power_kw: 3.5, calculation_mode: 'estimated' }],
+    natural_gas_equipment: [{ id: 'gas', name: 'Horno de gas', active: true, btu_per_hour: 100000 }],
+    lpg_equipment: [{ id: 'lpg', name: 'Quemador GLP', active: true, consumption_kg_per_hour: 0.25 }],
+  }
+  await page.route('**/rest/v1/arpe_cost_settings*', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ business_id: business.id, waste_percent: 12, indirect_percent: 12, labor_hourly_rate: 100, markup_percent: 60, costing_model_version: 1, costing_config: costingConfig }) }))
+  await login(page)
+  await expectDashboardLoaded(page, 'Dulce Encanto')
+  await page.goto('/calculadora-costos')
+  await page.getByLabel('Costo total de ingredientes').fill('420')
+  await page.getByLabel('Horas estimadas de trabajo').fill('2')
+  await page.getByRole('button', { name: 'Agregar gasto' }).click()
+  await page.getByRole('button', { name: 'Caja', exact: true }).click()
+  await page.getByLabel('Costo del gasto').fill('80')
+  await page.getByRole('button', { name: 'Electricidad', exact: true }).click()
+  await page.getByLabel('Equipo').nth(0).selectOption('oven')
+  await page.getByLabel('Tiempo de uso (minutos)').nth(0).fill('45')
+  await page.getByRole('button', { name: 'Gas natural', exact: true }).click()
+  await page.getByLabel('Equipo').nth(1).selectOption('gas')
+  await page.getByLabel('Tiempo de uso (minutos)').nth(1).fill('30')
+  await page.getByRole('button', { name: 'GLP / Propano', exact: true }).click()
+  await page.getByLabel('Equipo').nth(2).selectOption('lpg')
+  await page.getByLabel('Tiempo de uso (minutos)').nth(2).fill('45')
+  await page.getByRole('button', { name: 'Agua', exact: true }).click()
+  await page.getByLabel('Litros utilizados').fill('12')
+  await page.getByRole('button', { name: 'Configurar' }).click()
+  await page.getByLabel('Costo interno de entrega').fill('100')
+  await page.getByLabel('Cobro de entrega al cliente').fill('150')
+  const formatNio = (value: number) => `C$ ${new Intl.NumberFormat('es', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`
+  await expect(page.locator('.cost-suggested-price')).toContainText(formatNio(1411.78))
+  await expect(page.locator('.cost-suggested-total')).toContainText(formatNio(1561.78))
+  await page.locator('.quick-cost-breakdown > summary').click()
+  await expect(page.locator('.cost-trace-list')).toContainText('2.625 kWh')
+  await expect(page.locator('.cost-trace-list')).toContainText('0.5 therm')
+  await expect(page.locator('.cost-trace-list')).toContainText('0.1875 kg')
+  await expect(page.locator('.cost-trace-list')).toContainText(formatNio(0.96))
+  await expect(page.locator('.cost-trace-list')).toContainText('Overhead asignado')
+})
+
+test('cost settings save tenant rates, profiles, water and overhead in normalized units', async ({ page }) => {
+  await mockBackend(page, true)
+  const initialConfig = {
+    electricity_rate_per_kwh: 0, natural_gas_rate_per_therm: 0, lpg_cylinder_price: 0, lpg_net_kg: 0,
+    water_rate_per_liter: 0, monthly_overhead_total: 0, productive_hours_per_month: 0,
+    overhead_items: [], electricity_equipment: [], natural_gas_equipment: [], lpg_equipment: [],
+  }
+  let savedConfig: Record<string, unknown> | null = null
+  const settingsRow = { business_id: business.id, waste_percent: 12, indirect_percent: 12, labor_hourly_rate: 100, markup_percent: 60, costing_model_version: 1, costing_config: initialConfig }
+  await page.route('**/rest/v1/arpe_cost_settings*', async route => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(settingsRow) })
+      return
+    }
+    savedConfig = (route.request().postDataJSON() as { costing_config: Record<string, unknown> }).costing_config
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...settingsRow, ...route.request().postDataJSON() }) })
+  })
+  await login(page)
+  await page.goto('/configuracion')
+  await expect(page.getByRole('heading', { name: 'Configuración' })).toBeVisible()
+
+  await page.getByLabel('Tarifa eléctrica por kWh').fill('10.82')
+  await page.getByRole('button', { name: 'Agregar equipo eléctrico' }).click()
+  await page.getByLabel('Nombre', { exact: true }).fill('Horno principal')
+  await page.getByLabel('Potencia (W)').fill('3500')
+  await page.getByLabel('Modo').selectOption('measured')
+  await page.getByLabel('kWh medidos por ciclo').fill('2.4')
+
+  const gas = page.locator('.form-section').filter({ has: page.getByRole('heading', { name: 'Gas natural y GLP' }) })
+  await gas.getByLabel('Tarifa por therm (gas natural)').fill('2')
+  await gas.getByRole('button', { name: 'Agregar equipo de gas natural' }).click()
+  await gas.getByLabel('Equipo gas natural').fill('Horno de gas')
+  await gas.getByLabel('BTU/h').fill('100000')
+  await gas.getByLabel('Precio del cilindro GLP').fill('300')
+  await gas.locator('select').selectOption('lb')
+  await gas.locator('input[aria-label="Peso neto del cilindro"]').fill('25')
+  await gas.getByRole('button', { name: 'Agregar equipo GLP' }).click()
+  await gas.getByLabel('Consumo (kg/h)').fill('0.25')
+
+  const water = page.locator('.form-section').filter({ has: page.getByRole('heading', { name: 'Agua' }) })
+  await water.getByLabel('Costo efectivo por litro').fill('0.08')
+  const overhead = page.locator('.form-section').filter({ has: page.getByRole('heading', { name: 'Overhead mensual' }) })
+  await overhead.getByRole('button', { name: 'Agregar gasto mensual' }).click()
+  await overhead.getByLabel('Concepto').fill('Renta')
+  await overhead.getByLabel('Categoría').fill('Renta')
+  await overhead.getByLabel('Costo mensual').fill('12500')
+  await overhead.getByLabel('Horas productivas mensuales').fill('250')
+  await page.getByRole('button', { name: 'Guardar configuración' }).click()
+  await expect(page.getByText('Configuración de costeo guardada.')).toBeVisible()
+
+  expect(savedConfig).not.toBeNull()
+  expect(savedConfig?.electricity_rate_per_kwh).toBe(10.82)
+  expect((savedConfig?.electricity_equipment as { power_kw: number; calculation_mode: string; measured_kwh_per_cycle: number }[])[0]).toMatchObject({ power_kw: 3.5, calculation_mode: 'measured', measured_kwh_per_cycle: 2.4 })
+  expect(savedConfig?.natural_gas_rate_per_therm).toBe(2)
+  expect((savedConfig?.natural_gas_equipment as { btu_per_hour: number }[])[0].btu_per_hour).toBe(100000)
+  expect(savedConfig?.lpg_cylinder_price).toBe(300)
+  expect(savedConfig?.lpg_net_kg).toBeCloseTo(25 * 0.45359237, 8)
+  expect(savedConfig?.water_rate_per_liter).toBe(0.08)
+  expect(savedConfig?.monthly_overhead_total).toBe(12500)
+  expect(savedConfig?.productive_hours_per_month).toBe(250)
+  expect((savedConfig?.overhead_items as { monthly_cost: number }[])[0].monthly_cost).toBe(12500)
+})
+
 for (const theme of ['light', 'dark'] as const) {
   test(`welcome and cost calculator are clear and responsive in ${theme}`, async ({ page }) => {
     const hour = theme === 'light' ? 9 : 20
@@ -681,7 +789,7 @@ for (const theme of ['light', 'dark'] as const) {
         await expect(page.getByLabel('Merma (%)')).toHaveCount(0)
         await page.getByRole('button', { name: 'Editar parámetros' }).click()
         await expect(page.getByLabel('Merma (%)')).toHaveValue('12')
-        await expect(page.getByLabel('Gastos indirectos (%)')).toHaveValue('12')
+        await expect(page.getByText('El overhead se asigna por horas productivas.')).toBeVisible()
         await expect(page.getByLabel('Costo por hora')).toHaveValue('100')
         await expect(page.getByLabel('Ganancia sobre costo (%)')).toHaveValue('60')
         await expect(page.getByText('Agrega tus costos para ver el resultado.')).toBeVisible()
@@ -744,7 +852,7 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(page.getByLabel('Costo interno de entrega')).toHaveCount(0)
     await page.getByRole('button', { name: 'Editar parámetros' }).click()
     await expect(page.getByLabel('Merma (%)')).toHaveValue('12')
-    await expect(page.getByLabel('Gastos indirectos (%)')).toHaveValue('12')
+    await expect(page.getByText('El overhead se asigna por horas productivas.')).toBeVisible()
     await expect(page.getByLabel('Costo por hora')).toHaveValue('100')
     await expect(page.getByLabel('Ganancia sobre costo (%)')).toHaveValue('60')
     await expect(page.getByText('Agrega tus costos para ver el resultado.')).toBeVisible()
@@ -758,6 +866,7 @@ for (const theme of ['light', 'dark'] as const) {
     await page.getByLabel('Costo total de ingredientes').fill('420')
     await page.getByLabel('Horas estimadas de trabajo').fill('2')
     await page.getByRole('button', { name: 'Agregar gasto' }).click()
+    await page.getByRole('button', { name: 'Caja', exact: true }).click()
     await page.getByLabel('Categoría del gasto').selectOption('packaging')
     await page.getByLabel('Descripción del gasto').fill('Caja')
     await page.getByLabel('Costo del gasto').fill('80')
@@ -765,25 +874,27 @@ for (const theme of ['light', 'dark'] as const) {
     await page.getByLabel('Costo interno de entrega').fill('100')
     await page.getByLabel('Cobro de entrega al cliente').fill('150')
     const productionCostRow = page.locator('.cost-result-row').filter({ hasText: 'Costo de producción' })
-    await expect(productionCostRow).toContainText(formatNio(840.45))
-    await expect(page.locator('.cost-suggested-price')).toContainText(formatNio(1344.72))
-    await expect(page.locator('.cost-suggested-price')).toContainText(`${formatNio(56.03)} / cupcakes`)
-    await expect(page.locator('.cost-suggested-total')).toContainText(formatNio(1494.72))
+    await expect(productionCostRow).toContainText(formatNio(750.4))
+    await expect(page.locator('.cost-suggested-price')).toContainText(formatNio(1200.64))
+    await expect(page.locator('.cost-suggested-price')).toContainText(`${formatNio(50.03)} / cupcakes`)
+    await expect(page.locator('.cost-suggested-total')).toContainText(formatNio(1350.64))
     await expect(page.getByText('Indica un precio final para conocer tu ganancia y margen real.')).toBeVisible()
     await expect(page.getByText('Ganancia estimada', { exact: true })).toHaveCount(0)
 
     await page.getByRole('button', { name: 'Usar precio sugerido' }).click()
-    await expect(page.getByLabel('Precio que piensas cobrar')).toHaveValue('1494.72')
+    await expect(page.getByLabel('Precio que piensas cobrar')).toHaveValue('1350.64')
     await expect(page.getByText('Ganancia estimada', { exact: true })).toBeVisible()
     await expect(page.getByText('Margen real sobre venta', { exact: true })).toBeVisible()
 
     await page.getByLabel('Precio que piensas cobrar').fill('1600')
-    await expect(page.getByText('Ganancia estimada', { exact: true }).locator('..')).toContainText(formatNio(659.55))
-    await expect(page.getByText('Margen real sobre venta', { exact: true }).locator('..')).toContainText('41.22%')
-    await page.getByLabel('Precio que piensas cobrar').fill('900')
+    await expect(page.getByText('Ganancia estimada', { exact: true }).locator('..')).toContainText(formatNio(749.6))
+    await expect(page.getByText('Margen real sobre venta', { exact: true }).locator('..')).toContainText('46.85%')
+    await page.getByLabel('Precio que piensas cobrar').fill('800')
     await expect(page.getByText('Este precio no cubre el costo estimado.')).toBeVisible()
     await page.getByLabel('Ganancia sobre costo (%)').fill('80')
-    await expect(page.locator('.cost-suggested-price')).toContainText(formatNio(1512.81))
+    await expect(page.locator('.cost-suggested-price')).toContainText(formatNio(1350.72))
+    await page.getByRole('button', { name: 'Guardar como predeterminados' }).click()
+    await expect(page.getByText('Valores predeterminados guardados')).toBeVisible()
     await page.getByRole('button', { name: 'Restablecer' }).click()
     await expect(page.getByLabel('Nombre del producto')).toHaveValue('')
     await expect(page.getByLabel('Cantidad o rendimiento')).toHaveValue('1')
@@ -791,11 +902,13 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(page.getByLabel('Costo total de ingredientes')).toHaveValue('')
     await expect(page.getByLabel('Ganancia sobre costo (%)')).toHaveCount(0)
     await page.getByRole('button', { name: 'Editar parámetros' }).click()
-    await expect(page.getByLabel('Ganancia sobre costo (%)')).toHaveValue('60')
+    await expect(page.getByLabel('Ganancia sobre costo (%)')).toHaveValue('80')
     await expect(page.getByText('Agrega tus costos para ver el resultado.')).toBeVisible()
 
     page.off('request', trackCalculatorWrites)
-    expect(calculatorWrites).toEqual([])
+    expect(calculatorWrites).toHaveLength(1)
+    expect(calculatorWrites[0]).toContain('/rest/v1/arpe_cost_settings')
+    expect(calculatorWrites.some(write => /arpe_quotes|arpe_orders|arpe_quote_items/.test(write))).toBe(false)
     expect(pageErrors).toEqual([])
   })
 }
@@ -813,6 +926,7 @@ for (const theme of ['light', 'dark'] as const) {
     await page.getByRole('button', { name: 'Editar parámetros' }).click()
     await page.getByLabel('Costo total de ingredientes').fill('420')
     await page.getByRole('button', { name: 'Agregar gasto' }).click()
+    await page.getByRole('button', { name: 'Caja', exact: true }).click()
     await page.getByLabel('Descripción del gasto').fill('Caja')
     await page.getByLabel('Costo del gasto').fill('80')
     await page.getByRole('button', { name: 'Configurar' }).click()

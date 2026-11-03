@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { calculateCosts, defaultCostSettings } from './costs'
 import { money } from './products'
-import { buildQuickCostSummary, calculateQuickCost, validateQuickCost, type QuickCostDraft } from './quick-cost'
+import { buildQuickCostSummary, calculateQuickCost, quickCostExpensePresets, validateQuickCost, type QuickCostDraft } from './quick-cost'
+import { defaultCostingConfig } from './costing-engine'
 
 const draft = (overrides: Partial<QuickCostDraft> = {}): QuickCostDraft => ({
   productName: '',
@@ -26,10 +27,10 @@ describe('calculadora rápida de costos', () => {
       directCosts: [{ category: 'packaging', name: 'Caja', cost: 20 }],
     })
     const result = calculateQuickCost(input)
-    const expected = calculateCosts({ ingredients_cost: 100, waste_percent: 10, labor_hours: 2, labor_hourly_rate: 10, indirect_percent: 10, delivery_internal_cost: 0, delivery_customer_charge: 0, markup_percent: 50, final_price: 0 }, input.directCosts)
+    const expected = calculateCosts({ ingredients_cost: 100, waste_percent: 10, labor_hours: 2, labor_hourly_rate: 10, indirect_percent: 10, delivery_internal_cost: 0, delivery_customer_charge: 0, markup_percent: 50, final_price: 0, costing_model_version: 1, utilities: input.utilities, costing_config: input.costingConfig }, input.directCosts)
     expect(result.costs).toEqual(expected)
-    expect(result.costs.production_cost).toBe(165)
-    expect(result.costs.suggested_product_price).toBe(247.5)
+    expect(result.costs.production_cost).toBe(150)
+    expect(result.costs.suggested_product_price).toBe(225)
   })
 
   it('calcula el costo y el precio sugerido por unidad sin incluir la entrega', () => {
@@ -41,8 +42,8 @@ describe('calculadora rápida de costos', () => {
 
   it('expone la ganancia y margen calculados por el motor al ingresar un precio final', () => {
     const result = calculateQuickCost(draft({ ingredientsCost: 100, finalPrice: 200 }))
-    expect(result.costs.estimated_profit).toBe(74.56)
-    expect(result.costs.real_margin_percent).toBe(37.28)
+    expect(result.costs.estimated_profit).toBe(88)
+    expect(result.costs.real_margin_percent).toBe(44)
   })
 
   it('acepta costos y porcentajes en cero', () => {
@@ -58,7 +59,7 @@ describe('calculadora rápida de costos', () => {
 
   it('valida cantidad, unidad, merma y valores negativos o no numéricos', () => {
     const errors = validateQuickCost(draft({ quantity: 0, unit: ' ', ingredientsCost: -1, laborHours: Number.NaN, settings: { waste_percent: 101, indirect_percent: -1, labor_hourly_rate: 0, markup_percent: 0 } }))
-    expect(errors.map(error => error.field)).toEqual(expect.arrayContaining(['quantity', 'unit', 'ingredientsCost', 'laborHours', 'settings.waste_percent', 'settings.indirect_percent']))
+    expect(errors.map(error => error.field)).toEqual(expect.arrayContaining(['quantity', 'unit', 'ingredientsCost', 'laborHours', 'settings.waste_percent']))
   })
 
   it('construye un resumen en español con datos opcionales solo cuando están disponibles', () => {
@@ -74,5 +75,17 @@ describe('calculadora rápida de costos', () => {
     expect(evaluatedSummary).toContain('Precio evaluado: C$ 250.00')
     expect(evaluatedSummary).toContain('Ganancia estimada:')
     expect(evaluatedSummary).not.toContain('Pastel tres leches')
+  })
+
+  it('rechaza utilities incompletas y mantiene la calculadora en estado seguro', () => {
+    const input = draft({ costingConfig: defaultCostingConfig, utilities: [{ kind: 'electricity', equipment_id: '', minutes: 45 }] })
+    expect(validateQuickCost(input).some(error => error.field === 'utilities')).toBe(true)
+    expect(() => calculateQuickCost(input)).not.toThrow()
+    expect(calculateQuickCost(input).costs.utilities_total).toBe(0)
+  })
+
+  it('expone presets de gastos directos sin asignar precios ficticios', () => {
+    expect(quickCostExpensePresets.map(item => item.label)).toEqual(['Caja','Base','Topper','Decoración','Impresión','Consumible','Comisión','Otro'])
+    expect(quickCostExpensePresets.every(item => !('cost' in item))).toBe(true)
   })
 })
