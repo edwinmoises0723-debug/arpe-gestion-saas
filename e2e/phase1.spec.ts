@@ -818,12 +818,31 @@ for (const theme of ['light', 'dark'] as const) {
     await page.getByRole('button', { name: 'Usar precio sugerido' }).click()
     await page.locator('.quick-cost-breakdown > summary').click()
 
+    await expect(page.locator('.quick-cost-item select[aria-label="Categoría del gasto"]')).toBeVisible()
+    await expect(page.locator('.quick-cost-item input[aria-label="Descripción del gasto"]')).toBeVisible()
+    await expect(page.locator('.quick-cost-item input[aria-label="Costo del gasto"]')).toBeVisible()
+    await expect(page.locator('.quick-cost-item .cost-remove-item')).toBeVisible()
+
     const calculatorViewports = [[320, 739], [360, 800], [390, 844], [400, 739], [768, 1024], [884, 1024], [1440, 900]] as const
     for (const [width, height] of calculatorViewports) {
       await page.setViewportSize({ width, height })
       await page.evaluate(() => window.scrollTo(0, 0))
       const geometry = await page.evaluate(() => {
         const overlaps: string[] = []
+        const expenseItem = document.querySelector('.quick-cost-item')
+        const expenseControls = expenseItem
+          ? Array.from(expenseItem.querySelectorAll('select, input, .cost-remove-item'))
+          : []
+        if (expenseControls.length !== 4) overlaps.push('expense item fields/delete button missing')
+        for (let firstIndex = 0; firstIndex < expenseControls.length; firstIndex += 1) {
+          const first = expenseControls[firstIndex].getBoundingClientRect()
+          for (let secondIndex = firstIndex + 1; secondIndex < expenseControls.length; secondIndex += 1) {
+            const second = expenseControls[secondIndex].getBoundingClientRect()
+            if (first.right > second.left + 1 && first.left < second.right - 1 && first.bottom > second.top + 1 && first.top < second.bottom - 1) {
+              overlaps.push('expense item control overlap')
+            }
+          }
+        }
         for (const label of Array.from(document.querySelectorAll('.cost-calculator-page label'))) {
           const control = label.querySelector('input,select,textarea')
           if (!control) continue
