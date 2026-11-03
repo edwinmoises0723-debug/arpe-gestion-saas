@@ -11,6 +11,8 @@ export const costItemCategories: { value: CostItemCategory; label: string }[] = 
 
 export const defaultCostSettings = { waste_percent: 12, indirect_percent: 12, labor_hourly_rate: 0, markup_percent: 60 }
 
+export type CostSettingsValues = typeof defaultCostSettings
+
 export type CostDraft = {
   ingredients_cost: number
   waste_percent: number
@@ -71,6 +73,28 @@ export async function getCostSettings(businessId: string): Promise<CostSettings>
   const { data: created, error: createError } = await api.from('arpe_cost_settings').upsert({ business_id: businessId, ...defaultCostSettings }, { onConflict: 'business_id' }).select().single()
   if (createError) throw createError
   return created
+}
+
+/** Reads saved business defaults without creating a row when none exists. */
+export async function loadCostSettingsValues(businessId: string): Promise<CostSettingsValues> {
+  const { data, error } = await client()
+    .from('arpe_cost_settings')
+    .select('waste_percent,indirect_percent,labor_hourly_rate,markup_percent')
+    .eq('business_id', businessId)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return { ...defaultCostSettings }
+
+  const values = {
+    waste_percent: Number(data.waste_percent),
+    indirect_percent: Number(data.indirect_percent),
+    labor_hourly_rate: Number(data.labor_hourly_rate),
+    markup_percent: Number(data.markup_percent),
+  }
+  return Object.fromEntries(Object.entries(values).map(([key, value]) => [
+    key,
+    Number.isFinite(value) && value >= 0 ? value : defaultCostSettings[key as keyof CostSettingsValues],
+  ])) as CostSettingsValues
 }
 
 export async function saveCostSettings(businessId: string, values: Pick<CostDraft, 'waste_percent' | 'indirect_percent' | 'labor_hourly_rate' | 'markup_percent'>) {
