@@ -118,7 +118,9 @@ describe('compatibilidad del esquema de costos', () => {
     supabaseMock.responses.push({ data: null, error: { ...missingConfig, message: "Could not find the 'costing_config' column of 'arpe_cost_settings' in the schema cache" } }, { data: legacyRow, error: null }, { data: { ...legacyRow, waste_percent: 15 }, error: null })
     await saveCostSettings('business-1', { waste_percent: 15, indirect_percent: 12, labor_hourly_rate: 100, markup_percent: 60 })
     const write = supabaseMock.queries.at(-1)?.payload as Record<string, unknown>
-    expect(write).toMatchObject({ business_id: 'business-1', waste_percent: 15, indirect_percent: 12, labor_hourly_rate: 100, markup_percent: 60 })
+    expect(supabaseMock.queries.at(-1)?.operation).toBe('update')
+    expect(write).toMatchObject({ waste_percent: 15, indirect_percent: 12, labor_hourly_rate: 100, markup_percent: 60 })
+    expect(write).not.toHaveProperty('business_id')
     expect(write).not.toHaveProperty('costing_model_version')
     expect(write).not.toHaveProperty('costing_config')
   })
@@ -155,6 +157,11 @@ describe('compatibilidad del esquema de costos', () => {
     const values = defaultCostSettingsValues({ schemaCapability: 'v1-schema', activeModel: 'legacy' })
     expect(validateCostingV1Activation(values, defaultCostingConfig)).toEqual([])
     expect(validateCostingV1Activation(values, { ...defaultCostingConfig, monthly_overhead_total: 250 })).toContain('Configura horas productivas mensuales mayores que cero para asignar overhead.')
+    expect(validateCostingV1Activation(values, { ...defaultCostingConfig, electricity_equipment: [{ id: 'oven', name: 'Horno', active: true, power_kw: 0, calculation_mode: 'estimated' }] })).toContain('Completa el nombre y los datos de consumo de cada equipo eléctrico activo que usarás.')
+    expect(validateCostingV1Activation(values, { ...defaultCostingConfig, electricity_equipment: [{ id: 'oven', name: 'Horno medido', active: true, power_kw: 0, calculation_mode: 'measured' }] })).toContain('Configura la tarifa eléctrica por kWh para los equipos activos.')
+    expect(validateCostingV1Activation(values, { ...defaultCostingConfig, electricity_rate_per_kwh: 2, electricity_equipment: [{ id: 'oven', name: 'Horno medido', active: true, power_kw: 0, calculation_mode: 'measured' }] })).toEqual([])
+    expect(validateCostingV1Activation(values, { ...defaultCostingConfig, natural_gas_equipment: [{ id: 'gas', name: 'Horno gas', active: true, btu_per_hour: 0 }] })).toContain('Completa el nombre y los BTU/h de cada equipo de gas natural activo que usarás.')
+    expect(validateCostingV1Activation(values, { ...defaultCostingConfig, lpg_cylinder_price: 10, lpg_net_kg: 1, lpg_equipment: [{ id: 'lpg', name: 'Quemador', active: true, consumption_kg_per_hour: 0 }] })).toContain('Completa el nombre y el consumo kg/h de cada equipo GLP activo que usarás.')
   })
 
   it('does not update settings when activation validation fails', async () => {

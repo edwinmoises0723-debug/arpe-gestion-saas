@@ -21,6 +21,14 @@ describe('productos independientes y catálogo', () => {
     const copy = duplicateProduct(item); copy.cost!.markup_percent = 100; copy.direct_costs[0].cost = 99
     expect(item.cost.markup_percent).toBe(60); expect(item.direct_costs[0].cost).toBe(50)
   })
+  it('duplicates a persisted line as a new item using the currently active costing model', () => {
+    const settings = defaultCostSettingsValues({ schemaCapability: 'v1-schema', activeModel: 'v1' })
+    const persisted = Object.assign({ ...newProduct(), product: 'Pastel', cost: newItemCost(defaultCostSettingsValues({ schemaCapability: 'v1-schema', activeModel: 'legacy' })) }, { id: 'persisted-quote-item' })
+    const copy = duplicateProduct(persisted, settings)
+    expect(copy).not.toHaveProperty('id')
+    expect(copy.cost?.costing_model_version).toBe(1)
+    expect(copy.cost?.costing_snapshot?.costing_config).toEqual(defaultCostingConfig)
+  })
   it('filters name/category, accents and active state', () => {
     const inactive = { ...catalog, id: '2', name: 'Pastél', category: 'Pasteles', is_active: false }
     expect(filterCatalog([catalog, inactive], 'pastel', '', 'inactive')).toEqual([inactive])

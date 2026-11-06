@@ -42,7 +42,11 @@ export function validateCostingInputs(utilities: UtilityInput[] = [], config: Co
     if (utility.kind === 'electricity') {
       const equipment = config.electricity_equipment?.find(item => item.id === utility.equipment_id && item.active)
       if (!equipment) { errors.push('Configura o selecciona un equipo eléctrico activo.'); continue }
-      if (minutes > 0 && utility.measured_kwh !== undefined && (!Number.isFinite(utility.measured_kwh) || utility.measured_kwh < 0)) errors.push('El consumo medido no puede ser negativo.')
+      if (minutes > 0 && equipment.calculation_mode === 'measured') {
+        const measuredKwh = utility.measured_kwh ?? equipment.measured_kwh_per_cycle
+        if (measuredKwh !== undefined && (!Number.isFinite(measuredKwh) || measuredKwh < 0)) errors.push('El consumo medido no puede ser negativo.')
+        if (measuredKwh === undefined || measuredKwh <= 0) errors.push('Ingresa un consumo medido mayor que cero para este uso.')
+      }
       if (minutes > 0 && equipment.calculation_mode === 'estimated' && equipment.power_kw <= 0) errors.push(`Configura la potencia del equipo ${equipment.name}.`)
       if (minutes > 0 && config.electricity_rate_per_kwh <= 0) errors.push('Configura la tarifa eléctrica por kWh.')
     } else if (utility.kind === 'natural_gas') {

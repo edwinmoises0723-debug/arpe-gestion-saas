@@ -134,6 +134,18 @@ La activación es explícita y requiere guardar primero la configuración. Antes
 
 Cada nueva cotización conserva su versión y los parámetros usados al crear el costo. Las cotizaciones y pedidos históricos con versión `0` siguen calculándose con la fórmula clásica aunque el negocio active v1 más adelante. No se recalculan ni reinterpretan snapshots existentes.
 
+## Autoridad y trazabilidad
+
+La base de datos lee el modelo activo y la configuración oficial desde `arpe_cost_settings` al guardar una cotización. Si una línea nueva declara una versión distinta, la RPC la rechaza para que un navegador/PWA desactualizado no pueda elegir otra fórmula. Las tarifas y los perfiles de electricidad, gas, GLP y overhead usados en una línea v1 salen de la configuración del negocio; el JSON del navegador no puede reemplazarlos.
+
+El navegador envía datos propios del lote, como ingredientes, horas de trabajo, gastos directos, equipos usados, duraciones, litros y horas de asignación de overhead. El trigger SQL valida esos datos y recalcula los importes. Para una lectura eléctrica medida, el asistente admite kWh por ciclo configurados o kWh ingresados para esa cotización; cuando el equipo se usa, uno de esos valores debe ser mayor que cero.
+
+En cada costo v1 nuevo, el servidor guarda `version`, `config_snapshot`, consumos y horas de overhead. Al editar una cotización, la RPC usa el ID de ítem solo para localizar una fila de esa cotización y negocio, conserva la versión y configuración histórica desde la base, y rechaza referencias a otra cotización/negocio. Si el payload omite un costo que ya existe, se conserva junto con sus gastos directos en vez de borrarlo en silencio. La conversión a pedido copia el snapshot almacenado.
+
+Una línea nueva se crea con el modelo que esté activo en el negocio al momento de guardar. Por eso, si se agrega una línea a una cotización clásica después de activar v1, la cotización puede contener snapshots de modelos distintos; cada línea conserva su propia versión. No existe todavía una acción para recalcular una cotización completa con un modelo nuevo.
+
+La función TypeScript `saveQuoteCost()` no tiene llamadas en la aplicación actual y escribe las tablas legacy `arpe_quote_costs` / `arpe_quote_cost_items`, cuyas escrituras están revocadas a `authenticated`. El flujo activo de costeo multiproducto usa `saveQuoteBundle()` y la RPC protegida `arpe_save_quote_bundle`; la función legacy se conserva por ahora y no es una ruta de escritura disponible para el cliente.
+
 ## Parámetros predeterminados
 
 Guardar parámetros reutilizables actualiza únicamente la configuración del negocio elegida para reutilización, como merma, tarifa de mano de obra y markup, además de los parámetros globales expresamente incluidos en la pantalla. No guarda el nombre del producto, ingredientes del pedido, horas del lote, gastos directos, consumos del pedido, entrega ni precio final.

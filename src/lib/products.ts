@@ -28,7 +28,23 @@ export function newProduct(): QuoteBundleItem {
 export function fromCatalog(product: CatalogProduct): QuoteBundleItem {
   return { ...newProduct(), catalog_product_id: product.id, product: product.name, unit_label: product.unit_label, unit_price: Number(product.default_unit_price), portions: product.default_portions, flavor: product.default_flavor, filling: product.default_filling, decoration: product.default_decoration, extras: product.default_extras, notes: product.description }
 }
-export const duplicateProduct = (item: QuoteBundleItem): QuoteBundleItem => structuredClone(item)
+export function duplicateProduct(item: QuoteBundleItem, settings: NewItemCostSettings = defaultCostSettingsValues()): QuoteBundleItem {
+  const copy = structuredClone(item) as QuoteBundleItem & { id?: string }
+  delete copy.id
+  if (item.cost) {
+    copy.cost = {
+      ...newItemCost(settings),
+      ingredients_cost: item.cost.ingredients_cost,
+      waste_percent: item.cost.waste_percent,
+      labor_hours: item.cost.labor_hours,
+      labor_hourly_rate: item.cost.labor_hourly_rate,
+      indirect_percent: item.cost.indirect_percent,
+      markup_percent: item.cost.markup_percent,
+      ...(settings.activeModel === 'v1' ? { utilities: item.cost.utilities ?? item.cost.costing_snapshot?.utilities ?? [] } : {}),
+    }
+  }
+  return copy
+}
 export function removeProduct<T>(items: T[], index: number): T[] {
   if (items.length <= 1) throw new Error('La cotización necesita al menos un producto.')
   return items.filter((_, i) => i !== index)

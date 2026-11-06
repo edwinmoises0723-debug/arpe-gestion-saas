@@ -78,6 +78,12 @@ describe('Modelo de Costeo EJNEXA v1', () => {
     expect(validateCostingInputs([{ kind: 'electricity', equipment_id: '', minutes: 30 }], defaultCostingConfig)).toContain('Configura o selecciona un equipo eléctrico activo.')
     expect(validateCostingInputs([{ kind: 'water', liters: 12 }], defaultCostingConfig)).toContain('Configura el costo efectivo por litro de agua.')
   })
+  it('requires a positive measured kWh input when an active measured profile has no cycle default', () => {
+    const config = { ...defaultCostingConfig, electricity_rate_per_kwh: 10, electricity_equipment: [{ id: 'metered', name: 'Horno medido', active: true, power_kw: 0, calculation_mode: 'measured' as const }] }
+    expect(validateCostingInputs([{ kind: 'electricity', equipment_id: 'metered', minutes: 30 }], config)).toContain('Ingresa un consumo medido mayor que cero para este uso.')
+    expect(validateCostingInputs([{ kind: 'electricity', equipment_id: 'metered', minutes: 30, measured_kwh: 0.8 }], config)).toEqual([])
+    expect(validateCostingInputs([{ kind: 'electricity', equipment_id: 'metered', minutes: 30, measured_kwh: 0 }], config)).toContain('Ingresa un consumo medido mayor que cero para este uso.')
+  })
   it('no suma un gasto de electricidad como otro utility automático', () => {
     const c = calculateCosts({ ...defaultCostSettings, costing_model_version: 1, ingredients_cost: 100, labor_hours: 0, delivery_internal_cost: 0, delivery_customer_charge: 0, final_price: 0, costing_config: defaultCostingConfig }, [{ cost: 26.25 }])
     expect(c.direct_costs_total).toBe(26.25)
