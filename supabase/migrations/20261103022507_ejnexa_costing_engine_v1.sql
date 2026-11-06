@@ -241,7 +241,8 @@ begin
       else
         declared_model:=c->>'costing_model_version';
         if declared_model is not null and declared_model not in ('0','1','legacy') then raise exception 'El modelo de costeo cambió. Actualiza la aplicación e inténtalo nuevamente.'; end if;
-        if business_settings.costing_model_version=0 and declared_model='1' or business_settings.costing_model_version=1 and declared_model in ('0','legacy') then
+        if (business_settings.costing_model_version=1 and declared_model is distinct from '1')
+          or (business_settings.costing_model_version=0 and declared_model='1') then
           raise exception 'El modelo de costeo cambió. Actualiza la aplicación e inténtalo nuevamente.';
         end if;
         v:=business_settings.costing_model_version;

@@ -81,9 +81,9 @@ begin
   exception when raise_exception then if sqlerrm='TEST_FAILED legacy business accepted forged v1' then raise; end if; end;
 
   -- Save a real classic snapshot before activating v1.
-  select * into q_legacy from public.arpe_save_quote_bundle(null,header,jsonb_build_array(jsonb_build_object('product','Legacy line','quantity',1,'unit_label','unidad','unit_price',200,'cost',cost_v0)));
+  select * into q_legacy from public.arpe_save_quote_bundle(null,header,jsonb_build_array(jsonb_build_object('product','Legacy line','quantity',1,'unit_label','unidad','unit_price',200,'cost',cost_v0-'costing_model_version')));
   select id into legacy_item_id from public.arpe_quote_items where quote_id=q_legacy.id;
-  if (select costing_model_version from public.arpe_quote_item_costs where quote_item_id=legacy_item_id)<>0 then raise exception 'Legacy line was not stored as v0'; end if;
+  if (select costing_model_version from public.arpe_quote_item_costs where quote_item_id=legacy_item_id)<>0 then raise exception 'Legacy client without a version was not stored as v0'; end if;
 
   -- Direct UPDATE cannot activate an invalid estimated-equipment profile.
   begin
@@ -102,6 +102,12 @@ begin
     perform * from public.arpe_save_quote_bundle(null,header,jsonb_build_array(jsonb_build_object('product','Forged legacy','quantity',1,'unit_label','unidad','unit_price',200,'cost',cost_v0)));
     raise exception 'TEST_FAILED v1 business accepted forged legacy';
   exception when raise_exception then if sqlerrm='TEST_FAILED v1 business accepted forged legacy' then raise; end if; end;
+
+  -- A stale client omitting the model version cannot create an incomplete v1 line.
+  begin
+    perform * from public.arpe_save_quote_bundle(null,header,jsonb_build_array(jsonb_build_object('product','Stale client','quantity',1,'unit_label','unidad','unit_price',200,'cost',cost_v0-'costing_model_version')));
+    raise exception 'TEST_FAILED v1 business accepted a missing model version';
+  exception when raise_exception then if sqlerrm='TEST_FAILED v1 business accepted a missing model version' then raise; end if; end;
 
   forged_config:=jsonb_set(jsonb_set(official_config,'{electricity_rate_per_kwh}','999'::jsonb),'{electricity_equipment,0,power_kw}','99'::jsonb);
   cost_v1:=jsonb_build_object('ingredients_cost',100,'waste_percent',12,'labor_hours',1,'labor_hourly_rate',100,'indirect_percent',0,'markup_percent',60,'costing_model_version',1,'costing_config',forged_config,
