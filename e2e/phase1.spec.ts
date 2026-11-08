@@ -770,6 +770,9 @@ test('cost settings save tenant rates, profiles, water and overhead in normalize
   expect(settingsRow.costing_config).toEqual(savedConfig)
   await openModule('Calculadora de costo')
   await expect(page.getByRole('heading', { name: 'Consumos de producción' })).toBeVisible()
+  await page.getByRole('button', { name: 'Editar parámetros' }).click()
+  await expect(page.getByText('El overhead se asigna por horas productivas.')).toBeVisible()
+  await expect(page.getByLabel('Gastos indirectos (%)')).toHaveCount(0)
 })
 
 test('legacy costing schema loads basic settings without v1 reads or writes', async ({ page }) => {
@@ -878,7 +881,8 @@ for (const theme of ['light', 'dark'] as const) {
         await expect(page.getByLabel('Merma (%)')).toHaveCount(0)
         await page.getByRole('button', { name: 'Editar parámetros' }).click()
         await expect(page.getByLabel('Merma (%)')).toHaveValue('12')
-        await expect(page.getByText('El overhead se asigna por horas productivas.')).toBeVisible()
+        await expect(page.getByLabel('Gastos indirectos (%)')).toHaveValue('12')
+        await expect(page.getByText('El overhead se asigna por horas productivas.')).toHaveCount(0)
         await expect(page.getByLabel('Costo por hora')).toHaveValue('100')
         await expect(page.getByLabel('Ganancia sobre costo (%)')).toHaveValue('60')
         await expect(page.getByText('Agrega tus costos para ver el resultado.')).toBeVisible()
