@@ -934,7 +934,7 @@ for (const theme of ['light', 'dark'] as const) {
       labor_hourly_rate: 100,
       markup_percent: 60,
       costing_model_version: 1,
-      costing_config: {},
+      costing_config: { water_rate_per_liter: 0.5 },
     }
     await page.route('**/rest/v1/arpe_cost_settings*', async route => {
       if (route.request().method() !== 'GET') calculatorSettings = { ...calculatorSettings, ...route.request().postDataJSON() }
@@ -979,37 +979,73 @@ for (const theme of ['light', 'dark'] as const) {
     await page.getByRole('button', { name: 'Configurar' }).click()
     await page.getByLabel('Costo interno de entrega').fill('100')
     await page.getByLabel('Cobro de entrega al cliente').fill('150')
+    await page.getByRole('button', { name: 'Agua', exact: true }).click()
+    await page.getByLabel('Litros utilizados').fill('4')
+    await expect(page.getByLabel('Nombre del producto')).toHaveValue('Cupcakes de vainilla')
+    await expect(page.getByLabel('Cantidad o rendimiento')).toHaveValue('24')
+    await expect(page.getByLabel('Unidad')).toHaveValue('cupcakes')
+    await expect(page.getByLabel('Costo total de ingredientes')).toHaveValue('420')
+    await expect(page.getByLabel('Horas estimadas de trabajo')).toHaveValue('2')
+    await expect(page.getByLabel('Descripción del gasto')).toHaveValue('Caja')
+    await expect(page.getByLabel('Costo del gasto')).toHaveValue('80')
+    await expect(page.getByLabel('Costo interno de entrega')).toHaveValue('100')
+    await expect(page.getByLabel('Cobro de entrega al cliente')).toHaveValue('150')
+    await expect(page.getByLabel('Litros utilizados')).toHaveValue('4')
     const productionCostRow = page.locator('.cost-result-row').filter({ hasText: 'Costo de producción' })
-    await expect(productionCostRow).toContainText(formatNio(750.4))
-    await expect(page.locator('.cost-suggested-price')).toContainText(formatNio(1200.64))
-    await expect(page.locator('.cost-suggested-price')).toContainText(`${formatNio(50.03)} / cupcakes`)
-    await expect(page.locator('.cost-suggested-total')).toContainText(formatNio(1350.64))
+    await expect(productionCostRow).toContainText(formatNio(752.4))
+    await expect(page.locator('.cost-suggested-price')).toContainText(formatNio(1203.84))
+    await expect(page.locator('.cost-suggested-price')).toContainText(`${formatNio(50.16)} / cupcakes`)
+    await expect(page.locator('.cost-suggested-total')).toContainText(formatNio(1353.84))
     await expect(page.getByText('Indica un precio final para conocer tu ganancia y margen real.')).toBeVisible()
     await expect(page.getByText('Ganancia estimada', { exact: true })).toHaveCount(0)
 
     await page.getByRole('button', { name: 'Usar precio sugerido' }).click()
-    await expect(page.getByLabel('Precio que piensas cobrar')).toHaveValue('1350.64')
+    await expect(page.getByLabel('Precio que piensas cobrar')).toHaveValue('1353.84')
     await expect(page.getByText('Ganancia estimada', { exact: true })).toBeVisible()
     await expect(page.getByText('Margen real sobre venta', { exact: true })).toBeVisible()
 
     await page.getByLabel('Precio que piensas cobrar').fill('1600')
-    await expect(page.getByText('Ganancia estimada', { exact: true }).locator('..')).toContainText(formatNio(749.6))
-    await expect(page.getByText('Margen real sobre venta', { exact: true }).locator('..')).toContainText('46.85%')
+    await expect(page.getByText('Ganancia estimada', { exact: true }).locator('..')).toContainText(formatNio(747.6))
+    await expect(page.getByText('Margen real sobre venta', { exact: true }).locator('..')).toContainText('46.73%')
     await page.getByLabel('Precio que piensas cobrar').fill('800')
     await expect(page.getByText('Este precio no cubre el costo estimado.')).toBeVisible()
     await page.getByLabel('Ganancia sobre costo (%)').fill('80')
-    await expect(page.locator('.cost-suggested-price')).toContainText(formatNio(1350.72))
+    await expect(page.locator('.cost-suggested-price')).toContainText(formatNio(1354.32))
+    await expect(page.locator('.cost-suggested-total')).toContainText(formatNio(1504.32))
+    await page.getByRole('button', { name: 'Usar precio sugerido' }).click()
+    await expect(page.getByLabel('Precio que piensas cobrar')).toHaveValue('1504.32')
     await page.getByRole('button', { name: 'Guardar como predeterminados' }).click()
     await expect(page.getByText('Valores predeterminados guardados')).toBeVisible()
+    await page.locator('.cost-allocation-advanced summary').click()
+    await expect(page.getByLabel('Horas productivas asignadas')).toBeVisible()
+    await page.getByLabel('Horas estimadas de trabajo').fill('-1')
+    await page.getByLabel('Ganancia sobre costo (%)').click()
+    await expect(page.locator('.cost-field-error').filter({ hasText: 'Las horas estimadas' })).toBeVisible()
+    const writesBeforeReset = calculatorWrites.length
     await page.getByRole('button', { name: 'Restablecer' }).click()
+    await expect(page.getByRole('status').filter({ hasText: 'Calculadora restablecida' })).toBeVisible()
     await expect(page.getByLabel('Nombre del producto')).toHaveValue('')
     await expect(page.getByLabel('Cantidad o rendimiento')).toHaveValue('1')
     await expect(page.getByLabel('Unidad')).toHaveValue('unidad')
     await expect(page.getByLabel('Costo total de ingredientes')).toHaveValue('')
-    await expect(page.getByLabel('Ganancia sobre costo (%)')).toHaveCount(0)
+    await expect(page.getByLabel('Horas estimadas de trabajo')).toHaveValue('')
+    await expect(page.getByLabel('Descripción del gasto')).toHaveCount(0)
+    await expect(page.getByLabel('Costo del gasto')).toHaveCount(0)
+    await expect(page.getByLabel('Litros utilizados')).toHaveCount(0)
+    await expect(page.getByText('Sin consumos agregados')).toBeVisible()
+    await expect(page.getByText('Sin entrega')).toBeVisible()
+    await expect(page.getByLabel('Costo interno de entrega')).toHaveCount(0)
+    await expect(page.getByLabel('Cobro de entrega al cliente')).toHaveCount(0)
+    await expect(page.getByLabel('Precio que piensas cobrar')).toHaveCount(0)
+    await expect(page.getByText('Las horas estimadas', { exact: false })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Editar parámetros' })).toHaveAttribute('aria-expanded', 'false')
+    await expect(page.getByRole('button', { name: 'Agregar gasto' })).toBeVisible()
+    expect(calculatorWrites).toHaveLength(writesBeforeReset)
+    await expect(page.getByRole('status').filter({ hasText: 'Calculadora restablecida' })).toBeHidden({ timeout: 3500 })
     await page.getByRole('button', { name: 'Editar parámetros' }).click()
     await expect(page.getByLabel('Ganancia sobre costo (%)')).toHaveValue('80')
     await expect(page.getByText('Agrega tus costos para ver el resultado.')).toBeVisible()
+    await expect(page.getByText('Valores predeterminados guardados')).toHaveCount(0)
 
     page.off('request', trackCalculatorWrites)
     expect(calculatorWrites).toHaveLength(1)
@@ -1018,6 +1054,42 @@ for (const theme of ['light', 'dark'] as const) {
     expect(pageErrors).toEqual([])
   })
 }
+
+test('quick cost calculator restores saved parameters after an unsaved edit without writing', async ({ page }) => {
+  const writes: string[] = []
+  let calculatorSettings = {
+    business_id: business.id,
+    waste_percent: 12,
+    indirect_percent: 12,
+    labor_hourly_rate: 100,
+    markup_percent: 60,
+    costing_model_version: 0,
+    costing_config: {},
+  }
+  await mockBackend(page, true)
+  await page.route('**/rest/v1/arpe_cost_settings*', async route => {
+    if (route.request().method() !== 'GET') calculatorSettings = { ...calculatorSettings, ...route.request().postDataJSON() }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(calculatorSettings) })
+  })
+  page.on('request', request => {
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method()) && /\/rest\/v1\/|\/rpc\//.test(request.url())) writes.push(request.method())
+  })
+  await login(page)
+  await expectDashboardLoaded(page, 'Dulce Encanto')
+  await page.getByRole('button', { name: 'Abrir menú' }).click()
+  await page.getByRole('navigation', { name: 'Módulos complementarios' }).getByRole('link', { name: 'Calculadora de costo' }).click()
+  await expect(page.getByRole('heading', { name: 'Calculadora de costo.' })).toBeVisible()
+  await page.getByRole('button', { name: 'Editar parámetros' }).click()
+  await expect(page.getByLabel('Ganancia sobre costo (%)')).toHaveValue('60')
+  await page.getByLabel('Ganancia sobre costo (%)').fill('80')
+  await page.getByRole('button', { name: 'Restablecer' }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Calculadora restablecida' })).toBeVisible()
+  await expect(page.getByLabel('Ganancia sobre costo (%)')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Editar parámetros' }).click()
+  await expect(page.getByLabel('Ganancia sobre costo (%)')).toHaveValue('60')
+  expect(writes).toEqual([])
+  await expect(page.getByRole('status').filter({ hasText: 'Calculadora restablecida' })).toBeHidden({ timeout: 3500 })
+})
 
 for (const theme of ['light', 'dark'] as const) {
   test(`quick cost calculator layout is clear at target sizes in ${theme}`, async ({ page }, testInfo) => {
