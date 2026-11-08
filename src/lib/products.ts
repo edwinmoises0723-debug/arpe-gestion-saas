@@ -1,5 +1,6 @@
-import type { CatalogProduct, CatalogProductInput, ItemCostInput, OrderItem, QuoteBundleHeader, QuoteBundleItem, QuoteItem } from './database.types'
-import { calculateCosts, defaultCostSettings } from './costs'
+import type { CatalogProduct, CatalogProductInput, CostSettings, ItemCostInput, OrderItem, QuoteBundleHeader, QuoteBundleItem, QuoteItem } from './database.types'
+import { calculateCosts, defaultCostSettingsValues, type ActiveCostingModel, type CostingSchemaCapability } from './costs'
+import { defaultCostingConfig, validateCostingInputs } from './costing-engine'
 import { calculateDeposit } from './quotes'
 import { client } from './supabase'
 import { removeCatalogMedia, uploadCatalogMedia, validateCatalogImage } from './catalog'
@@ -27,16 +28,47 @@ export function newProduct(): QuoteBundleItem {
 export function fromCatalog(product: CatalogProduct): QuoteBundleItem {
   return { ...newProduct(), catalog_product_id: product.id, product: product.name, unit_label: product.unit_label, unit_price: Number(product.default_unit_price), portions: product.default_portions, flavor: product.default_flavor, filling: product.default_filling, decoration: product.default_decoration, extras: product.default_extras, notes: product.description }
 }
-export const duplicateProduct = (item: QuoteBundleItem): QuoteBundleItem => structuredClone(item)
+export function duplicateProduct(item: QuoteBundleItem, settings: NewItemCostSettings = defaultCostSettingsValues()): QuoteBundleItem {
+  const copy = structuredClone(item) as QuoteBundleItem & { id?: string }
+  delete copy.id
+  if (item.cost) {
+    copy.cost = {
+      ...newItemCost(settings),
+      ingredients_cost: item.cost.ingredients_cost,
+      waste_percent: item.cost.waste_percent,
+      labor_hours: item.cost.labor_hours,
+      labor_hourly_rate: item.cost.labor_hourly_rate,
+      indirect_percent: item.cost.indirect_percent,
+      markup_percent: item.cost.markup_percent,
+      ...(settings.activeModel === 'v1' ? { utilities: item.cost.utilities ?? item.cost.costing_snapshot?.utilities ?? [] } : {}),
+    }
+  }
+  return copy
+}
 export function removeProduct<T>(items: T[], index: number): T[] {
   if (items.length <= 1) throw new Error('La cotización necesita al menos un producto.')
   return items.filter((_, i) => i !== index)
 }
-export function newItemCost(settings = defaultCostSettings): ItemCostInput {
-  return { waste_percent: Number(settings.waste_percent), indirect_percent: Number(settings.indirect_percent), labor_hourly_rate: Number(settings.labor_hourly_rate), markup_percent: Number(settings.markup_percent), ingredients_cost: 0, labor_hours: 0 }
+type NewItemCostSettings = Pick<CostSettings, 'waste_percent' | 'indirect_percent' | 'labor_hourly_rate' | 'markup_percent'> & Partial<Pick<CostSettings, 'costing_config'>> & { activeModel?: ActiveCostingModel; schemaCapability?: CostingSchemaCapability }
+export function newItemCost(settings: NewItemCostSettings = defaultCostSettingsValues()): ItemCostInput {
+  const activeModel = settings.activeModel ?? 'legacy'
+  const schemaCapability = settings.schemaCapability ?? (activeModel === 'v1' ? 'v1-schema' : 'legacy-schema')
+  const costingConfig = (settings as CostSettings).costing_config ?? defaultCostingConfig
+  return {
+    ...(schemaCapability === 'v1-schema' ? { costing_model_version: activeModel === 'v1' ? 1 : 0 } : {}),
+    ...(activeModel === 'v1' ? { costing_snapshot: { version: 1 as const, costing_config: structuredClone(costingConfig) } } : {}),
+    waste_percent: Number(settings.waste_percent), indirect_percent: Number(settings.indirect_percent), labor_hourly_rate: Number(settings.labor_hourly_rate), markup_percent: Number(settings.markup_percent), ingredients_cost: 0, labor_hours: 0,
+  }
 }
 export function calculateItemCost(item: QuoteBundleItem) {
-  return calculateCosts({ ...(item.cost ?? newItemCost()), delivery_internal_cost: 0, delivery_customer_charge: 0, final_price: lineTotal(item) }, item.direct_costs)
+  const cost = item.cost ?? newItemCost()
+  const snapshot = cost.costing_snapshot ?? undefined
+  const config = snapshot?.costing_config ?? ('costing_config' in cost ? cost.costing_config : undefined) ?? defaultCostingConfig
+  const utilities = cost.utilities ?? snapshot?.utilities ?? []
+  const invalid = validateCostingInputs(utilities, config).length > 0
+  const modelVersion = cost.costing_model_version === 1 ? 1 : 'legacy'
+  const hasV1CostInputs = modelVersion === 1
+  return calculateCosts({ ...cost, costing_model_version: modelVersion, costing_config: hasV1CostInputs && invalid ? { ...config, monthly_overhead_total: 0 } : hasV1CostInputs ? config : undefined, utilities: hasV1CostInputs ? invalid ? [] : utilities : undefined, costing_snapshot: snapshot, delivery_internal_cost: 0, delivery_customer_charge: 0, final_price: lineTotal(item) }, item.direct_costs)
 }
 export function suggestedUnitPrice(item: QuoteBundleItem) {
   if (!Number.isFinite(item.quantity) || item.quantity <= 0) throw new Error('Indica una cantidad mayor que cero.')
@@ -60,8 +92,13 @@ export function validateBundle(header: QuoteBundleHeader, items: QuoteBundleItem
     if (!item.unit_label.trim()) throw new Error('Indica la unidad de cada producto.')
     if (!Number.isFinite(item.quantity) || item.quantity <= 0 || Math.abs(item.quantity * 1000 - Math.round(item.quantity * 1000)) > 0.00001) throw new Error('La cantidad debe ser mayor que cero y tener hasta 3 decimales.')
     if (!Number.isFinite(item.unit_price) || item.unit_price < 0) throw new Error('El precio unitario no puede ser negativo.')
-    if (item.cost && Object.values(item.cost).some(value => !Number.isFinite(value) || value < 0)) throw new Error('Los costos y porcentajes no pueden ser negativos.')
+    if (item.cost && Object.values(item.cost).some(value => typeof value === 'number' && (!Number.isFinite(value) || value < 0))) throw new Error('Los costos y porcentajes no pueden ser negativos.')
     if (item.cost && item.cost.waste_percent > 100) throw new Error('La merma no puede superar el 100%.')
+    if (item.cost) {
+      const config = item.cost.costing_snapshot?.costing_config ?? item.cost.costing_config ?? defaultCostingConfig
+      const utilityErrors = validateCostingInputs(item.cost.utilities ?? item.cost.costing_snapshot?.utilities ?? [], config)
+      if (utilityErrors.length) throw new Error(utilityErrors[0])
+    }
     if (item.direct_costs.some(cost => !cost.name.trim() || !Number.isFinite(cost.cost) || cost.cost < 0)) throw new Error('Completa la descripción y el costo de cada gasto.')
   }
   if ([header.delivery_internal_cost, header.delivery_customer_charge, header.deposit_value].some(value => !Number.isFinite(value) || value < 0)) throw new Error('La entrega y el anticipo no pueden ser negativos.')
@@ -124,7 +161,7 @@ export async function loadQuoteBundle(quoteId: string, businessId: string): Prom
   if (direct.error) throw direct.error
   return items.map(item => {
     const c = costs.data?.find(cost => cost.quote_item_id === item.id)
-    return { ...item, cost: c ? { ingredients_cost: Number(c.ingredients_cost), waste_percent: Number(c.waste_percent), labor_hours: Number(c.labor_hours), labor_hourly_rate: Number(c.labor_hourly_rate), indirect_percent: Number(c.indirect_percent), markup_percent: Number(c.markup_percent) } : null,
+    return { ...item, cost: c ? { ingredients_cost: Number(c.ingredients_cost), waste_percent: Number(c.waste_percent), labor_hours: Number(c.labor_hours), labor_hourly_rate: Number(c.labor_hourly_rate), indirect_percent: Number(c.indirect_percent), markup_percent: Number(c.markup_percent), costing_model_version: c.costing_model_version ?? 0, costing_snapshot: c.costing_snapshot ? { ...c.costing_snapshot, version: c.costing_model_version === 1 ? 1 : 'legacy', costing_config: c.costing_snapshot.config_snapshot ?? c.costing_snapshot.costing_config, config_snapshot: c.costing_snapshot.config_snapshot ?? c.costing_snapshot.costing_config } : undefined } : null,
       direct_costs: (direct.data ?? []).filter(d => d.quote_item_id === item.id).map(d => ({ category: d.category, name: d.name, cost: Number(d.cost) })) }
   })
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { ArrowLeft, Copy, Plus, Save, Trash2 } from 'lucide-react'
 import type { Business, CatalogProduct, Quote, QuoteBundleHeader, QuoteBundleItem } from '../lib/database.types'
-import { defaultCostSettings, getCostSettings } from '../lib/costs'
+import { defaultCostSettingsValues, getCostSettings, type LoadedCostSettings } from '../lib/costs'
 import { calculateBundle, duplicateProduct, fromCatalog, lineTotal, listCatalog, loadQuoteBundle, newItemCost, newProduct, removeProduct, saveQuoteBundle } from '../lib/products'
 import { formatCurrency, getInitialQuoteDeposit, quoteStatuses } from '../lib/quotes'
 import { errorMessage } from '../lib/supabase'
@@ -16,7 +16,7 @@ export function QuoteForm({ business, quote, preparation, onSaved, onCancel }: {
   const [header, setHeader] = useState<QuoteBundleHeader>(() => ({ customer_name: quote?.customer_name ?? preparation?.header.customer_name ?? '', customer_phone: quote?.customer_phone ?? preparation?.header.customer_phone ?? '', delivery_date: quote?.delivery_date ?? preparation?.header.delivery_date ?? null, delivery_time: quote?.delivery_time ?? null, notes: quote?.notes ?? preparation?.header.notes ?? '', ...getInitialQuoteDeposit(business, quote), status: quote?.status ?? 'draft', delivery_internal_cost: quote?.delivery_internal_cost ?? 0, delivery_customer_charge: quote?.delivery_customer_charge ?? 0 }))
   const [items, setItems] = useState(() => preparation ? preparation.items.map(value => ({ key: crypto.randomUUID(), value: structuredClone(value) })) : [{ key: crypto.randomUUID(), value: newProduct() }])
   const [catalog, setCatalog] = useState<CatalogProduct[]>([])
-  const [settings, setSettings] = useState(defaultCostSettings)
+  const [settings, setSettings] = useState<LoadedCostSettings>({ business_id: business.id, ...defaultCostSettingsValues(), created_at: '', updated_at: '' })
   const [loading, setLoading] = useState(true)
   const [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -59,7 +59,7 @@ export function QuoteForm({ business, quote, preparation, onSaved, onCancel }: {
       </section>
       <section className="bundle-products"><h2>Productos de esta cotización</h2><p className="muted">El catálogo precarga datos; cada producto queda guardado solo en esta propuesta.</p>
         {items.map(({ key, value: item }, index) => <article className="panel bundle-item" key={key} aria-label={`Producto ${index + 1}`}>
-          <div className="bundle-item-heading"><h3>Producto {index + 1}</h3><div><button type="button" className="icon-button" aria-label={`Duplicar producto ${index + 1}`} onClick={() => setItems([...items, { key: crypto.randomUUID(), value: duplicateProduct(item) }])}><Copy size={17} /></button><button type="button" className="icon-button danger-icon" aria-label={`Eliminar producto ${index + 1}`} onClick={() => { try { setItems(removeProduct(items, index)); setError('') } catch (e) { setError(errorMessage(e)) } }}><Trash2 size={17} /></button></div></div>
+          <div className="bundle-item-heading"><h3>Producto {index + 1}</h3><div><button type="button" className="icon-button" aria-label={`Duplicar producto ${index + 1}`} onClick={() => setItems([...items, { key: crypto.randomUUID(), value: duplicateProduct(item, settings) }])}><Copy size={17} /></button><button type="button" className="icon-button danger-icon" aria-label={`Eliminar producto ${index + 1}`} onClick={() => { try { setItems(removeProduct(items, index)); setError('') } catch (e) { setError(errorMessage(e)) } }}><Trash2 size={17} /></button></div></div>
           <label>Seleccionar del catálogo o personalizado<select value={item.catalog_product_id ?? ''} onChange={e => { const p = catalog.find(product => product.id === e.target.value); changeItem(index, p ? fromCatalog(p) : { ...item, catalog_product_id: null }) }}><option value="">Producto personalizado</option>{catalog.filter(p => p.is_active || p.id === item.catalog_product_id).map(p => <option key={p.id} value={p.id}>{p.name}{p.is_active ? '' : ' · Inactivo'}</option>)}</select></label>
           <label>Producto<input required maxLength={160} value={item.product} onChange={e => changeItem(index, { ...item, product: e.target.value })} /></label>
           <div className="form-grid"><label>Cantidad<input type="number" min="0.001" step="0.001" required value={item.quantity} onChange={e => changeItem(index, { ...item, quantity: Number(e.target.value) })} /></label><label>Unidad<input list="product-units" required maxLength={40} value={item.unit_label} onChange={e => changeItem(index, { ...item, unit_label: e.target.value })} /></label><label>Porciones <small>Opcional</small><input type="number" min="1" step="1" value={item.portions ?? ''} onChange={e => changeItem(index, { ...item, portions: e.target.value ? Number(e.target.value) : null })} /></label></div>
@@ -67,7 +67,7 @@ export function QuoteForm({ business, quote, preparation, onSaved, onCancel }: {
           <label>Notas del producto<textarea maxLength={1000} value={item.notes} onChange={e => changeItem(index, { ...item, notes: e.target.value })} /></label>
           <QuoteItemPrice id={`quote-item-price-${key}`} pending={isPending(item)} value={item.unit_price} onChange={unit_price => changeItem(index, { ...item, unit_price })} />
           <div className="calculated-row"><span>{isPending(item) ? 'Subtotal del producto' : `${item.quantity} × ${amount(item.unit_price)} · Subtotal`}</span><strong>{isPending(item) ? 'Precio pendiente' : amount(lineTotal(item))}</strong></div>
-          {item.cost ? <details className="item-cost-details"><summary>Mostrar asistente de costos</summary><ItemCostAssistant pricePending={isPending(item)} item={item} business={business} onChange={value => changeItem(index, value)} /></details> : <button type="button" className="secondary-button" onClick={() => changeItem(index, { ...item, cost: newItemCost(settings) })}>Iniciar asistente de costos</button>}
+          {item.cost ? <details className="item-cost-details"><summary>Mostrar asistente de costos</summary><ItemCostAssistant pricePending={isPending(item)} capabilities={settings.capabilities} item={item} business={business} onChange={value => changeItem(index, value)} /></details> : <button type="button" className="secondary-button" onClick={() => changeItem(index, { ...item, cost: newItemCost(settings) })}>Iniciar asistente de costos</button>}
         </article>)}
         <datalist id="product-units">{['unidad', 'pastel', 'docena', 'caja', 'libra', 'kg', 'porción'].map(unit => <option key={unit} value={unit} />)}</datalist>
         <button type="button" className="secondary-button" onClick={() => setItems([...items, { key: crypto.randomUUID(), value: newProduct() }])}><Plus size={17} /> Agregar producto</button>
