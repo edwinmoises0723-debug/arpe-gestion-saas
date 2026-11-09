@@ -44,6 +44,35 @@ describe('calculadora rápida de costos', () => {
     expect(buildQuickCostSummary(input, result, amount => `C$ ${amount.toFixed(2)}`)).toContain('Gastos indirectos (12%): C$ 13.44')
   })
 
+  it('calcula cada costo clásico, entrega y precio sugerido sin duplicar la caja', () => {
+    const input = draft({
+      productName: 'Cupcakes de vainilla', quantity: 24, unit: 'cupcakes', ingredientsCost: 420, laborHours: 2,
+      settings: { waste_percent: 12, indirect_percent: 12, labor_hourly_rate: 100, markup_percent: 60, activeModel: 'legacy' },
+      directCosts: [{ category: 'packaging', name: 'Caja', cost: 80 }],
+      deliveryInternalCost: 100, deliveryCustomerCharge: 150, finalPrice: 1494.72,
+    })
+    const result = calculateQuickCost(input)
+
+    expect(result.costs.waste_amount).toBe(50.4)
+    expect(result.costs.labor_cost).toBe(200)
+    expect(result.costs.direct_costs_total).toBe(80)
+    expect(result.costs.production_subtotal).toBe(750.4)
+    expect(result.costs.indirect_amount).toBe(90.05)
+    expect(result.costs.production_cost).toBe(840.45)
+    expect(result.costs.delivery_internal_cost).toBe(100)
+    expect(result.costs.total_internal_cost).toBe(940.45)
+    expect(result.costs.suggested_product_price).toBe(1344.72)
+    expect(result.costs.delivery_customer_charge).toBe(150)
+    expect(result.costs.suggested_customer_total).toBe(1494.72)
+    expect(result.costs.estimated_profit).toBe(554.27)
+    expect(result.costs.real_margin_percent).toBe(37.08)
+    expect(result.costPerUnit).toBe(35.02)
+
+    const belowCost = calculateQuickCost({ ...input, finalPrice: 800 })
+    expect(belowCost.costs.estimated_profit).toBe(-140.45)
+    expect(belowCost.costs.real_margin_percent).toBe(-17.56)
+  })
+
   it('switches formulas only when the active model is explicitly changed', () => {
     const legacy = draft({
       ingredientsCost: 100,

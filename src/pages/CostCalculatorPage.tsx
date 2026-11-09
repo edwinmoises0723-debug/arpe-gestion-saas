@@ -27,6 +27,7 @@ export function CostCalculatorPage({ business }: { business: Business }) {
   const [defaultsMessage, setDefaultsMessage] = useState('')
   const [showValidation, setShowValidation] = useState(false)
   const [copyMessage, setCopyMessage] = useState('')
+  const [resetFeedbackId, setResetFeedbackId] = useState(0)
   const [directCostsOpen, setDirectCostsOpen] = useState(false)
   const [deliveryOpen, setDeliveryOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -57,6 +58,12 @@ export function CostCalculatorPage({ business }: { business: Business }) {
     return () => window.clearTimeout(timer)
   }, [copyMessage])
 
+  useEffect(() => {
+    if (resetFeedbackId === 0) return
+    const timer = window.setTimeout(() => setResetFeedbackId(0), 2400)
+    return () => window.clearTimeout(timer)
+  }, [resetFeedbackId])
+
   const calculation = useMemo(() => calculateQuickCost(draft), [draft])
   const errors = validateQuickCost(draft)
   const supportsV1 = draft.settings.activeModel === 'v1'
@@ -76,9 +83,11 @@ export function CostCalculatorPage({ business }: { business: Business }) {
     setDraft({ ...newDraft(defaults), costingConfig: draft.costingConfig })
     setShowValidation(false)
     setCopyMessage('')
+    setDefaultsMessage('')
     setDirectCostsOpen(false)
     setDeliveryOpen(false)
     setSettingsOpen(false)
+    setResetFeedbackId(current => current + 1)
   }
 
   async function saveDefaults() {
@@ -149,6 +158,7 @@ export function CostCalculatorPage({ business }: { business: Business }) {
       <button type="button" className="secondary-button cost-reset" onClick={restore}><RotateCcw size={16} /> Restablecer</button>
     </header>
 
+    {resetFeedbackId > 0 && <div className="notice" role="status" aria-live="polite"><Check size={16} /> Calculadora restablecida</div>}
     {settingsWarning && <Notice error>{settingsWarning}</Notice>}
     {preparedForV1 && <p className="field-hint" role="status">Modelo actual: Clásico. La configuración avanzada está disponible en Configuración, pero este cálculo continúa usando la fórmula clásica.</p>}
 
