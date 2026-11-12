@@ -1,0 +1,2 @@
+create index ejnexa_catalog_campaign_products_campaign_business_idx
+  on public.ejnexa_catalog_campaign_products (campaign_id, business_id);
