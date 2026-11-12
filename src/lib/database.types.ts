@@ -8,6 +8,8 @@ export type PaymentMethod = 'cash' | 'bank_transfer' | 'bank_deposit' | 'card' |
 export type PaymentStatus = 'posted' | 'voided'
 export type PublicCatalogPriceMode = 'exact' | 'from' | 'contact'
 export type CatalogRequestStatus = 'new' | 'reviewing' | 'converted' | 'declined' | 'archived'
+export type CatalogCampaignKind = 'promotion' | 'showcase'
+export type CatalogPromotionType = 'percentage' | 'fixed_discount' | 'fixed_price' | 'two_for_one' | 'combo'
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export type Business = {
@@ -226,10 +228,58 @@ export type CatalogRequestItem = {
   default_portions_snapshot: number | null
   public_price_mode_snapshot: PublicCatalogPriceMode
   public_unit_price_snapshot: number | null
+  campaign_id_snapshot: string | null
+  campaign_name_snapshot: string | null
+  campaign_kind_snapshot: CatalogCampaignKind | null
+  promotion_type_snapshot: CatalogPromotionType | null
+  promotion_badge_snapshot: string | null
+  base_unit_price_snapshot: number | null
+  promotional_unit_price_snapshot: number | null
   created_at: string
 }
+export type CatalogCampaign = {
+  id: string
+  business_id: string
+  name: string
+  description: string
+  campaign_kind: CatalogCampaignKind
+  promotion_type: CatalogPromotionType | null
+  percentage_discount: number | null
+  fixed_discount: number | null
+  promo_price: number | null
+  badge_text: string | null
+  image_path: string | null
+  starts_on: string | null
+  ends_on: string | null
+  active: boolean
+  featured: boolean
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+export type CatalogCampaignInput = Omit<CatalogCampaign, 'id' | 'created_at' | 'updated_at'>
+export type CatalogCampaignProduct = {
+  campaign_id: string
+  business_id: string
+  product_id: string
+  position: number
+  created_at: string
+}
+export type CatalogCampaignProductInput = Omit<CatalogCampaignProduct, 'created_at'>
 export type PublicCatalogProfile = Pick<Business, 'catalog_slug' | 'name' | 'slogan' | 'description' | 'currency' | 'public_catalog_logo_path'> & { whatsapp: string | null }
-export type PublicCatalogProduct = Omit<Pick<CatalogProduct, 'id' | 'name' | 'category' | 'description' | 'unit_label' | 'default_unit_price' | 'default_portions' | 'image_path' | 'public_price_mode' | 'public_sort_order'>, 'default_unit_price'> & { default_unit_price: number | null }
+export type PublicCatalogProduct = Omit<Pick<CatalogProduct, 'id' | 'name' | 'category' | 'description' | 'unit_label' | 'default_unit_price' | 'default_portions' | 'image_path' | 'public_price_mode' | 'public_sort_order'>, 'default_unit_price'> & {
+  default_unit_price: number | null
+  campaign_id?: string | null
+  campaign_kind?: CatalogCampaignKind | null
+  promotion_type?: CatalogPromotionType | null
+  promotion_badge?: string | null
+  campaign_name?: string | null
+  campaign_description?: string | null
+  campaign_image_path?: string | null
+  campaign_featured?: boolean | null
+  base_price?: number | null
+  promotional_price?: number | null
+}
 export type ProductFields = {
   product: string; quantity: number; unit_label: string; portions: number | null
   flavor: string; filling: string; decoration: string; extras: string; notes: string
@@ -264,6 +314,18 @@ type ReadOnlyTable<T> = { Row: T; Insert: never; Update: never; Relationships: [
 export type Database = {
   public: {
     Tables: {
+      ejnexa_catalog_campaigns: {
+        Row: CatalogCampaign
+        Insert: CatalogCampaignInput
+        Update: Partial<Omit<CatalogCampaignInput, 'business_id'>>
+        Relationships: []
+      }
+      ejnexa_catalog_campaign_products: {
+        Row: CatalogCampaignProduct
+        Insert: CatalogCampaignProductInput
+        Update: never
+        Relationships: []
+      }
       arpe_catalog_requests: ReadOnlyTable<CatalogRequest>
       arpe_catalog_request_items: ReadOnlyTable<CatalogRequestItem>
       arpe_catalog_products: { Row: CatalogProduct; Insert: CatalogProductInput; Update: Partial<CatalogProductInput>; Relationships: [] }

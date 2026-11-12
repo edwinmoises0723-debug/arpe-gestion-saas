@@ -13,7 +13,10 @@ const item = (overrides: Partial<CatalogRequestItem> = {}): CatalogRequestItem =
   id: 'item-a', request_id: 'request-a', business_id: 'business-a', catalog_product_id: 'product-a', position: 1,
   product_name_snapshot: 'Pastel de Chocolate', category_snapshot: 'Pasteles', quantity: 2,
   unit_label_snapshot: 'unidad', default_portions_snapshot: 12, public_price_mode_snapshot: 'exact',
-  public_unit_price_snapshot: 850, created_at: '2026-10-24T18:30:00Z', ...overrides,
+  public_unit_price_snapshot: 850, campaign_id_snapshot: null, campaign_name_snapshot: null,
+  campaign_kind_snapshot: null, promotion_type_snapshot: null, promotion_badge_snapshot: null,
+  base_unit_price_snapshot: null, promotional_unit_price_snapshot: null,
+  created_at: '2026-10-24T18:30:00Z', ...overrides,
 })
 
 describe('solicitudes internas del catálogo', () => {
@@ -36,6 +39,22 @@ describe('solicitudes internas del catálogo', () => {
     expect(result.items[1].catalog_product_id).toBe('product-contact')
     expect(result.itemsWithoutPublishedPrice).toEqual(['Topper personalizado'])
     expect(result.items.every(value => value.cost === null && value.direct_costs.length === 0)).toBe(true)
+  })
+
+  it('uses the server-snapshotted promotional price for later quote preparation', () => {
+    const result = prepareCatalogRequestQuote(request(), [item({
+      public_unit_price_snapshot: 750,
+      campaign_id_snapshot: 'campaign-a',
+      campaign_name_snapshot: 'Semana dulce',
+      campaign_kind_snapshot: 'promotion',
+      promotion_type_snapshot: 'percentage',
+      promotion_badge_snapshot: '25% OFF',
+      base_unit_price_snapshot: 1000,
+      promotional_unit_price_snapshot: 750,
+    })])
+    expect(result.items[0].unit_price).toBe(750)
+    expect(result.items[0].cost).toBeNull()
+    expect(result.items[0].direct_costs).toEqual([])
   })
 
   it('no acepta estado de navegación preparado para otro negocio', () => {

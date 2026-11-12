@@ -1,6 +1,6 @@
 # EJNEXA Business
 
-EJNEXA Business es un producto de EJNEXA AI Studio para la gestión de pastelerías, reposterías y pequeños negocios.
+EJNEXA Business es una plataforma SaaS configurable de EJNEXA AI Studio para negocios de distintos rubros.
 
 **Fundador:** Ing. Edwin Nicaragua
 
@@ -8,7 +8,7 @@ EJNEXA Business es un producto de EJNEXA AI Studio para la gestión de pasteler�
 
 **Descriptor:** AI · Automation · Digital Systems · Creative Content
 
-Los identificadores técnicos con prefijo `arpe_` se conservan por compatibilidad y no representan la marca visible actual.
+Los identificadores técnicos históricos con prefijo `arpe_` se conservan por compatibilidad y no representan la marca visible actual. Esta nomenclatura ligada al primer tenant es deuda técnica controlada: no se renombrará masivamente durante fases acotadas. Los módulos nuevos reutilizables usan nombres neutrales con prefijo `ejnexa_`; la fundación de campañas, por ejemplo, usa `ejnexa_catalog_campaigns` y `ejnexa_catalog_campaign_products`.
 
 La identidad visual oficial se integrará desde `public/brand/ejnexa/`. Faltan los assets oficiales listados allí; no se usan imágenes sustitutas. La migración `20261003230928_business_logo_10mb.sql` está preparada en el repositorio y no se ha aplicado al Supabase remoto.
 
