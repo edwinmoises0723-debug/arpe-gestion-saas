@@ -10,7 +10,7 @@ const profile: PublicCatalogProfile = {
   public_catalog_logo_path: 'owner-1/business-1/profile/logo.png', whatsapp: '+505 8888-1111',
 }
 const products: PublicCatalogProduct[] = [
-  { id: 'product-1', name: 'Pastel de Chocolate', category: 'Pasteles', description: 'Pastel artesanal con ganache.', unit_label: 'pastel', default_unit_price: 850, default_portions: 20, image_path: 'owner-1/business-1/products/pastel.png', public_price_mode: 'exact', public_sort_order: 1 },
+  { id: 'product-1', name: 'Pastel de Chocolate', category: 'Pasteles', description: 'Pastel artesanal con ganache.', unit_label: 'pastel', default_unit_price: 850, default_portions: 20, image_path: 'owner-1/business-1/products/pastel.png', public_price_mode: 'exact', public_sort_order: 1, campaign_id: 'campaign-1', campaign_kind: 'promotion', promotion_type: 'percentage', promotion_badge: '15% OFF', campaign_name: 'Oferta especial', base_price: 1000, promotional_price: 850 },
   { id: 'product-2', name: 'Tres Leches', category: 'Postres', description: 'Suave y fresco.', unit_label: 'unidad', default_unit_price: 1200, default_portions: null, image_path: null, public_price_mode: 'from', public_sort_order: 2 },
   { id: 'product-3', name: 'Alfajor especial', category: 'Galletas', description: 'Relleno artesanal.', unit_label: 'unidad', default_unit_price: null, default_portions: null, image_path: null, public_price_mode: 'contact', public_sort_order: 3 },
 ]
@@ -238,10 +238,14 @@ test('public catalog persists a request once and keeps sharing attached to its r
   await expect(panel.getByText('SOL-2026-0001')).toBeVisible()
   expect(submissionPayloads).toHaveLength(1)
   expect(Object.keys(submissionPayloads[0]).sort()).toEqual(['p_client_request_key', 'p_customer_name', 'p_customer_phone', 'p_desired_date', 'p_details', 'p_items', 'p_slug'].sort())
+  expect(submissionPayloads[0].p_items).toEqual([
+    { product_id: 'product-1', quantity: 2, expected_campaign_id: 'campaign-1', expected_public_unit_price: 850 },
+    { product_id: 'product-2', quantity: 1, expected_campaign_id: null, expected_public_unit_price: 1200 },
+  ])
   expect(submissionPayloads[0]).toMatchObject({ p_slug: 'arpe-dulce-encanto', p_customer_name: 'María Gómez', p_customer_phone: '', p_desired_date: futureDate, p_details: 'Pastel azul con temática de fútbol', p_items: [{ product_id: 'product-1', quantity: 2 }, { product_id: 'product-2', quantity: 1 }] })
   expect(String(submissionPayloads[0].p_client_request_key)).toMatch(/^[0-9a-f-]{36}$/i)
   expect(Object.keys(submissionPayloads[0])).not.toEqual(expect.arrayContaining(['business_id', 'owner_id', 'price', 'snapshot', 'image_path', 'category', 'name']))
-  expect((submissionPayloads[0].p_items as Record<string, unknown>[]).every(item => Object.keys(item).sort().join(',') === 'product_id,quantity')).toBe(true)
+  expect((submissionPayloads[0].p_items as Record<string, unknown>[]).every(item => Object.keys(item).sort().join(',') === 'expected_campaign_id,expected_public_unit_price,product_id,quantity')).toBe(true)
 
   let whatsappTarget = ''
   await page.context().route('https://wa.me/**', async route => { whatsappTarget = route.request().url(); await route.fulfill({ status: 200, contentType: 'text/html', body: '<title>intercepted WhatsApp</title>' }) })

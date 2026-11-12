@@ -1,4 +1,4 @@
-import type { CatalogRequestStatus, Json, PublicCatalogPriceMode, PublicCatalogProduct } from './database.types'
+import type { CatalogPromotionType, CatalogRequestStatus, Json, PublicCatalogPriceMode, PublicCatalogProduct } from './database.types'
 import { normalizeWhatsAppNumber } from './catalog-sharing'
 import { client } from './supabase'
 
@@ -10,6 +10,9 @@ export type CatalogRequestItem = {
   unitLabel: string
   publicPriceMode: PublicCatalogPriceMode
   publicUnitPrice: number | null
+  campaignId: string | null
+  promotionType: CatalogPromotionType | null
+  promotionBadge: string | null
   defaultPortions: number | null
   imagePath?: string | null
 }
@@ -23,9 +26,20 @@ export type CatalogRequestSubmissionPayload = {
   p_customer_phone: string
   p_desired_date: string | null
   p_details: string
-  p_items: Array<{ product_id: string; quantity: number }>
+  /** Client expectations are optimistic consistency checks only; the server resolves authoritative offer and snapshots. */
+  p_items: Array<{
+    product_id: string
+    quantity: number
+    expected_campaign_id?: string | null
+    expected_public_unit_price?: number | null
+  }>
 }
 export type CatalogRequestSubmission = { id: string; requestNumber: string; status: CatalogRequestStatus; submittedAt: string }
+export const CATALOG_OFFER_CHANGED_MESSAGE = 'La promoción cambió. Actualiza el catálogo e inténtalo nuevamente.'
+
+export function isCatalogOfferChangedError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'message' in error && error.message === CATALOG_OFFER_CHANGED_MESSAGE
+}
 
 export function addCatalogRequestItem(items: CatalogRequestItem[], product: PublicCatalogProduct): CatalogRequestItem[] {
   const existing = items.find(item => item.productId === product.id)
@@ -38,6 +52,9 @@ export function addCatalogRequestItem(items: CatalogRequestItem[], product: Publ
     unitLabel: product.unit_label,
     publicPriceMode: product.public_price_mode,
     publicUnitPrice: product.default_unit_price,
+    campaignId: product.campaign_id ?? null,
+    promotionType: product.promotion_type ?? null,
+    promotionBadge: product.promotion_badge ?? null,
     defaultPortions: product.default_portions,
     imagePath: product.image_path,
   }]
@@ -77,7 +94,12 @@ export function buildCatalogRequestSubmissionPayload(args: {
     p_customer_phone: '',
     p_desired_date: args.form.desiredDate || null,
     p_details: args.form.details.trim(),
-    p_items: args.items.map(item => ({ product_id: item.productId, quantity: item.quantity })),
+    p_items: args.items.map(item => ({
+      product_id: item.productId,
+      quantity: item.quantity,
+      expected_campaign_id: item.campaignId,
+      expected_public_unit_price: item.publicUnitPrice,
+    })),
   }
 }
 

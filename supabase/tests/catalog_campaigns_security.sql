@@ -41,7 +41,8 @@ values
   ('53000000-0000-4000-8000-000000000007', '51000000-0000-4000-8000-000000000001', 'Expired campaign', '', 'promotion', 'fixed_price', null, null, 100, null, null, current_date - 2, current_date - 1, true, false, 7),
   ('53000000-0000-4000-8000-000000000008', '51000000-0000-4000-8000-000000000001', 'Future campaign', '', 'promotion', 'fixed_price', null, null, 100, null, null, current_date + 1, current_date + 2, true, false, 8),
   ('53000000-0000-4000-8000-000000000013', '51000000-0000-4000-8000-000000000001', 'Combo campaign', '', 'promotion', 'combo', null, null, null, null, null, current_date, current_date, true, false, 9),
-  ('53000000-0000-4000-8000-000000000014', '51000000-0000-4000-8000-000000000002', 'Shoe pair offer', '', 'promotion', 'two_for_one', null, null, null, null, null, current_date, current_date, true, false, 1);
+  ('53000000-0000-4000-8000-000000000014', '51000000-0000-4000-8000-000000000002', 'Shoe pair offer', '', 'promotion', 'two_for_one', null, null, null, null, null, current_date, current_date, true, false, 1),
+  ('53000000-0000-4000-8000-000000000015', '51000000-0000-4000-8000-000000000001', 'Contact product showcase', '', 'showcase', null, null, null, null, 'Nuevo', null, current_date, current_date, true, true, 1);
 
 insert into public.ejnexa_catalog_campaign_products (campaign_id, business_id, product_id, position)
 values
@@ -54,7 +55,8 @@ values
   ('53000000-0000-4000-8000-000000000007', '51000000-0000-4000-8000-000000000001', '52000000-0000-4000-8000-000000000007', 1),
   ('53000000-0000-4000-8000-000000000008', '51000000-0000-4000-8000-000000000001', '52000000-0000-4000-8000-000000000008', 1),
   ('53000000-0000-4000-8000-000000000013', '51000000-0000-4000-8000-000000000001', '52000000-0000-4000-8000-000000000010', 1),
-  ('53000000-0000-4000-8000-000000000014', '51000000-0000-4000-8000-000000000002', '52000000-0000-4000-8000-000000000009', 1);
+  ('53000000-0000-4000-8000-000000000014', '51000000-0000-4000-8000-000000000002', '52000000-0000-4000-8000-000000000009', 1),
+  ('53000000-0000-4000-8000-000000000015', '51000000-0000-4000-8000-000000000001', '52000000-0000-4000-8000-000000000006', 1);
 
 do $$
 begin
@@ -133,6 +135,15 @@ begin
   if not has_function_privilege('anon', 'public.ejnexa_get_public_catalog_products(text)', 'EXECUTE') then
     raise exception 'Public catalog RPC is missing anon EXECUTE';
   end if;
+  if not has_function_privilege('authenticated', 'public.ejnexa_get_public_catalog_products(text)', 'EXECUTE')
+     or not has_function_privilege('anon', 'public.ejnexa_submit_catalog_request(text, uuid, text, text, date, text, jsonb)', 'EXECUTE')
+     or not has_function_privilege('authenticated', 'public.ejnexa_submit_catalog_request(text, uuid, text, text, date, text, jsonb)', 'EXECUTE') then
+    raise exception 'Public catalog RPC grants are incomplete';
+  end if;
+  if has_function_privilege('anon', 'private.ejnexa_resolve_catalog_product_offer(uuid, uuid)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'private.ejnexa_resolve_catalog_product_offer(uuid, uuid)', 'EXECUTE') then
+    raise exception 'Private offer resolver is directly executable by client roles';
+  end if;
   if (
     select count(*)
     from pg_policies
@@ -175,8 +186,10 @@ begin
     raise exception 'Showcase changed the product price';
   end if;
   select * into v_row from public.ejnexa_get_public_catalog_products('campaign-test-arpe') where id = '52000000-0000-4000-8000-000000000006';
-  if v_row.default_unit_price is not null or v_row.base_price is not null or v_row.promotional_price is not null or v_row.campaign_id is not null then
-    raise exception 'Contact price exposed a monetary promotion';
+  if v_row.default_unit_price is not null or v_row.base_price is not null or v_row.promotional_price is not null
+     or v_row.campaign_id is distinct from '53000000-0000-4000-8000-000000000015'
+     or v_row.campaign_kind is distinct from 'showcase' or v_row.promotion_type is not null then
+    raise exception 'Contact price did not preserve its showcase without exposing monetary values';
   end if;
   if exists (select 1 from public.ejnexa_get_public_catalog_products('campaign-test-arpe') p where p.id in ('52000000-0000-4000-8000-000000000007', '52000000-0000-4000-8000-000000000008') and p.campaign_id is not null) then
     raise exception 'Expired or future campaign was exposed as active';
@@ -218,7 +231,66 @@ begin
     'campaign-test-arpe', '54000000-0000-4000-8000-000000000001', 'Test Customer', '', null, '',
     jsonb_build_array(jsonb_build_object(
       'product_id', '52000000-0000-4000-8000-000000000001', 'quantity', 2,
-      'promotion_type', 'fixed_price', 'promo_price', 1, 'discount', 999
+      'expected_campaign_id', '53000000-0000-4000-8000-000000000001', 'expected_public_unit_price', 750,
+      'promotion_type', 'fixed_price', 'promo_price', 1, 'percentage_discount', 99, 'discount', 999
+    ))
+  );
+
+  begin
+    perform 1 from public.ejnexa_submit_catalog_request(
+      'campaign-test-arpe', '54000000-0000-4000-8000-000000000002', 'Test Customer', '', null, '',
+      jsonb_build_array(jsonb_build_object(
+        'product_id', '52000000-0000-4000-8000-000000000001', 'quantity', 1,
+        'expected_campaign_id', '53000000-0000-4000-8000-000000000001', 'expected_public_unit_price', 751
+      ))
+    );
+    raise exception 'Expected changed expected_public_unit_price to be rejected';
+  exception when others then
+    if sqlerrm <> 'La promoción cambió. Actualiza el catálogo e inténtalo nuevamente.' then raise; end if;
+  end;
+end;
+$$;
+reset role;
+
+do $$
+declare
+  v_item public.arpe_catalog_request_items;
+begin
+  select * into v_item from public.arpe_catalog_request_items
+  where request_id = (select id from public.arpe_catalog_requests where client_request_key = '54000000-0000-4000-8000-000000000001');
+  if v_item.quantity is distinct from 2 or v_item.public_unit_price_snapshot is distinct from 750
+     or v_item.base_unit_price_snapshot is distinct from 1000 or v_item.promotional_unit_price_snapshot is distinct from 750
+     or v_item.promotion_type_snapshot is distinct from 'percentage'
+     or v_item.campaign_id_snapshot is distinct from '53000000-0000-4000-8000-000000000001' then
+    raise exception 'Request did not preserve the server-resolved promotion snapshot';
+  end if;
+end;
+$$;
+
+update public.ejnexa_catalog_campaigns set active = false
+where id = '53000000-0000-4000-8000-000000000001';
+
+set local role anon;
+do $$
+begin
+  begin
+    perform 1 from public.ejnexa_submit_catalog_request(
+      'campaign-test-arpe', '54000000-0000-4000-8000-000000000003', 'Test Customer', '', null, '',
+      jsonb_build_array(jsonb_build_object(
+        'product_id', '52000000-0000-4000-8000-000000000001', 'quantity', 1,
+        'expected_campaign_id', '53000000-0000-4000-8000-000000000001', 'expected_public_unit_price', 750
+      ))
+    );
+    raise exception 'Expected changed campaign expectation to be rejected';
+  exception when others then
+    if sqlerrm <> 'La promoción cambió. Actualiza el catálogo e inténtalo nuevamente.' then raise; end if;
+  end;
+
+  perform 1 from public.ejnexa_submit_catalog_request(
+    'campaign-test-arpe', '54000000-0000-4000-8000-000000000004', 'Contact Customer', '', null, '',
+    jsonb_build_array(jsonb_build_object(
+      'product_id', '52000000-0000-4000-8000-000000000006', 'quantity', 1,
+      'expected_campaign_id', '53000000-0000-4000-8000-000000000015', 'expected_public_unit_price', 12345
     ))
   );
 end;
@@ -230,12 +302,14 @@ declare
   v_item public.arpe_catalog_request_items;
 begin
   select * into v_item from public.arpe_catalog_request_items
-  where request_id = (select id from public.arpe_catalog_requests where client_request_key = '54000000-0000-4000-8000-000000000001');
-  if v_item.quantity <> 2 or v_item.public_unit_price_snapshot <> 750
-     or v_item.base_unit_price_snapshot <> 1000 or v_item.promotional_unit_price_snapshot <> 750
-     or v_item.promotion_type_snapshot <> 'percentage'
-     or v_item.campaign_id_snapshot <> '53000000-0000-4000-8000-000000000001' then
-    raise exception 'Request did not preserve the server-resolved promotion snapshot';
+  where request_id = (select id from public.arpe_catalog_requests where client_request_key = '54000000-0000-4000-8000-000000000004');
+  if v_item.campaign_id_snapshot is distinct from '53000000-0000-4000-8000-000000000015'
+     or v_item.campaign_kind_snapshot is distinct from 'showcase'
+     or v_item.promotion_type_snapshot is not null
+     or v_item.public_unit_price_snapshot is not null
+     or v_item.base_unit_price_snapshot is not null
+     or v_item.promotional_unit_price_snapshot is not null then
+    raise exception 'Contact + showcase did not preserve its campaign while keeping monetary snapshots NULL';
   end if;
 end;
 $$;
@@ -260,8 +334,30 @@ begin
     raise exception 'Cross-tenant campaign insert unexpectedly succeeded';
   exception when insufficient_privilege then null;
   end;
+
+  update public.ejnexa_catalog_campaigns set name = 'Changed by owner A'
+  where id = '53000000-0000-4000-8000-000000000014';
+  get diagnostics v_other_count = row_count;
+  if v_other_count <> 0 then raise exception 'Cross-tenant campaign update unexpectedly affected a row'; end if;
+
+  delete from public.ejnexa_catalog_campaigns where id = '53000000-0000-4000-8000-000000000014';
+  get diagnostics v_other_count = row_count;
+  if v_other_count <> 0 then raise exception 'Cross-tenant campaign delete unexpectedly affected a row'; end if;
 end;
 $$;
 reset role;
+
+do $$
+begin
+  if not exists (
+    select 1 from public.ejnexa_catalog_campaigns
+    where id = '53000000-0000-4000-8000-000000000014'
+      and name = 'Shoe pair offer'
+      and business_id = '51000000-0000-4000-8000-000000000002'
+  ) then
+    raise exception 'Cross-tenant update/delete changed the other business campaign';
+  end if;
+end;
+$$;
 
 rollback;

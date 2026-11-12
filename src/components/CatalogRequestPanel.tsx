@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarDays, Clipboard, Minus, Plus, Send, Trash2, X } from 'lucide-react'
 import { catalogImageUrl } from '../lib/catalog'
-import { buildCatalogRequestSubmissionPayload, buildQuoteRequestMessage, buildQuoteRequestWhatsAppUrl, calculateCatalogReference, formatRequestedDate, localDateString, submitCatalogRequest, validateCatalogRequest, type CatalogRequestForm, type CatalogRequestItem, type CatalogRequestSubmission, type CatalogRequestSubmissionPayload } from '../lib/catalog-request'
+import { buildCatalogRequestSubmissionPayload, buildQuoteRequestMessage, buildQuoteRequestWhatsAppUrl, calculateCatalogReference, CATALOG_OFFER_CHANGED_MESSAGE, formatRequestedDate, isCatalogOfferChangedError, localDateString, submitCatalogRequest, validateCatalogRequest, type CatalogRequestForm, type CatalogRequestItem, type CatalogRequestSubmission, type CatalogRequestSubmissionPayload } from '../lib/catalog-request'
 import type { Currency } from '../lib/database.types'
 import './catalog-request.css'
 
@@ -134,8 +134,14 @@ export function CatalogRequestPanel({ open, onClose, onRequestLockChange, slug, 
       const result = await submitCatalogRequest(pending.payload)
       setSubmission({ status: 'success', pending, result })
       setNotice(whatsapp ? '' : 'La solicitud quedó guardada. Este negocio no tiene WhatsApp público habilitado; puedes copiarla o compartirla.')
-    } catch {
-      setSubmission({ status: 'error', pending })
+    } catch (error) {
+      if (isCatalogOfferChangedError(error)) {
+        setSubmission({ status: 'idle' })
+        setNotice(CATALOG_OFFER_CHANGED_MESSAGE)
+        onRequestLockChange(false)
+      } else {
+        setSubmission({ status: 'error', pending })
+      }
     } finally {
       submitLock.current = false
     }
