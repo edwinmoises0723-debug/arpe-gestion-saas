@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CatalogProduct } from './database.types'
-import { buildCampaignInput, buildCampaignPricePreview, campaignErrorMessage, defaultCampaignBadge, getCampaignDisplayStatus, validateCampaignDraft } from './catalog-campaigns'
+import { buildCampaignInput, buildCampaignPricePreview, buildCampaignSaveRpcArgs, campaignErrorMessage, defaultCampaignBadge, getCampaignDisplayStatus, validateCampaignDraft } from './catalog-campaigns'
 
 const products: CatalogProduct[] = [
   { id: 'p1', business_id: 'b1', name: 'Item A', category: 'Retail', description: '', unit_label: 'unidad', default_unit_price: 100, default_portions: null, default_flavor: '', default_filling: '', default_decoration: '', default_extras: '', is_active: true, image_path: null, is_public: true, public_price_mode: 'exact', public_sort_order: 0, created_at: '', updated_at: '' },
@@ -27,10 +27,17 @@ describe('campaign offers and previews', () => {
   })
 
   it('validates type-specific values and contact-priced products', () => {
-    expect(validateCampaignDraft(validDraft({ value: '101' }), products)).toContain('El descuento debe ser un número entero entre 1 y 100.')
+    expect(validateCampaignDraft(validDraft({ value: '12.5' }), products)).toEqual([])
+    expect(validateCampaignDraft(validDraft({ value: '7.25' }), products)).toEqual([])
+    expect(validateCampaignDraft(validDraft({ value: '0' }), products)).toContain('El descuento debe ser mayor que 0 y hasta 100, con un máximo de dos decimales.')
+    expect(validateCampaignDraft(validDraft({ value: '100.01' }), products)).toContain('El descuento debe ser mayor que 0 y hasta 100, con un máximo de dos decimales.')
+    expect(validateCampaignDraft(validDraft({ value: '7.251' }), products)).toContain('El descuento debe ser mayor que 0 y hasta 100, con un máximo de dos decimales.')
     expect(validateCampaignDraft(validDraft({ offerType: 'percentage', productIds: ['p3'] }), products)).toContain('Los productos con Precio pendiente no pueden tener descuentos monetarios.')
     expect(validateCampaignDraft(validDraft({ offerType: 'fixed_discount', value: '51', productIds: ['p2'] }), products)).toContain('El descuento no puede ser mayor que el precio habitual de un producto seleccionado.')
     expect(validateCampaignDraft(validDraft({ offerType: 'fixed_price', value: '0', productIds: ['p1'] }), products)).toEqual([])
+    expect(validateCampaignDraft(validDraft({ offerType: 'fixed_price', value: '45', productIds: ['p1', 'p2'] }), products)).toEqual([])
+    expect(validateCampaignDraft(validDraft({ offerType: 'fixed_price', value: '51', productIds: ['p1', 'p2'] }), products)).toContain('El precio especial no puede superar el precio habitual de los productos seleccionados.')
+    expect(validateCampaignDraft(validDraft({ offerType: 'fixed_price', value: '20', productIds: ['p3'] }), products)).toContain('Los productos con Precio pendiente no pueden tener descuentos monetarios.')
     expect(validateCampaignDraft(validDraft({ offerType: 'two_for_one', value: '', productIds: ['p3'] }), products)).toEqual([])
     expect(validateCampaignDraft(validDraft({ offerType: 'showcase', value: '', productIds: ['p3'] }), products)).toEqual([])
   })
@@ -49,6 +56,17 @@ describe('campaign offers and previews', () => {
     expect(defaultCampaignBadge('fixed_price')).toBe('Precio especial')
   })
 
+  it('builds one authenticated save RPC payload with the campaign snapshot and product IDs', () => {
+    const values = buildCampaignInput({ ...emptyCampaignDraft(), offerType: 'percentage', value: '12.5' }, 'b1', true)
+    expect(buildCampaignSaveRpcArgs(values, 'campaign-1', ['p1', 'p2'])).toEqual({
+      p_campaign_id: 'campaign-1', p_business_id: 'b1', p_name: 'Temporada', p_description: '',
+      p_campaign_kind: 'promotion', p_promotion_type: 'percentage', p_percentage_discount: 12.5,
+      p_fixed_discount: null, p_promo_price: null, p_badge_text: '12.5% OFF', p_image_path: null,
+      p_starts_on: null, p_ends_on: null, p_active: true, p_featured: false, p_sort_order: 0,
+      p_product_ids: ['p1', 'p2'],
+    })
+  })
+
   it('derives inactive, scheduled, active and finished labels from campaign fields', () => {
     const today = '2026-11-12'
     expect(getCampaignDisplayStatus({ active: false, starts_on: null, ends_on: null }, today)).toBe('inactive')
@@ -59,6 +77,7 @@ describe('campaign offers and previews', () => {
 
   it('translates overlap and database errors into safe Spanish copy', () => {
     expect(campaignErrorMessage({ code: '23514', message: 'A product cannot have overlapping active commercial promotions' })).toContain('Uno de los productos ya tiene una promoción activa')
+    expect(campaignErrorMessage({ code: '23514', message: 'Special price cannot exceed the usual price of any selected product' })).toBe('El precio especial no puede superar el precio habitual de los productos seleccionados.')
     expect(campaignErrorMessage({ code: '23514', message: 'raw SQL detail' })).toBe('No pudimos guardar la promoción. Revisa sus productos, fechas y valores.')
     expect(campaignErrorMessage({ code: 'PGRST', message: 'raw SQL detail' })).not.toContain('raw SQL')
   })

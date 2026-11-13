@@ -100,7 +100,7 @@ begin
   insert into public.ejnexa_catalog_campaigns (id, business_id, name, campaign_kind, promotion_type, percentage_discount, active, starts_on, ends_on)
   values ('53000000-0000-4000-8000-000000000010', '51000000-0000-4000-8000-000000000001', 'Draft promotion', 'promotion', 'percentage', 10, false, current_date, current_date + 1);
   insert into public.ejnexa_catalog_campaign_products (campaign_id, business_id, product_id, position)
-  values ('53000000-0000-4000-8000-000000000010', '51000000-0000-4000-8000-000000000001', '52000000-0000-4000-8000-000000000001', 1);
+  values ('53000000-0000-4000-8000-000000000010', '51000000-0000-4000-8000-000000000001', '52000000-0000-4000-8000-000000000002', 1);
   begin
     update public.ejnexa_catalog_campaigns set active = true where id = '53000000-0000-4000-8000-000000000010';
     raise exception 'Expected activation of overlapping promotion to fail';
@@ -320,29 +320,170 @@ do $$
 declare
   v_own_count integer;
   v_other_count integer;
+  v_count integer;
+  v_campaign_id uuid;
+  v_active boolean;
+  v_name text;
+  v_product_id uuid;
 begin
   select count(*) into v_own_count from public.ejnexa_catalog_campaigns where business_id = '51000000-0000-4000-8000-000000000001';
   select count(*) into v_other_count from public.ejnexa_catalog_campaigns where business_id = '51000000-0000-4000-8000-000000000002';
   if v_own_count < 8 or v_other_count <> 0 then raise exception 'Campaign owner RLS isolation failed'; end if;
 
-  insert into public.ejnexa_catalog_campaigns (business_id, name, campaign_kind)
-  values ('51000000-0000-4000-8000-000000000001', 'Owner-created showcase', 'showcase');
+  if not has_table_privilege('authenticated', 'public.ejnexa_catalog_campaigns', 'SELECT')
+     or not has_table_privilege('authenticated', 'public.ejnexa_catalog_campaign_products', 'SELECT')
+     or has_table_privilege('authenticated', 'public.ejnexa_catalog_campaigns', 'INSERT')
+     or has_table_privilege('authenticated', 'public.ejnexa_catalog_campaigns', 'UPDATE')
+     or has_table_privilege('authenticated', 'public.ejnexa_catalog_campaigns', 'DELETE')
+     or has_table_privilege('authenticated', 'public.ejnexa_catalog_campaign_products', 'INSERT')
+     or has_table_privilege('authenticated', 'public.ejnexa_catalog_campaign_products', 'UPDATE')
+     or has_table_privilege('authenticated', 'public.ejnexa_catalog_campaign_products', 'DELETE') then
+    raise exception 'Campaign table privileges do not preserve SELECT-only authenticated access';
+  end if;
+
+  if not has_function_privilege('authenticated', 'public.ejnexa_save_catalog_campaign(uuid, uuid, text, text, text, text, numeric, numeric, numeric, text, text, date, date, boolean, boolean, integer, uuid[])', 'EXECUTE')
+     or has_function_privilege('anon', 'public.ejnexa_save_catalog_campaign(uuid, uuid, text, text, text, text, numeric, numeric, numeric, text, text, date, date, boolean, boolean, integer, uuid[])', 'EXECUTE')
+     or not has_function_privilege('authenticated', 'public.ejnexa_set_catalog_campaign_active(uuid, uuid, boolean)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.ejnexa_set_catalog_campaign_active(uuid, uuid, boolean)', 'EXECUTE') then
+    raise exception 'Campaign management RPC grants are incomplete';
+  end if;
+  if exists (
+    select 1 from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+    where n.nspname = 'public'
+      and p.proname in ('ejnexa_save_catalog_campaign', 'ejnexa_set_catalog_campaign_active')
+      and a.grantee = 0 and a.privilege_type = 'EXECUTE'
+  ) then
+    raise exception 'Campaign management RPCs are executable by PUBLIC';
+  end if;
+
+  select id into v_campaign_id
+  from public.ejnexa_save_catalog_campaign(
+    null, '51000000-0000-4000-8000-000000000001', 'Owner decimal draft', '', 'promotion', 'percentage',
+    12.5, null, null, null, null, current_date + 10, current_date + 12, false, false, 0,
+    array['52000000-0000-4000-8000-000000000007'::uuid]
+  );
+  if v_campaign_id is null then raise exception 'Owner could not create an atomic campaign draft'; end if;
+  if not exists (select 1 from public.ejnexa_catalog_campaigns where id = v_campaign_id and percentage_discount = 12.5 and active = false)
+     or not exists (select 1 from public.ejnexa_catalog_campaign_products where campaign_id = v_campaign_id and product_id = '52000000-0000-4000-8000-000000000007') then
+    raise exception 'Owner campaign draft or product association was not persisted atomically';
+  end if;
 
   begin
-    insert into public.ejnexa_catalog_campaigns (business_id, name, campaign_kind)
-    values ('51000000-0000-4000-8000-000000000002', 'Cross-tenant showcase', 'showcase');
-    raise exception 'Cross-tenant campaign insert unexpectedly succeeded';
+    perform 1 from public.ejnexa_save_catalog_campaign(
+      v_campaign_id, '51000000-0000-4000-8000-000000000001', 'Must roll back', '', 'promotion', 'percentage',
+      20, null, null, null, null, current_date, current_date + 2, true, false, 0,
+      array['52000000-0000-4000-8000-000000000002'::uuid]
+    );
+    raise exception 'Expected overlapping publication during update to fail';
+  exception when check_violation then null;
+  end;
+  select c.name, c.active into v_name, v_active from public.ejnexa_catalog_campaigns c where c.id = v_campaign_id;
+  select cp.product_id into v_product_id from public.ejnexa_catalog_campaign_products cp where cp.campaign_id = v_campaign_id;
+  if v_name <> 'Owner decimal draft' or v_active is not false or v_product_id <> '52000000-0000-4000-8000-000000000007' then
+    raise exception 'Failed atomic campaign update changed the campaign or its original links';
+  end if;
+
+  perform 1 from public.ejnexa_set_catalog_campaign_active('51000000-0000-4000-8000-000000000001', v_campaign_id, true);
+  if not exists (select 1 from public.ejnexa_catalog_campaigns where id = v_campaign_id and active = true) then
+    raise exception 'Owner activation RPC did not activate campaign';
+  end if;
+  perform 1 from public.ejnexa_set_catalog_campaign_active('51000000-0000-4000-8000-000000000001', v_campaign_id, false);
+  if not exists (select 1 from public.ejnexa_catalog_campaigns where id = v_campaign_id and active = false) then
+    raise exception 'Owner deactivation RPC did not deactivate campaign';
+  end if;
+
+  begin
+    perform 1 from public.ejnexa_save_catalog_campaign(
+      null, '51000000-0000-4000-8000-000000000002', 'Cross-tenant campaign', '', 'showcase', null,
+      null, null, null, null, null, null, null, false, false, 0,
+      array['52000000-0000-4000-8000-000000000009'::uuid]
+    );
+    raise exception 'Cross-tenant campaign save unexpectedly succeeded';
   exception when insufficient_privilege then null;
   end;
 
-  update public.ejnexa_catalog_campaigns set name = 'Changed by owner A'
-  where id = '53000000-0000-4000-8000-000000000014';
-  get diagnostics v_other_count = row_count;
-  if v_other_count <> 0 then raise exception 'Cross-tenant campaign update unexpectedly affected a row'; end if;
+  begin
+    perform 1 from public.ejnexa_save_catalog_campaign(
+      null, '51000000-0000-4000-8000-000000000001', 'Cross-tenant product', '', 'showcase', null,
+      null, null, null, null, null, null, null, false, false, 0,
+      array['52000000-0000-4000-8000-000000000009'::uuid]
+    );
+    raise exception 'Cross-tenant product save unexpectedly succeeded';
+  exception when insufficient_privilege then null;
+  end;
 
-  delete from public.ejnexa_catalog_campaigns where id = '53000000-0000-4000-8000-000000000014';
-  get diagnostics v_other_count = row_count;
-  if v_other_count <> 0 then raise exception 'Cross-tenant campaign delete unexpectedly affected a row'; end if;
+  begin
+    perform 1 from public.ejnexa_save_catalog_campaign(
+      null, '51000000-0000-4000-8000-000000000001', 'Duplicate products', '', 'showcase', null,
+      null, null, null, null, null, null, null, false, false, 0,
+      array['52000000-0000-4000-8000-000000000007'::uuid, '52000000-0000-4000-8000-000000000007'::uuid]
+    );
+    raise exception 'Duplicate campaign product IDs unexpectedly succeeded';
+  exception when check_violation then null;
+  end;
+
+  begin
+    perform 1 from public.ejnexa_save_catalog_campaign(
+      null, '51000000-0000-4000-8000-000000000001', 'Price too high', '', 'promotion', 'fixed_price',
+      null, null, 1001, null, null, null, null, false, false, 0,
+      array['52000000-0000-4000-8000-000000000001'::uuid]
+    );
+    raise exception 'Fixed price higher than the product price unexpectedly succeeded';
+  exception when check_violation then null;
+  end;
+
+  begin
+    perform 1 from public.ejnexa_save_catalog_campaign(
+      null, '51000000-0000-4000-8000-000000000001', 'Discount too high', '', 'promotion', 'fixed_discount',
+      null, 1001, null, null, null, null, null, false, false, 0,
+      array['52000000-0000-4000-8000-000000000001'::uuid]
+    );
+    raise exception 'Fixed discount larger than the product price unexpectedly succeeded';
+  exception when check_violation then null;
+  end;
+
+  begin
+    perform 1 from public.ejnexa_save_catalog_campaign(
+      null, '51000000-0000-4000-8000-000000000001', 'Contact monetary promotion', '', 'promotion', 'percentage',
+      25, null, null, null, null, null, null, false, false, 0,
+      array['52000000-0000-4000-8000-000000000006'::uuid]
+    );
+    raise exception 'Contact-priced monetary campaign unexpectedly succeeded';
+  exception when check_violation then null;
+  end;
+
+  begin
+    perform 1 from public.ejnexa_save_catalog_campaign(
+      null, '51000000-0000-4000-8000-000000000001', 'Publication overlap', '', 'promotion', 'percentage',
+      10, null, null, null, null, current_date, current_date + 2, true, false, 0,
+      array['52000000-0000-4000-8000-000000000002'::uuid]
+    );
+    raise exception 'Overlapping atomic publication unexpectedly succeeded';
+  exception when check_violation then null;
+  end;
+  select count(*) into v_count from public.ejnexa_catalog_campaigns where business_id = '51000000-0000-4000-8000-000000000001' and name = 'Publication overlap';
+  if v_count <> 0 then raise exception 'Failed publication left a partial campaign behind'; end if;
+  select count(*) into v_count from public.ejnexa_catalog_campaign_products cp
+  join public.ejnexa_catalog_campaigns c on c.id = cp.campaign_id
+  where c.business_id = '51000000-0000-4000-8000-000000000001' and c.name = 'Publication overlap';
+  if v_count <> 0 then raise exception 'Failed publication left partial campaign product links behind'; end if;
+
+  begin
+    perform 1 from public.ejnexa_set_catalog_campaign_active('51000000-0000-4000-8000-000000000001', '53000000-0000-4000-8000-000000000010', true);
+    raise exception 'Overlapping activation RPC unexpectedly succeeded';
+  exception when check_violation then null;
+  end;
+  if not exists (select 1 from public.ejnexa_catalog_campaigns where id = '53000000-0000-4000-8000-000000000010' and active = false) then
+    raise exception 'Rejected activation changed the original campaign state';
+  end if;
+
+  begin
+    perform 1 from public.ejnexa_set_catalog_campaign_active('51000000-0000-4000-8000-000000000002', '53000000-0000-4000-8000-000000000014', true);
+    raise exception 'Cross-tenant activation RPC unexpectedly succeeded';
+  exception when insufficient_privilege then null;
+  end;
 end;
 $$;
 reset role;
