@@ -39,7 +39,7 @@ export function catalogImageUrl(path: string | null | undefined) {
   return client().storage.from(CATALOG_MEDIA_BUCKET).getPublicUrl(path).data.publicUrl
 }
 
-export async function uploadCatalogMedia(ownerId: string, businessId: string, folder: 'products' | 'profile', file: File) {
+export async function uploadCatalogMedia(ownerId: string, businessId: string, folder: 'products' | 'profile' | 'campaigns', file: File) {
   validateCatalogImage(file)
   const extension = mimeExtensions[file.type]
   const path = `${ownerId}/${businessId}/${folder}/${crypto.randomUUID()}.${extension}`

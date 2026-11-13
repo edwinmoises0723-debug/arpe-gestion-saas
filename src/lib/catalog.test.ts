@@ -52,6 +52,8 @@ describe('catálogo público y multimedia', () => {
     const path = await uploadCatalogMedia('owner-1', 'business-1', 'products', file)
     expect(path).toMatch(/^owner-1\/business-1\/products\/file-id\.png$/)
     expect(upload).toHaveBeenCalledWith(path, file, { contentType: 'image/png', upsert: false })
+    const campaignPath = await uploadCatalogMedia('owner-1', 'business-1', 'campaigns', file)
+    expect(campaignPath).toMatch(/^owner-1\/business-1\/campaigns\/file-id\.png$/)
     await expect(removeCatalogMedia('someone/business/products/a.png', 'owner-1')).rejects.toThrow('no pertenece')
     await removeCatalogMedia(path, 'owner-1')
     expect(remove).toHaveBeenCalledWith([path])

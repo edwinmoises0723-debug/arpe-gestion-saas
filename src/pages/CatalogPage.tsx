@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Image, Package, Plus, Search, Upload, X } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import type { Business, CatalogProduct, CatalogProductInput, PublicCatalogPriceMode } from '../lib/database.types'
 import { catalogImageUrl, isValidCatalogSlug, savePublicCatalogSettings, slugifyCatalogName, validateCatalogImage, type PublicCatalogSettingsInput } from '../lib/catalog'
 import { filterCatalog, listCatalog, saveCatalog } from '../lib/products'
@@ -7,8 +8,13 @@ import { formatCurrency } from '../lib/quotes'
 import { errorMessage } from '../lib/supabase'
 import { Loading, Notice } from '../components/Feedback'
 import { CatalogDistributionActions } from '../components/CatalogDistributionActions'
+import { CatalogTabs, type CatalogView } from '../components/CatalogTabs'
+import { CampaignsPanel } from '../components/CampaignsPanel'
 
 export function CatalogPage({ business }: { business: Business }) {
+  const [searchParams] = useSearchParams()
+  const requestedView = searchParams.get('vista')
+  const view: CatalogView = requestedView === 'promociones' || requestedView === 'publico' ? requestedView : 'productos'
   const [products, setProducts] = useState<CatalogProduct[]>([])
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('')
@@ -26,11 +32,15 @@ export function CatalogPage({ business }: { business: Business }) {
   }
   if (editing) return <CatalogForm business={business} product={editing === 'new' ? null : editing} onSaved={saved} onCancel={() => setEditing(null)} />
   const visible = filterCatalog(products, search, category, status)
-  return <div className="catalog-page"><div className="page-heading"><div><span className="eyebrow accent">TU COLECCIÓN DE PRODUCTOS</span><h1>Catálogo</h1><p className="muted">Guarda lo habitual y personaliza cada cotización con libertad.</p></div><button className="primary" onClick={() => setEditing('new')}><Plus size={18} /> Crear producto</button></div>
-    {error && <Notice error>{error}</Notice>}{notice && <Notice>{notice}</Notice>}
-    <PublicCatalogSettings business={business} onSaved={setNotice} onError={setError} />
-    <section className="panel catalog-filters"><label>Buscar por nombre o categoría<span className="catalog-search"><Search size={18} /><input type="search" value={search} onChange={e => setSearch(e.target.value)} /></span></label><div className="form-grid"><label>Categoría<select value={category} onChange={e => setCategory(e.target.value)}><option value="">Todas</option>{[...new Set(products.map(p => p.category))].sort().map(c => <option key={c}>{c}</option>)}</select></label><label>Estado<select value={status} onChange={e => setStatus(e.target.value)}><option value="active">Activos</option><option value="inactive">Inactivos</option><option value="all">Todos</option></select></label></div></section>
-    {loading ? <Loading text="Cargando tu catálogo…" /> : <section className="catalog-grid">{visible.map(p => <article className="panel catalog-card" key={p.id}><ProductImage path={p.image_path} name={p.name} /><div className="catalog-card-copy"><span className="eyebrow accent">{p.category}</span><h2>{p.name}</h2><p>{formatCurrency(p.default_unit_price, business)} / {p.unit_label}</p>{p.default_portions !== null && <p>{p.default_portions} porciones</p>}<div className="catalog-statuses"><span className="subtle-badge">{p.is_active ? 'Activo' : 'Inactivo'}</span><span className="subtle-badge">{p.is_public ? 'Público' : 'Privado'}</span></div></div><div className="catalog-actions"><button className="secondary-button" onClick={() => setEditing(p)}>Editar</button><button className="text-button" disabled={busy} onClick={() => void toggle(p)}>{p.is_active ? 'Desactivar' : 'Activar'}</button></div></article>)}{!visible.length && <div className="panel"><h2>{products.length ? 'No hay productos con estos filtros' : 'Tu catálogo comienza aquí'}</h2><p>Agrega tus productos habituales. También puedes cotizar productos personalizados sin registrarlos aquí.</p></div>}</section>}
+  return <div className="catalog-page"><div className="page-heading"><div><span className="eyebrow accent">TU ESPACIO COMERCIAL</span><h1>Catálogo</h1><p className="muted">Gestiona productos, promociones y lo que compartes con tus clientes.</p></div>{view === 'productos' && <button className="primary" onClick={() => setEditing('new')}><Plus size={18} /> Crear producto</button>}</div>
+    <CatalogTabs active={view} />
+    {view === 'productos' && <>
+      {error && <Notice error>{error}</Notice>}{notice && <Notice>{notice}</Notice>}
+      <section className="panel catalog-filters"><label>Buscar por nombre o categoría<span className="catalog-search"><Search size={18} /><input type="search" value={search} onChange={e => setSearch(e.target.value)} /></span></label><div className="form-grid"><label>Categoría<select value={category} onChange={e => setCategory(e.target.value)}><option value="">Todas</option>{[...new Set(products.map(p => p.category))].sort().map(c => <option key={c}>{c}</option>)}</select></label><label>Estado<select value={status} onChange={e => setStatus(e.target.value)}><option value="active">Activos</option><option value="inactive">Inactivos</option><option value="all">Todos</option></select></label></div></section>
+      {loading ? <Loading text="Cargando tu catálogo…" /> : <section className="catalog-grid">{visible.map(p => <article className="panel catalog-card" key={p.id}><ProductImage path={p.image_path} name={p.name} /><div className="catalog-card-copy"><span className="eyebrow accent">{p.category}</span><h2>{p.name}</h2><p>{formatCurrency(p.default_unit_price, business)} / {p.unit_label}</p>{p.default_portions !== null && <p>{p.default_portions} porciones</p>}<div className="catalog-statuses"><span className="subtle-badge">{p.is_active ? 'Activo' : 'Inactivo'}</span><span className="subtle-badge">{p.is_public ? 'Público' : 'Privado'}</span></div></div><div className="catalog-actions"><button className="secondary-button" onClick={() => setEditing(p)}>Editar</button><button className="text-button" disabled={busy} onClick={() => void toggle(p)}>{p.is_active ? 'Desactivar' : 'Activar'}</button></div></article>)}{!visible.length && <div className="panel"><h2>{products.length ? 'No hay productos con estos filtros' : 'Tu catálogo comienza aquí'}</h2><p>Agrega tus productos habituales. También puedes cotizar productos personalizados sin registrarlos aquí.</p></div>}</section>}
+    </>}
+    {view === 'promociones' && <CampaignsPanel business={business} products={products} />}
+    {view === 'publico' && <>{error && <Notice error>{error}</Notice>}{notice && <Notice>{notice}</Notice>}<PublicCatalogSettings business={business} onSaved={setNotice} onError={setError} /></>}
   </div>
 }
 
