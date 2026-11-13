@@ -54,13 +54,18 @@ export function CampaignWizard({ business, products, campaign, onCancel, onSaved
       if (draft.description.trim().length > 1000) nextErrors.push('La descripción no puede superar 1,000 caracteres.')
       if (draft.badgeText.trim().length > 60) nextErrors.push('El badge no puede superar 60 caracteres.')
       const value = draft.value.trim() ? Number(draft.value) : Number.NaN
-      if (draft.offerType === 'percentage' && (!Number.isInteger(value) || value < 1 || value > 100)) nextErrors.push('El descuento debe ser un número entero entre 1 y 100.')
+      if (draft.offerType === 'percentage' && (!Number.isFinite(value) || value <= 0 || value > 100 || Math.round(value * 100) !== value * 100)) nextErrors.push('El descuento debe ser mayor que 0 y hasta 100, con un máximo de dos decimales.')
       if (draft.offerType === 'fixed_discount') {
         if (!Number.isFinite(value) || value <= 0) nextErrors.push('Indica un monto de descuento mayor que cero.')
         const prices = draft.productIds.map(id => products.find(product => product.id === id)).filter((product): product is CatalogProduct => Boolean(product && product.public_price_mode !== 'contact'))
         if (Number.isFinite(value) && prices.some(product => value > Number(product.default_unit_price))) nextErrors.push('El descuento no puede ser mayor que el precio habitual de un producto seleccionado.')
       }
-      if (draft.offerType === 'fixed_price' && (!Number.isFinite(value) || value < 0)) nextErrors.push('Indica un precio especial válido, igual o mayor que cero.')
+      if (draft.offerType === 'fixed_price') {
+        if (!Number.isFinite(value) || value < 0) nextErrors.push('Indica un precio especial válido, igual o mayor que cero.')
+        const pricedProducts = draft.productIds.map(id => products.find(product => product.id === id)).filter((product): product is CatalogProduct => Boolean(product && product.public_price_mode !== 'contact'))
+        const minimumPrice = pricedProducts.length ? Math.min(...pricedProducts.map(product => Number(product.default_unit_price))) : null
+        if (Number.isFinite(value) && minimumPrice !== null && value > minimumPrice) nextErrors.push('El precio especial no puede superar el precio habitual de los productos seleccionados.')
+      }
     }
     if (step === 3 && draft.startsOn && draft.endsOn && draft.endsOn < draft.startsOn) nextErrors.push('La fecha final debe ser igual o posterior a la fecha de inicio.')
     setErrors(nextErrors)
@@ -136,9 +141,9 @@ export function CampaignWizard({ business, products, campaign, onCancel, onSaved
       {step === 0 && <CampaignTypeSelector business={business} selected={draft.offerType} onSelect={chooseType} />}
       {step === 1 && <CampaignProductPicker business={business} products={products} offerType={draft.offerType} selected={draft.productIds} onChange={ids => update('productIds', ids)} />}
       {step === 2 && <fieldset className="campaign-details-fields" disabled={busy}>
-        {draft.offerType === 'percentage' && <label>Porcentaje de descuento<input aria-label="Porcentaje de descuento" type="number" min="1" max="100" step="1" value={draft.value} onChange={event => update('value', event.target.value)} placeholder="25" /><small>Elige un número entero entre 1 y 100.</small></label>}
+        {draft.offerType === 'percentage' && <label>Porcentaje de descuento<input aria-label="Porcentaje de descuento" type="number" min="0.01" max="100" step="0.01" value={draft.value} onChange={event => update('value', event.target.value)} placeholder="25" /><small>Elige un porcentaje mayor que 0 y hasta 100. Puedes usar hasta dos decimales.</small></label>}
         {draft.offerType === 'fixed_discount' && <label>Monto de descuento<input aria-label="Monto de descuento" type="number" min="0.01" max={minimumProductPrice ?? undefined} step="0.01" value={draft.value} onChange={event => update('value', event.target.value)} placeholder={minimumProductPrice === null ? '0.00' : Math.min(100, minimumProductPrice).toFixed(2)} /><small>La moneda configurada para este negocio se mostrará en la vista previa.</small>{minimumProductPrice !== null && Number(draft.value) > minimumProductPrice && <small className="campaign-inline-error">El descuento no puede ser mayor que {formatCurrency(minimumProductPrice, business)}.</small>}</label>}
-        {draft.offerType === 'fixed_price' && <label>Precio especial<input aria-label="Precio especial" type="number" min="0" step="0.01" value={draft.value} onChange={event => update('value', event.target.value)} placeholder="0.00" /><small>El precio habitual de cada producto se toma del catálogo.</small></label>}
+        {draft.offerType === 'fixed_price' && <label>Precio especial<input aria-label="Precio especial" type="number" min="0" max={minimumProductPrice ?? undefined} step="0.01" value={draft.value} onChange={event => update('value', event.target.value)} placeholder="0.00" /><small>Debe ser igual o menor que el precio habitual más bajo de los productos seleccionados.</small>{minimumProductPrice !== null && Number(draft.value) > minimumProductPrice && <small className="campaign-inline-error">El precio especial no puede superar el precio habitual de los productos seleccionados.</small>}</label>}
         {draft.offerType === 'two_for_one' && <div className="campaign-guidance"><span className="campaign-type-icon"><Check size={20} /></span><p>Compra 1 y recibe 2 unidades del mismo producto. No hace falta calcular ningún porcentaje ni ingresar otro precio.</p></div>}
         {draft.offerType === 'showcase' && <div className="campaign-guidance"><span className="campaign-type-icon"><Check size={20} /></span><p>Destaca una novedad, una temporada o una colección sin cambiar el precio de los productos.</p></div>}
         <label>Nombre de la campaña<input aria-label="Nombre de la campaña" required maxLength={120} value={draft.name} onChange={event => update('name', event.target.value)} placeholder="Ej. Oferta de temporada" /><small>Este nombre puede aparecer junto a los productos en el catálogo público.</small></label>

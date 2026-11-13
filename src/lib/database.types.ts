@@ -392,6 +392,32 @@ export type Database = {
       arpe_void_payment: { Args: { p_payment_id: string; p_void_reason: string }; Returns: Payment[] }
       ejnexa_get_public_catalog_profile: { Args: { p_slug: string }; Returns: PublicCatalogProfile[] }
       ejnexa_get_public_catalog_products: { Args: { p_slug: string }; Returns: PublicCatalogProduct[] }
+      ejnexa_save_catalog_campaign: {
+        Args: {
+          p_campaign_id: string | null
+          p_business_id: string
+          p_name: string
+          p_description: string
+          p_campaign_kind: CatalogCampaignKind
+          p_promotion_type: CatalogPromotionType | null
+          p_percentage_discount: number | null
+          p_fixed_discount: number | null
+          p_promo_price: number | null
+          p_badge_text: string | null
+          p_image_path: string | null
+          p_starts_on: string | null
+          p_ends_on: string | null
+          p_active: boolean
+          p_featured: boolean
+          p_sort_order: number
+          p_product_ids: string[]
+        }
+        Returns: CatalogCampaign[]
+      }
+      ejnexa_set_catalog_campaign_active: {
+        Args: { p_business_id: string; p_campaign_id: string; p_active: boolean }
+        Returns: CatalogCampaign[]
+      }
       ejnexa_submit_catalog_request: {
         Args: {
           p_slug: string

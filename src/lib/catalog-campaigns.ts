@@ -107,7 +107,7 @@ export function validateCampaignDraft(draft: Pick<CampaignDraft, 'offerType' | '
   if (selected.length !== draft.productIds.length) errors.push('Actualiza la lista de productos antes de guardar.')
   if (draft.startsOn && draft.endsOn && draft.endsOn < draft.startsOn) errors.push('La fecha final debe ser igual o posterior a la fecha de inicio.')
 
-  if (draft.offerType === 'percentage' && (!Number.isInteger(value) || value < 1 || value > 100)) errors.push('El descuento debe ser un número entero entre 1 y 100.')
+  if (draft.offerType === 'percentage' && (!Number.isFinite(value) || value <= 0 || value > 100 || Math.round(value * 100) !== value * 100)) errors.push('El descuento debe ser mayor que 0 y hasta 100, con un máximo de dos decimales.')
   if (draft.offerType === 'fixed_discount') {
     if (!Number.isFinite(value) || value <= 0) errors.push('Indica un monto de descuento mayor que cero.')
     if (selected.some(product => product.public_price_mode === 'contact')) errors.push('Los productos con Precio pendiente no pueden tener descuentos monetarios.')
@@ -115,7 +115,13 @@ export function validateCampaignDraft(draft: Pick<CampaignDraft, 'offerType' | '
       errors.push('El descuento no puede ser mayor que el precio habitual de un producto seleccionado.')
     }
   }
-  if (draft.offerType === 'fixed_price' && (!Number.isFinite(value) || value < 0)) errors.push('Indica un precio especial válido, igual o mayor que cero.')
+  if (draft.offerType === 'fixed_price') {
+    if (!Number.isFinite(value) || value < 0) errors.push('Indica un precio especial válido, igual o mayor que cero.')
+    if (selected.some(product => product.public_price_mode === 'contact')) errors.push('Los productos con Precio pendiente no pueden tener descuentos monetarios.')
+    const pricedProducts = selected.filter(product => product.public_price_mode !== 'contact')
+    const minimumPrice = pricedProducts.length ? Math.min(...pricedProducts.map(product => Number(product.default_unit_price))) : null
+    if (Number.isFinite(value) && minimumPrice !== null && value > minimumPrice) errors.push('El precio especial no puede superar el precio habitual de los productos seleccionados.')
+  }
   if (draft.offerType === 'percentage' && selected.some(product => product.public_price_mode === 'contact')) errors.push('Los productos con Precio pendiente no pueden tener descuentos monetarios.')
   if (draft.offerType === 'fixed_price' && selected.some(product => product.public_price_mode === 'contact')) errors.push('Los productos con Precio pendiente no pueden tener descuentos monetarios.')
   return errors
@@ -162,10 +168,33 @@ export function buildCampaignInput(draft: CampaignDraft, businessId: string, act
   }
 }
 
+export function buildCampaignSaveRpcArgs(values: CatalogCampaignInput, campaignId: string | null, productIds: string[]) {
+  return {
+    p_campaign_id: campaignId,
+    p_business_id: values.business_id,
+    p_name: values.name,
+    p_description: values.description,
+    p_campaign_kind: values.campaign_kind,
+    p_promotion_type: values.promotion_type,
+    p_percentage_discount: values.percentage_discount,
+    p_fixed_discount: values.fixed_discount,
+    p_promo_price: values.promo_price,
+    p_badge_text: values.badge_text,
+    p_image_path: values.image_path,
+    p_starts_on: values.starts_on,
+    p_ends_on: values.ends_on,
+    p_active: values.active,
+    p_featured: values.featured,
+    p_sort_order: values.sort_order,
+    p_product_ids: productIds,
+  }
+}
+
 export function campaignErrorMessage(error: unknown) {
   const record = typeof error === 'object' && error !== null ? error as { message?: unknown; code?: unknown } : null
   const message = typeof record?.message === 'string' ? record.message : error instanceof Error ? error.message : ''
   if (/overlapping active commercial promotions/i.test(message)) return CAMPAIGN_OVERLAP_MESSAGE
+  if (/special price cannot exceed the usual price/i.test(message)) return 'El precio especial no puede superar el precio habitual de los productos seleccionados.'
   if (record?.code === '23514') return 'No pudimos guardar la promoción. Revisa sus productos, fechas y valores.'
   if (/fetch|network|offline/i.test(message)) return 'No pudimos conectar. Revisa tu conexión e inténtalo de nuevo.'
   return 'No pudimos completar esta acción. Revisa la información e inténtalo de nuevo.'
@@ -184,33 +213,6 @@ export async function listCatalogCampaigns(businessId: string): Promise<Campaign
   return campaigns.map(campaign => ({ ...campaign, product_ids: productsByCampaign.get(campaign.id) ?? [] }))
 }
 
-function campaignUpdateFromRecord(campaign: CatalogCampaign): Partial<Omit<CatalogCampaignInput, 'business_id'>> {
-  return {
-    name: campaign.name,
-    description: campaign.description,
-    campaign_kind: campaign.campaign_kind,
-    promotion_type: campaign.promotion_type,
-    percentage_discount: campaign.percentage_discount,
-    fixed_discount: campaign.fixed_discount,
-    promo_price: campaign.promo_price,
-    badge_text: campaign.badge_text,
-    image_path: campaign.image_path,
-    starts_on: campaign.starts_on,
-    ends_on: campaign.ends_on,
-    active: campaign.active,
-    featured: campaign.featured,
-    sort_order: campaign.sort_order,
-  }
-}
-
-async function ignoreFailure(action: () => PromiseLike<unknown>) {
-  try {
-    await action()
-  } catch {
-    // Preserve the original operation error while attempting best-effort cleanup.
-  }
-}
-
 export async function saveCatalogCampaign(args: {
   businessId: string
   ownerId: string
@@ -221,98 +223,34 @@ export async function saveCatalogCampaign(args: {
   removeImage?: boolean
 }) {
   const db = client()
-  const linksTable = db.from('ejnexa_catalog_campaign_products')
-  const campaignsTable = db.from('ejnexa_catalog_campaigns')
   const businessId = args.businessId
   if (args.values.business_id !== businessId) throw new Error('Invalid business')
 
   let uploadedPath: string | null = null
-  let savedCampaign: CatalogCampaign | null = null
-  let writeStarted = false
-  let created = false
-  let originalCampaign = args.existing ?? null
-  let originalLinks: Array<{ campaign_id: string; business_id: string; product_id: string; position: number }> = []
-  const previousImagePath = originalCampaign?.image_path ?? null
+  const previousImagePath = args.existing?.image_path ?? null
 
   try {
-    if (originalCampaign) {
-      const { data, error } = await campaignsTable.select('*').eq('id', originalCampaign.id).eq('business_id', businessId).maybeSingle()
-      if (error) throw error
-      if (!data) throw new Error('Campaign not found')
-      originalCampaign = data
-      const { data: linkData, error: linkError } = await linksTable.select('campaign_id,business_id,product_id,position').eq('campaign_id', data.id).eq('business_id', businessId).order('position')
-      if (linkError) throw linkError
-      originalLinks = linkData ?? []
-    }
     if (args.imageFile) uploadedPath = await uploadCatalogMedia(args.ownerId, businessId, 'campaigns', args.imageFile)
-    const nextImagePath = uploadedPath ?? (args.removeImage ? null : originalCampaign?.image_path ?? args.values.image_path)
+    const nextImagePath = uploadedPath ?? (args.removeImage ? null : args.existing?.image_path ?? args.values.image_path)
     const safeValues: CatalogCampaignInput = { ...args.values, business_id: businessId, image_path: nextImagePath, active: false }
-    const updateValues: Partial<Omit<CatalogCampaignInput, 'business_id'>> = {
-      name: safeValues.name,
-      description: safeValues.description,
-      campaign_kind: safeValues.campaign_kind,
-      promotion_type: safeValues.promotion_type,
-      percentage_discount: safeValues.percentage_discount,
-      fixed_discount: safeValues.fixed_discount,
-      promo_price: safeValues.promo_price,
-      badge_text: safeValues.badge_text,
-      image_path: safeValues.image_path,
-      starts_on: safeValues.starts_on,
-      ends_on: safeValues.ends_on,
-      active: safeValues.active,
-      featured: safeValues.featured,
-      sort_order: safeValues.sort_order,
-    }
-
-    if (originalCampaign) {
-      if (originalCampaign.active) {
-        const { error } = await campaignsTable.update({ active: false }).eq('id', originalCampaign.id).eq('business_id', businessId)
-        if (error) throw error
-        writeStarted = true
-      }
-      const { data, error } = await campaignsTable.update(updateValues).eq('id', originalCampaign.id).eq('business_id', businessId).select().single()
-      if (error) throw error
-      savedCampaign = data
-      writeStarted = true
-    } else {
-      const { data, error } = await campaignsTable.insert(safeValues).select().single()
-      if (error) throw error
-      savedCampaign = data
-      created = true
-      writeStarted = true
-    }
-
-    const { error: deleteError } = await linksTable.delete().eq('campaign_id', savedCampaign.id).eq('business_id', businessId)
-    if (deleteError) throw deleteError
-    if (args.productIds.length) {
-      const { error: insertError } = await linksTable.insert(args.productIds.map((productId, position) => ({ campaign_id: savedCampaign!.id, business_id: businessId, product_id: productId, position: position + 1 })))
-      if (insertError) throw insertError
-    }
-
-    if (args.values.active) {
-      const { data, error } = await campaignsTable.update({ active: true }).eq('id', savedCampaign.id).eq('business_id', businessId).select().single()
-      if (error) throw error
-      savedCampaign = data
-    }
+    const rpcValues = { ...safeValues, active: args.values.active }
+    const { data, error } = await db.rpc('ejnexa_save_catalog_campaign', buildCampaignSaveRpcArgs(rpcValues, args.existing?.id ?? null, args.productIds)).single()
+    if (error) throw error
+    if (!data) throw new Error('Campaign save returned no campaign')
     if (previousImagePath && previousImagePath !== nextImagePath) await removeCatalogMedia(previousImagePath, args.ownerId).catch(() => undefined)
-    return savedCampaign
+    return data
   } catch (error) {
-    const campaignToRestore = originalCampaign
-    if (writeStarted && campaignToRestore && !created) {
-      await ignoreFailure(() => linksTable.delete().eq('campaign_id', campaignToRestore.id).eq('business_id', businessId))
-      if (originalLinks.length) await ignoreFailure(() => linksTable.insert(originalLinks))
-      await ignoreFailure(() => campaignsTable.update({ ...campaignUpdateFromRecord(campaignToRestore), active: false }).eq('id', campaignToRestore.id).eq('business_id', businessId))
-      if (campaignToRestore.active) await ignoreFailure(() => campaignsTable.update({ active: true }).eq('id', campaignToRestore.id).eq('business_id', businessId))
-    } else if (created && savedCampaign) {
-      await ignoreFailure(() => campaignsTable.delete().eq('id', savedCampaign!.id).eq('business_id', businessId))
-    }
     if (uploadedPath) await removeCatalogMedia(uploadedPath, args.ownerId).catch(() => undefined)
     throw error
   }
 }
 
 export async function setCatalogCampaignActive(businessId: string, campaignId: string, active: boolean) {
-  const { data, error } = await client().from('ejnexa_catalog_campaigns').update({ active }).eq('id', campaignId).eq('business_id', businessId).select().single()
+  const { data, error } = await client().rpc('ejnexa_set_catalog_campaign_active', {
+    p_business_id: businessId,
+    p_campaign_id: campaignId,
+    p_active: active,
+  }).single()
   if (error) throw error
   return data
 }
