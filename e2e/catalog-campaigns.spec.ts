@@ -24,6 +24,7 @@ async function mockCampaignBackend(page: Page) {
   const activationRpcCalls: Record<string, unknown>[] = []
   const directMutations: string[] = []
   let rejectNextPublication = false
+  let rejectNextProductUpdate = false
   let sequence = 0
 
   await page.context().route('**/auth/v1/**', async route => {
@@ -38,7 +39,14 @@ async function mockCampaignBackend(page: Page) {
     const json = (data: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) })
 
     if (path.endsWith('/arpe_businesses')) return json([business])
-    if (path.endsWith('/arpe_catalog_products')) return json(products.filter(product => product.business_id === businessId))
+    if (path.endsWith('/arpe_catalog_products')) {
+      if (method === 'GET') return json(products.filter(product => product.business_id === businessId))
+      if (method === 'PATCH' && rejectNextProductUpdate) {
+        rejectNextProductUpdate = false
+        return json({ code: '23514', message: 'EJNEXA_CAMPAIGN_PRODUCT_PRICE_INVARIANT' }, 400)
+      }
+      return json({ message: 'Unexpected product write in this test.' }, 405)
+    }
     if (path.endsWith('/ejnexa_catalog_campaigns')) {
       if (method === 'GET') return json(campaigns.filter(campaign => campaign.business_id === businessId))
       directMutations.push(`campaigns:${method}`)
@@ -83,7 +91,11 @@ async function mockCampaignBackend(page: Page) {
     return json([])
   })
 
-  return { campaigns, links, campaignRpcCalls, activationRpcCalls, directMutations, rejectNextPublication: () => { rejectNextPublication = true } }
+  return {
+    campaigns, links, campaignRpcCalls, activationRpcCalls, directMutations,
+    rejectNextPublication: () => { rejectNextPublication = true },
+    rejectNextProductUpdate: () => { rejectNextProductUpdate = true },
+  }
 }
 
 async function openPromotions(page: Page) {
@@ -173,6 +185,18 @@ test('shows a friendly message when atomic publication is rejected by no-stackin
   expect(backend.campaigns).toEqual([])
   expect(backend.links).toEqual([])
   expect(backend.directMutations).toEqual([])
+})
+
+test('shows a friendly message when an active promotion blocks a product price-mode change', async ({ page }) => {
+  const backend = await mockCampaignBackend(page)
+  await openPromotions(page)
+  await page.goto('/catalogo', { waitUntil: 'domcontentloaded' })
+  await page.getByRole('button', { name: 'Editar' }).first().click()
+  await page.getByLabel('Cómo mostrar el precio').selectOption('contact')
+  backend.rejectNextProductUpdate()
+  await page.getByRole('button', { name: 'Guardar producto' }).click()
+  await expect(page.getByText('Este producto tiene una promoción activa que depende de su precio actual. Ajusta o desactiva la promoción antes de cambiar el precio.')).toBeVisible()
+  await expect(page.getByText('EJNEXA_CAMPAIGN_PRODUCT_PRICE_INVARIANT')).toHaveCount(0)
 })
 
 test('2x1 offer keeps its non-monetary rule and contact-price products remain available', async ({ page }) => {

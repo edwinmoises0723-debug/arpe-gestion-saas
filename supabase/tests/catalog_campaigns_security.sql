@@ -23,7 +23,10 @@ values
   ('52000000-0000-4000-8000-000000000007', '51000000-0000-4000-8000-000000000001', 'Expired', 'Pasteles', 'unidad', 1000, true, true, 'exact'),
   ('52000000-0000-4000-8000-000000000008', '51000000-0000-4000-8000-000000000001', 'Future', 'Pasteles', 'unidad', 1000, true, true, 'exact'),
   ('52000000-0000-4000-8000-000000000009', '51000000-0000-4000-8000-000000000002', 'Zapatos', 'Zapatos', 'par', 50, true, true, 'exact'),
-  ('52000000-0000-4000-8000-000000000010', '51000000-0000-4000-8000-000000000001', 'Combo', 'Pasteles', 'unidad', 1000, true, true, 'exact');
+  ('52000000-0000-4000-8000-000000000010', '51000000-0000-4000-8000-000000000001', 'Combo', 'Pasteles', 'unidad', 1000, true, true, 'exact'),
+  ('52000000-0000-4000-8000-000000000011', '51000000-0000-4000-8000-000000000001', 'Fixed price invariant', 'Pasteles', 'unidad', 100, true, true, 'exact'),
+  ('52000000-0000-4000-8000-000000000012', '51000000-0000-4000-8000-000000000001', 'Fixed discount invariant', 'Pasteles', 'unidad', 100, true, true, 'exact'),
+  ('52000000-0000-4000-8000-000000000013', '51000000-0000-4000-8000-000000000001', 'Inactive campaign invariant', 'Pasteles', 'unidad', 100, true, true, 'exact');
 
 insert into public.ejnexa_catalog_campaigns (
   id, business_id, name, description, campaign_kind, promotion_type,
@@ -42,7 +45,10 @@ values
   ('53000000-0000-4000-8000-000000000008', '51000000-0000-4000-8000-000000000001', 'Future campaign', '', 'promotion', 'fixed_price', null, null, 100, null, null, current_date + 1, current_date + 2, true, false, 8),
   ('53000000-0000-4000-8000-000000000013', '51000000-0000-4000-8000-000000000001', 'Combo campaign', '', 'promotion', 'combo', null, null, null, null, null, current_date, current_date, true, false, 9),
   ('53000000-0000-4000-8000-000000000014', '51000000-0000-4000-8000-000000000002', 'Shoe pair offer', '', 'promotion', 'two_for_one', null, null, null, null, null, current_date, current_date, true, false, 1),
-  ('53000000-0000-4000-8000-000000000015', '51000000-0000-4000-8000-000000000001', 'Contact product showcase', '', 'showcase', null, null, null, null, 'Nuevo', null, current_date, current_date, true, true, 1);
+  ('53000000-0000-4000-8000-000000000015', '51000000-0000-4000-8000-000000000001', 'Contact product showcase', '', 'showcase', null, null, null, null, 'Nuevo', null, current_date, current_date, true, true, 1),
+  ('53000000-0000-4000-8000-000000000016', '51000000-0000-4000-8000-000000000001', 'Fixed price invariant', '', 'promotion', 'fixed_price', null, null, 80, null, null, current_date, current_date + 2, true, false, 10),
+  ('53000000-0000-4000-8000-000000000017', '51000000-0000-4000-8000-000000000001', 'Fixed discount invariant', '', 'promotion', 'fixed_discount', null, 80, null, null, null, current_date, current_date + 2, true, false, 11),
+  ('53000000-0000-4000-8000-000000000018', '51000000-0000-4000-8000-000000000001', 'Inactive fixed price invariant', '', 'promotion', 'fixed_price', null, null, 80, null, null, current_date + 5, current_date + 7, false, false, 12);
 
 insert into public.ejnexa_catalog_campaign_products (campaign_id, business_id, product_id, position)
 values
@@ -56,7 +62,10 @@ values
   ('53000000-0000-4000-8000-000000000008', '51000000-0000-4000-8000-000000000001', '52000000-0000-4000-8000-000000000008', 1),
   ('53000000-0000-4000-8000-000000000013', '51000000-0000-4000-8000-000000000001', '52000000-0000-4000-8000-000000000010', 1),
   ('53000000-0000-4000-8000-000000000014', '51000000-0000-4000-8000-000000000002', '52000000-0000-4000-8000-000000000009', 1),
-  ('53000000-0000-4000-8000-000000000015', '51000000-0000-4000-8000-000000000001', '52000000-0000-4000-8000-000000000006', 1);
+  ('53000000-0000-4000-8000-000000000015', '51000000-0000-4000-8000-000000000001', '52000000-0000-4000-8000-000000000006', 1),
+  ('53000000-0000-4000-8000-000000000016', '51000000-0000-4000-8000-000000000001', '52000000-0000-4000-8000-000000000011', 1),
+  ('53000000-0000-4000-8000-000000000017', '51000000-0000-4000-8000-000000000001', '52000000-0000-4000-8000-000000000012', 1),
+  ('53000000-0000-4000-8000-000000000018', '51000000-0000-4000-8000-000000000001', '52000000-0000-4000-8000-000000000013', 1);
 
 do $$
 begin
@@ -484,6 +493,170 @@ begin
     raise exception 'Cross-tenant activation RPC unexpectedly succeeded';
   exception when insufficient_privilege then null;
   end;
+end;
+$$;
+
+do $$
+declare
+  v_failed boolean;
+  v_error text;
+  v_security_definer boolean;
+  v_config text[];
+begin
+  if has_function_privilege('authenticated', 'private.ejnexa_save_catalog_campaign(uuid, uuid, text, text, text, text, numeric, numeric, numeric, text, text, date, date, boolean, boolean, integer, uuid[])', 'EXECUTE')
+     or has_function_privilege('authenticated', 'private.ejnexa_set_catalog_campaign_active(uuid, uuid, boolean)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'private.ejnexa_assert_catalog_campaign_valid(uuid, uuid, numeric, text, boolean)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'private.ejnexa_guard_catalog_product_campaign_price()', 'EXECUTE')
+     or has_function_privilege('anon', 'private.ejnexa_save_catalog_campaign(uuid, uuid, text, text, text, text, numeric, numeric, numeric, text, text, date, date, boolean, boolean, integer, uuid[])', 'EXECUTE') then
+    raise exception 'Authenticated or anon can directly execute a private campaign function';
+  end if;
+
+  if exists (
+    select 1 from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+    where n.nspname in ('public', 'private')
+      and p.proname in (
+        'ejnexa_save_catalog_campaign', 'ejnexa_set_catalog_campaign_active',
+        'ejnexa_assert_catalog_campaign_valid', 'ejnexa_guard_catalog_product_campaign_price'
+      )
+      and a.grantee = 0 and a.privilege_type = 'EXECUTE'
+  ) then
+    raise exception 'PUBLIC can directly execute a campaign-management function';
+  end if;
+
+  select p.prosecdef, p.proconfig into v_security_definer, v_config
+  from pg_proc p where p.oid = 'public.ejnexa_save_catalog_campaign(uuid, uuid, text, text, text, text, numeric, numeric, numeric, text, text, date, date, boolean, boolean, integer, uuid[])'::regprocedure;
+  if v_security_definer is not true or coalesce(array_to_string(v_config, ','), '') not like '%search_path=""%' then
+    raise exception 'Campaign save wrapper must be SECURITY DEFINER with an empty search_path';
+  end if;
+  select p.prosecdef, p.proconfig into v_security_definer, v_config
+  from pg_proc p where p.oid = 'public.ejnexa_set_catalog_campaign_active(uuid, uuid, boolean)'::regprocedure;
+  if v_security_definer is not true or coalesce(array_to_string(v_config, ','), '') not like '%search_path=""%' then
+    raise exception 'Campaign activation wrapper must be SECURITY DEFINER with an empty search_path';
+  end if;
+
+  begin
+    perform 1 from private.ejnexa_set_catalog_campaign_active('51000000-0000-4000-8000-000000000001', '53000000-0000-4000-8000-000000000001', false);
+    raise exception 'Authenticated could directly execute the private activation function';
+  exception when insufficient_privilege then null;
+  end;
+
+  begin
+    perform 1 from private.ejnexa_save_catalog_campaign(
+      null, '51000000-0000-4000-8000-000000000001', 'Private save call', '', 'showcase', null,
+      null, null, null, null, null, null, null, false, false, 20,
+      array['52000000-0000-4000-8000-000000000011'::uuid]
+    );
+    raise exception 'Authenticated could directly execute the private save function';
+  exception when insufficient_privilege then null;
+  end;
+
+  perform 1 from public.ejnexa_set_catalog_campaign_active('51000000-0000-4000-8000-000000000001', '53000000-0000-4000-8000-000000000001', true);
+  v_failed := false;
+  begin
+    update public.arpe_catalog_products set public_price_mode = 'contact'
+    where id = '52000000-0000-4000-8000-000000000001';
+  exception when check_violation then
+    v_failed := true;
+    v_error := sqlerrm;
+  end;
+  if not v_failed or v_error <> 'EJNEXA_CAMPAIGN_PRODUCT_PRICE_INVARIANT' then
+    raise exception 'Active percentage promotion did not block changing its product to contact price';
+  end if;
+  if not exists (select 1 from public.arpe_catalog_products where id = '52000000-0000-4000-8000-000000000001' and public_price_mode = 'exact' and default_unit_price = 1000)
+     or not exists (select 1 from public.ejnexa_catalog_campaigns where id = '53000000-0000-4000-8000-000000000001' and active is true) then
+    raise exception 'Rejected contact-price update changed the product or campaign';
+  end if;
+  perform 1 from public.ejnexa_set_catalog_campaign_active('51000000-0000-4000-8000-000000000001', '53000000-0000-4000-8000-000000000001', false);
+
+  v_failed := false;
+  begin
+    update public.arpe_catalog_products set default_unit_price = 70
+    where id = '52000000-0000-4000-8000-000000000011';
+  exception when check_violation then
+    v_failed := true;
+    v_error := sqlerrm;
+  end;
+  if not v_failed or v_error <> 'EJNEXA_CAMPAIGN_PRODUCT_PRICE_INVARIANT' then
+    raise exception 'Active fixed-price promotion did not block a base price below its special price';
+  end if;
+  if not exists (select 1 from public.arpe_catalog_products where id = '52000000-0000-4000-8000-000000000011' and default_unit_price = 100)
+     or not exists (select 1 from public.ejnexa_catalog_campaigns where id = '53000000-0000-4000-8000-000000000016' and active is true) then
+    raise exception 'Rejected fixed-price update changed the product or campaign';
+  end if;
+
+  v_failed := false;
+  begin
+    update public.arpe_catalog_products set default_unit_price = 70
+    where id = '52000000-0000-4000-8000-000000000012';
+  exception when check_violation then
+    v_failed := true;
+    v_error := sqlerrm;
+  end;
+  if not v_failed or v_error <> 'EJNEXA_CAMPAIGN_PRODUCT_PRICE_INVARIANT' then
+    raise exception 'Active fixed-discount promotion did not block a base price below its discount';
+  end if;
+  if not exists (select 1 from public.arpe_catalog_products where id = '52000000-0000-4000-8000-000000000012' and default_unit_price = 100) then
+    raise exception 'Rejected fixed-discount update changed the product price';
+  end if;
+
+  v_failed := false;
+  begin
+    update public.arpe_catalog_products set default_unit_price = 70
+    where id = '52000000-0000-4000-8000-000000000008';
+  exception when check_violation then
+    v_failed := true;
+    v_error := sqlerrm;
+  end;
+  if not v_failed or v_error <> 'EJNEXA_CAMPAIGN_PRODUCT_PRICE_INVARIANT' then
+    raise exception 'Future scheduled active promotion did not protect its product price';
+  end if;
+
+  update public.arpe_catalog_products set default_unit_price = 300, public_price_mode = 'contact'
+  where id = '52000000-0000-4000-8000-000000000005';
+  if not exists (select 1 from public.arpe_catalog_products where id = '52000000-0000-4000-8000-000000000005' and default_unit_price = 300 and public_price_mode = 'contact') then
+    raise exception 'Active showcase incorrectly blocked price or price-mode changes';
+  end if;
+
+  update public.arpe_catalog_products set default_unit_price = 900, public_price_mode = 'contact'
+  where id = '52000000-0000-4000-8000-000000000004';
+  if not exists (select 1 from public.arpe_catalog_products where id = '52000000-0000-4000-8000-000000000004' and default_unit_price = 900 and public_price_mode = 'contact') then
+    raise exception 'Active 2x1 incorrectly blocked a contact-priced product';
+  end if;
+
+  update public.arpe_catalog_products set default_unit_price = 70
+  where id = '52000000-0000-4000-8000-000000000013';
+  if not exists (select 1 from public.arpe_catalog_products where id = '52000000-0000-4000-8000-000000000013' and default_unit_price = 70)
+     or not exists (select 1 from public.ejnexa_catalog_campaigns where id = '53000000-0000-4000-8000-000000000018' and active is false) then
+    raise exception 'Inactive campaign incorrectly blocked a product price change';
+  end if;
+
+  v_failed := false;
+  begin
+    perform 1 from public.ejnexa_set_catalog_campaign_active('51000000-0000-4000-8000-000000000001', '53000000-0000-4000-8000-000000000018', true);
+  exception when check_violation then
+    v_failed := true;
+    v_error := sqlerrm;
+  end;
+  if not v_failed or v_error <> 'EJNEXA_CAMPAIGN_PRODUCT_PRICE_INVARIANT'
+     or not exists (select 1 from public.ejnexa_catalog_campaigns where id = '53000000-0000-4000-8000-000000000018' and active is false) then
+    raise exception 'Activation did not revalidate the current fixed price and preserve the inactive state';
+  end if;
+
+  update public.arpe_catalog_products set default_unit_price = 100, public_price_mode = 'contact'
+  where id = '52000000-0000-4000-8000-000000000013';
+  v_failed := false;
+  begin
+    perform 1 from public.ejnexa_set_catalog_campaign_active('51000000-0000-4000-8000-000000000001', '53000000-0000-4000-8000-000000000018', true);
+  exception when check_violation then
+    v_failed := true;
+    v_error := sqlerrm;
+  end;
+  if not v_failed or v_error <> 'EJNEXA_CAMPAIGN_PRODUCT_PRICE_INVARIANT'
+     or not exists (select 1 from public.ejnexa_catalog_campaigns where id = '53000000-0000-4000-8000-000000000018' and active is false) then
+    raise exception 'Activation did not revalidate contact price mode and preserve the inactive state';
+  end if;
 end;
 $$;
 reset role;

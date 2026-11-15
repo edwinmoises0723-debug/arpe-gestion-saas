@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import type { CatalogProduct, QuoteBundleHeader } from './database.types'
-import { calculateBundle, calculateItemCost, duplicateProduct, filterCatalog, fromCatalog, lineTotal, newItemCost, newProduct, removeProduct, suggestedUnitPrice, summarizeProducts, validateBundle } from './products'
+import { calculateBundle, calculateItemCost, catalogProductPromotionInvariantMessage, catalogProductSaveErrorMessage, duplicateProduct, filterCatalog, fromCatalog, lineTotal, newItemCost, newProduct, removeProduct, suggestedUnitPrice, summarizeProducts, validateBundle } from './products'
 import { defaultCostSettingsValues } from './costs'
 import { defaultCostingConfig } from './costing-engine'
 
 const header: QuoteBundleHeader = { customer_name: 'Cliente de prueba', customer_phone: '', delivery_date: null, delivery_time: null, notes: '', status: 'draft', deposit_type: 'percentage', deposit_value: 50, delivery_internal_cost: 100, delivery_customer_charge: 150 }
 const catalog: CatalogProduct = { id: 'catalog-1', business_id: 'business-1', name: 'Alfajor', category: 'Galletas', description: 'Relleno suave', unit_label: 'unidad', default_unit_price: 35, default_portions: null, default_flavor: 'Chocolate', default_filling: 'Ganache', default_decoration: '', default_extras: '', is_active: true, image_path: null, is_public: false, public_price_mode: 'exact', public_sort_order: 0, created_at: '', updated_at: '' }
 describe('productos independientes y catálogo', () => {
+  it('translates the active-promotion price invariant to a clear product-edit message', () => {
+    expect(catalogProductSaveErrorMessage({ code: '23514', message: 'EJNEXA_CAMPAIGN_PRODUCT_PRICE_INVARIANT' })).toBe(catalogProductPromotionInvariantMessage)
+    expect(catalogProductSaveErrorMessage({ code: '23514', message: 'another check constraint' })).toBeNull()
+  })
+
   it('copies catalog snapshots in both directions and duplicates cost data independently', () => {
     const source = { ...catalog }
     const item = fromCatalog(source)
