@@ -194,6 +194,7 @@ export function campaignErrorMessage(error: unknown) {
   const record = typeof error === 'object' && error !== null ? error as { message?: unknown; code?: unknown } : null
   const message = typeof record?.message === 'string' ? record.message : error instanceof Error ? error.message : ''
   if (/overlapping active commercial promotions/i.test(message)) return CAMPAIGN_OVERLAP_MESSAGE
+  if (/EJNEXA_CAMPAIGN_PRODUCT_PRICE_INVARIANT/.test(message)) return 'Uno de los productos ya no cumple las condiciones de esta promoción. Revisa su precio público antes de activarla.'
   if (/special price cannot exceed the usual price/i.test(message)) return 'El precio especial no puede superar el precio habitual de los productos seleccionados.'
   if (record?.code === '23514') return 'No pudimos guardar la promoción. Revisa sus productos, fechas y valores.'
   if (/fetch|network|offline/i.test(message)) return 'No pudimos conectar. Revisa tu conexión e inténtalo de nuevo.'

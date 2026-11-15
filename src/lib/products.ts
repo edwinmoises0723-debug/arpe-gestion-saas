@@ -10,6 +10,16 @@ export const lineTotal = (item: { quantity: number; unit_price: number }) => mon
 export const productsSubtotal = (items: { line_total: number }[]) => money(items.reduce((sum, item) => sum + Number(item.line_total), 0))
 export const quoteProductsSubtotal = productsSubtotal
 export const orderProductsSubtotal = productsSubtotal
+export const catalogProductPromotionInvariantMessage = 'Este producto tiene una promoción activa que depende de su precio actual. Ajusta o desactiva la promoción antes de cambiar el precio.'
+
+export function catalogProductSaveErrorMessage(error: unknown) {
+  const record = typeof error === 'object' && error !== null ? error as { code?: unknown; message?: unknown } : null
+  if (record?.code === '23514' && typeof record.message === 'string' && record.message.includes('EJNEXA_CAMPAIGN_PRODUCT_PRICE_INVARIANT')) {
+    return catalogProductPromotionInvariantMessage
+  }
+  return null
+}
+
 export function summarizeProducts(items: { product: string }[], fallback = '') {
   return items.length ? `${items[0].product}${items.length > 1 ? ` + ${items.length - 1} más` : ''}` : fallback
 }
@@ -123,6 +133,8 @@ export async function saveCatalog(id: string | null, input: CatalogProductInput,
     return data
   } catch (error) {
     if (uploaded && media) await removeCatalogMedia(uploaded, media.ownerId).catch(() => undefined)
+    const friendlyMessage = catalogProductSaveErrorMessage(error)
+    if (friendlyMessage) throw new Error(friendlyMessage, { cause: error })
     throw error
   }
 }
