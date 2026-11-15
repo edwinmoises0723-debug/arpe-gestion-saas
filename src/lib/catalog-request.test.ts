@@ -28,6 +28,7 @@ describe('public catalog quote request', () => {
     expect(validateCatalogRequest(item, { ...validForm, desiredDate: '2026-10-17' }, '2026-10-18')).toHaveProperty('desiredDate')
     expect(validateCatalogRequest(item, { ...validForm, desiredDate: '2026-10-18' }, '2026-10-18')).toEqual({})
     expect(validateCatalogRequest(item, { ...validForm, details: 'x'.repeat(1001) }, '2026-10-18')).toHaveProperty('details')
+    expect(validateCatalogRequest([{ ...item[0], unavailable: true }], validForm, '2026-10-18').items).toContain('ya no están disponibles')
     expect(validateCatalogRequest(Array.from({ length: 51 }, (_, index) => ({ ...item[0], productId: `product-${index}` })), validForm, '2026-10-18')).toHaveProperty('items')
     expect(validateCatalogRequest([{ ...item[0], quantity: 10000 }], validForm, '2026-10-18')).toHaveProperty('items')
     expect(setCatalogRequestQuantity(item, 'pastel-id', 10000)[0].quantity).toBe(9999)

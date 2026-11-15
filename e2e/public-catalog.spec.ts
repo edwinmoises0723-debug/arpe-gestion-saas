@@ -1,8 +1,10 @@
 import { expect, test } from '@playwright/test'
 import type { PublicCatalogProduct, PublicCatalogProfile } from '../src/lib/database.types'
 import type { Business } from '../src/lib/database.types'
-import type { Page } from '@playwright/test'
+import type { Page, Route } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
+
+const staleOfferMessage = 'La promoción cambió. Actualiza el catálogo e inténtalo nuevamente.'
 
 const profile: PublicCatalogProfile = {
   catalog_slug: 'arpe-dulce-encanto', name: 'ARPE Dulce Encanto', slogan: 'Hecho con cariño',
@@ -13,6 +15,13 @@ const products: PublicCatalogProduct[] = [
   { id: 'product-1', name: 'Pastel de Chocolate', category: 'Pasteles', description: 'Pastel artesanal con ganache.', unit_label: 'pastel', default_unit_price: 850, default_portions: 20, image_path: 'owner-1/business-1/products/pastel.png', public_price_mode: 'exact', public_sort_order: 1, campaign_id: 'campaign-1', campaign_kind: 'promotion', promotion_type: 'percentage', promotion_badge: '15% OFF', campaign_name: 'Oferta especial', base_price: 1000, promotional_price: 850 },
   { id: 'product-2', name: 'Tres Leches', category: 'Postres', description: 'Suave y fresco.', unit_label: 'unidad', default_unit_price: 1200, default_portions: null, image_path: null, public_price_mode: 'from', public_sort_order: 2 },
   { id: 'product-3', name: 'Alfajor especial', category: 'Galletas', description: 'Relleno artesanal.', unit_label: 'unidad', default_unit_price: null, default_portions: null, image_path: null, public_price_mode: 'contact', public_sort_order: 3 },
+]
+const campaignProducts: PublicCatalogProduct[] = [
+  { id: 'offer-one', name: 'Bolso urbano', category: 'Accesorios', description: 'Ligero y versátil.', unit_label: 'unidad', default_unit_price: 850, default_portions: null, image_path: 'owner-1/business-1/products/bolso.png', public_price_mode: 'exact', public_sort_order: 1, campaign_id: 'campaign-featured-one', campaign_kind: 'promotion', promotion_type: 'percentage', promotion_badge: '15% OFF', campaign_name: 'Semana de accesorios', campaign_description: 'Una selección para acompañarte todos los días.', campaign_image_path: 'owner-1/business-1/campaigns/semana.png', campaign_featured: true, base_price: 1000, promotional_price: 850 },
+  { id: 'offer-two', name: 'Cartera clásica', category: 'Accesorios', description: 'Diseño atemporal.', unit_label: 'unidad', default_unit_price: 700, default_portions: null, image_path: null, public_price_mode: 'exact', public_sort_order: 2, campaign_id: 'campaign-featured-two', campaign_kind: 'promotion', promotion_type: 'fixed_price', promotion_badge: 'PRECIO ESPECIAL', campaign_name: 'Precio especial', campaign_description: 'Precio especial por tiempo limitado.', campaign_image_path: null, campaign_featured: true, base_price: 900, promotional_price: 700 },
+  { id: 'offer-three', name: 'Taza térmica', category: 'Hogar', description: '', unit_label: 'pieza', default_unit_price: 300, default_portions: null, image_path: null, public_price_mode: 'exact', public_sort_order: 3, campaign_id: 'campaign-two-for-one', campaign_kind: 'promotion', promotion_type: 'two_for_one', promotion_badge: null, campaign_name: 'Dos para compartir', campaign_description: '', campaign_image_path: null, campaign_featured: false, base_price: null, promotional_price: null },
+  { id: 'offer-four', name: 'Colección recién llegada', category: 'Novedades', description: '', unit_label: 'pieza', default_unit_price: 425, default_portions: null, image_path: null, public_price_mode: 'from', public_sort_order: 4, campaign_id: 'campaign-showcase', campaign_kind: 'showcase', promotion_type: null, promotion_badge: 'Nuevo', campaign_name: 'Recién llegado', campaign_description: 'Conoce lo último del negocio.', campaign_image_path: null, campaign_featured: false, base_price: null, promotional_price: null },
+  { id: 'offer-five', name: 'Servicio personalizado', category: 'Servicios', description: 'Cuéntanos qué necesitas.', unit_label: 'servicio', default_unit_price: null, default_portions: null, image_path: null, public_price_mode: 'contact', public_sort_order: 5, campaign_id: null, campaign_kind: null, promotion_type: null, promotion_badge: null, campaign_name: null, campaign_description: null, campaign_image_path: null, campaign_featured: null, base_price: null, promotional_price: null },
 ]
 const tinyPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/4XcAAAAASUVORK5CYII=', 'base64')
 
@@ -55,15 +64,16 @@ test('public catalog is available without login and supports discovery, detail, 
 
   await gotoPublicCatalog(page, 'arpe-dulce-encanto')
   expect(await page.locator('html').getAttribute('data-theme')).toBe('dark')
-  expect(await page.locator('.public-catalog').evaluate(element => getComputedStyle(element).backgroundColor)).toBe('rgb(248, 246, 239)')
+  expect(await page.locator('.public-catalog').evaluate(element => getComputedStyle(element).backgroundColor)).toBe('rgb(245, 247, 251)')
   const origin = new URL(page.url()).origin
   await expect(page).toHaveURL(/\/catalogo\/arpe-dulce-encanto$/)
   await expect(page.getByRole('heading', { name: 'ARPE Dulce Encanto' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Nuestros productos' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Encuentra lo que buscas' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Todos los productos' })).toBeVisible()
   await expect(page.getByRole('img', { name: 'Logo de ARPE Dulce Encanto' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Ver detalle de Pastel de Chocolate' })).toContainText('C$850')
   await expect(page.getByRole('button', { name: 'Ver detalle de Tres Leches' })).toContainText(/Desde C\$1[,.]?200/)
-  await expect(page.getByRole('button', { name: 'Ver detalle de Alfajor especial' })).toContainText('Consultar precio')
+  await expect(page.getByRole('button', { name: 'Ver detalle de Alfajor especial' })).toContainText('Precio pendiente')
   await expect(page.getByRole('button', { name: 'Ver detalle de Alfajor especial' })).not.toContainText('0')
   await expect.poll(() => page.title()).toBe('ARPE Dulce Encanto | Catálogo')
   await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', profile.description)
@@ -142,7 +152,7 @@ test('public catalog handles filters, detail, responsive widths and unavailable 
   await expect(page.getByRole('button', { name: 'Ver detalle de Pastel de Chocolate' })).toBeVisible()
   await page.getByRole('searchbox', { name: 'Buscar productos' }).fill('bizcocho')
   await expect(page.getByText('No encontramos productos con esos filtros.')).toBeVisible()
-  await page.getByRole('button', { name: 'Limpiar filtros' }).click()
+  await page.getByRole('button', { name: 'Ver todo el catálogo' }).click()
   await expect(page.locator('.public-product-card')).toHaveCount(3)
   await page.getByRole('button', { name: 'Ver detalle de Pastel de Chocolate' }).click()
   const dialog = page.getByRole('dialog', { name: 'Pastel de Chocolate' })
@@ -156,7 +166,7 @@ test('public catalog handles filters, detail, responsive widths and unavailable 
     expect(dimensions.content, `horizontal overflow at ${width}px`).toBeLessThanOrEqual(dimensions.viewport)
   }
   await gotoPublicCatalog(page, 'vacio')
-  await expect(page.getByText('Muy pronto encontrarás nuestros productos aquí.')).toBeVisible()
+  await expect(page.getByText('Muy pronto encontrarás opciones aquí.')).toBeVisible()
   await gotoPublicCatalog(page, 'no-existe')
   await expect(page.getByRole('heading', { name: 'Este catálogo no está disponible' })).toBeVisible()
   await expect(page.getByText('ARPE Dulce Encanto')).toHaveCount(0)
@@ -165,6 +175,144 @@ test('public catalog handles filters, detail, responsive widths and unavailable 
   await page.getByRole('button', { name: 'Intentar de nuevo' }).click()
   await expect(page.getByRole('heading', { name: 'No pudimos cargar el catálogo' })).toBeVisible()
   expect(pageErrors).toEqual([])
+})
+
+test('public catalog presents server-resolved campaign types and filters from the featured hero', async ({ page }) => {
+  await mockPublicCatalogBackend(page, () => campaignProducts)
+  await gotoPublicCatalog(page, 'catalogo-multirubro')
+
+  const hero = page.getByRole('region', { name: 'Campañas destacadas' })
+  await expect(hero).toBeVisible()
+  await expect(hero.getByRole('heading', { name: 'Semana de accesorios' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Ver detalle de Bolso urbano' })).toContainText('15% OFF')
+  await expect(page.getByRole('button', { name: 'Ver detalle de Bolso urbano' }).locator('del')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Ofertas para ti' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Novedades y destacados' })).toBeVisible()
+  await expect(page.getByText('Compra 1 y recibe 2').first()).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Ver detalle de Servicio personalizado' })).toContainText('Precio pendiente')
+
+  await hero.getByRole('button', { name: 'Campaña siguiente' }).click()
+  await expect(hero.locator('.public-campaign-slide').nth(1)).toContainText('Precio especial')
+  await hero.getByRole('button', { name: 'Campaña anterior' }).click()
+  await hero.locator('.public-campaign-slide').first().getByRole('button', { name: 'Ver oferta' }).click()
+  const productSection = page.locator('#public-products')
+  await expect(productSection.getByRole('heading', { name: 'Semana de accesorios' })).toBeVisible()
+  await expect(productSection.locator('.public-product-card')).toHaveCount(1)
+  await expect(productSection).toContainText('Bolso urbano')
+  await productSection.getByRole('button', { name: 'Ver todos' }).click()
+  await expect(productSection.locator('.public-product-card')).toHaveCount(campaignProducts.length)
+
+  const twoForOne = page.getByRole('button', { name: 'Ver detalle de Taza térmica' })
+  await twoForOne.click()
+  const dialog = page.getByRole('dialog', { name: 'Taza térmica' })
+  await expect(dialog).toContainText('Compra 1 y recibe 2')
+  await expect(dialog.locator('del')).toHaveCount(0)
+  await page.keyboard.press('Escape')
+})
+
+test('public catalog without campaigns has no empty promotion sections', async ({ page }) => {
+  const unpromotedProducts = campaignProducts.map(product => ({
+    ...product,
+    campaign_id: null,
+    campaign_kind: null,
+    promotion_type: null,
+    promotion_badge: null,
+    campaign_name: null,
+    campaign_description: null,
+    campaign_image_path: null,
+    campaign_featured: null,
+    base_price: null,
+    promotional_price: null,
+  }))
+  await mockPublicCatalogBackend(page, () => unpromotedProducts)
+  await gotoPublicCatalog(page, 'sin-campanas')
+  await expect(page.locator('.public-institutional-hero')).toBeVisible()
+  await expect(page.locator('.public-campaign-hero')).toHaveCount(0)
+  await expect(page.locator('.public-campaign-section')).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Todos los productos' })).toBeVisible()
+})
+
+test('stale campaign update preserves the request and refreshes its official offer snapshot', async ({ page }) => {
+  const oldProduct = { ...campaignProducts[0], campaign_featured: false }
+  const refreshedProduct = {
+    ...oldProduct,
+    campaign_id: 'campaign-refreshed',
+    promotion_badge: '30% OFF',
+    campaign_name: 'Oferta renovada',
+    base_price: 1000,
+    default_unit_price: 700,
+    promotional_price: 700,
+  }
+  let staleOfferReturned = false
+  let refreshedLoads = 0
+  const submissions: Record<string, unknown>[] = []
+  await mockPublicCatalogBackend(page, () => {
+    if (staleOfferReturned) {
+      refreshedLoads += 1
+      return [refreshedProduct]
+    }
+    return [oldProduct]
+  }, async (route, payload) => {
+    submissions.push(payload)
+    if (submissions.length === 1) {
+      staleOfferReturned = true
+      await route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ code: 'P0001', message: staleOfferMessage }) })
+      return
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 'updated-request-id', request_number: 'SOL-2026-0100', status: 'new', submitted_at: new Date().toISOString() }]) })
+  })
+  await gotoPublicCatalog(page, 'oferta-cambio')
+  await page.getByRole('button', { name: 'Agregar Bolso urbano a solicitud' }).click()
+  await openCatalogRequest(page)
+  const panel = page.getByRole('dialog', { name: 'Mi solicitud' })
+  await panel.getByLabel('Tu nombre').fill('María Gómez')
+  await panel.getByRole('button', { name: 'Enviar solicitud' }).click()
+  await expect(panel.getByRole('alert')).toContainText('Esta oferta cambió mientras preparabas tu solicitud.')
+  await expect(panel).toContainText('Bolso urbano')
+  await expect(panel.getByLabel('Tu nombre')).toHaveValue('María Gómez')
+  await panel.getByRole('button', { name: 'Actualizar catálogo' }).click()
+  await expect(panel.getByText(/Catálogo actualizado/)).toBeVisible()
+  await expect(panel.locator('.catalog-request-item')).toContainText('30% OFF')
+  await expect(panel.locator('.catalog-request-item')).toContainText('700')
+  await expect(panel.getByLabel('Tu nombre')).toHaveValue('María Gómez')
+  await panel.getByRole('button', { name: 'Enviar solicitud' }).click()
+  await expect(panel.getByText('SOL-2026-0100')).toBeVisible()
+  expect(refreshedLoads).toBeGreaterThan(0)
+  expect((submissions[0].p_items as Record<string, unknown>[])[0].expected_campaign_id).toBe('campaign-featured-one')
+  expect((submissions[1].p_items as Record<string, unknown>[])[0].expected_campaign_id).toBe('campaign-refreshed')
+})
+
+test('public catalog visual QA covers neutral, campaign, detail and request states at target widths', async ({ page }, testInfo) => {
+  await mockPublicCatalogBackend(page, () => campaignProducts)
+  await gotoPublicCatalog(page, 'visual-qa')
+
+  for (const width of [320, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: width < 500 ? 844 : 1000 })
+    const dimensions = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth, content: document.documentElement.scrollWidth }))
+    expect(dimensions.content, `horizontal overflow at ${width}px`).toBeLessThanOrEqual(dimensions.viewport)
+    await page.screenshot({ path: testInfo.outputPath(`catalog-normal-${width}.png`), fullPage: true })
+
+    await page.locator('.public-campaign-slide').first().getByRole('button', { name: 'Ver oferta' }).click()
+    await page.screenshot({ path: testInfo.outputPath(`catalog-campaign-${width}.png`), fullPage: true })
+
+    await page.getByRole('button', { name: 'Ver detalle de Bolso urbano' }).click()
+    const detail = page.getByRole('dialog', { name: 'Bolso urbano' })
+    await expect(detail).toBeVisible()
+    await page.screenshot({ path: testInfo.outputPath(`catalog-detail-${width}.png`), fullPage: false })
+    await page.keyboard.press('Escape')
+    await expect(detail).not.toBeVisible()
+
+    await page.getByRole('button', { name: 'Agregar Bolso urbano a solicitud' }).click()
+    await openCatalogRequest(page)
+    const request = page.getByRole('dialog', { name: 'Mi solicitud' })
+    await expect(request).toBeVisible()
+    await page.screenshot({ path: testInfo.outputPath(`catalog-request-${width}.png`), fullPage: false })
+    await request.getByRole('button', { name: 'Quitar Bolso urbano' }).click()
+    await request.getByRole('button', { name: 'Cerrar mi solicitud' }).click()
+    await expect(request).not.toBeVisible()
+    await expect(page.locator('.catalog-request-floating, .public-request-header-button')).toHaveCount(0)
+    if (width !== 1440) await page.locator('#public-products').getByRole('button', { name: 'Ver todos' }).click()
+  }
 })
 
 test('public catalog persists a request once and keeps sharing attached to its receipt', async ({ page }, testInfo) => {
@@ -205,7 +353,7 @@ test('public catalog persists a request once and keeps sharing attached to its r
   await page.getByRole('button', { name: 'Ver detalle de Pastel de Chocolate' }).click()
   const productDetail = page.getByRole('dialog', { name: 'Pastel de Chocolate' })
   await productDetail.getByRole('button', { name: 'Agregar Pastel de Chocolate a solicitud' }).click()
-  await expect(productDetail.getByText('Agregado')).toBeVisible()
+  await expect(productDetail.getByText('En tu solicitud')).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(productDetail).not.toBeVisible()
   const pastelCard = page.locator('.public-product-card').filter({ has: page.getByRole('button', { name: 'Ver detalle de Pastel de Chocolate' }) })
@@ -214,7 +362,7 @@ test('public catalog persists a request once and keeps sharing attached to its r
   await page.getByRole('button', { name: 'Postres', exact: true }).click()
   const tresLechesCard = page.locator('.public-product-card').filter({ has: page.getByRole('button', { name: 'Ver detalle de Tres Leches' }) })
   await tresLechesCard.getByRole('button', { name: 'Agregar Tres Leches a solicitud' }).click()
-  await page.getByRole('button', { name: /Mi solicitud · 2 productos/ }).click()
+  await openCatalogRequest(page)
   const panel = page.getByRole('dialog', { name: 'Mi solicitud' })
   await expect(panel).toBeVisible()
   await expect(panel).toContainText('2 productos distintos')
@@ -278,7 +426,7 @@ test('public catalog persists a request once and keeps sharing attached to its r
   await expect(lockedPastel.getByRole('button', { name: 'Aumentar cantidad de Pastel de Chocolate' })).toBeDisabled()
   await expect(lockedTresLeches.getByRole('button', { name: 'Aumentar cantidad de Tres Leches' })).toBeDisabled()
   await expect(lockedAlfajor.getByRole('button', { name: 'Agregar Alfajor especial a solicitud' })).toBeDisabled()
-  await page.getByRole('button', { name: /Mi solicitud · 2 productos/ }).click()
+  await openCatalogRequest(page)
   await expect(panel.getByText('SOL-2026-0001')).toBeVisible()
   await expect(panel.getByRole('region', { name: 'Revisa tu solicitud' })).toContainText('2 × Pastel de Chocolate')
   await expect(panel.getByRole('region', { name: 'Revisa tu solicitud' })).toContainText('1 × Tres Leches')
@@ -287,7 +435,7 @@ test('public catalog persists a request once and keeps sharing attached to its r
   await panel.getByRole('button', { name: 'Volver al catálogo' }).click()
   await expect(lockedPastel.getByRole('button', { name: 'Agregar Pastel de Chocolate a solicitud' })).toBeEnabled()
   await lockedPastel.getByRole('button', { name: 'Agregar Pastel de Chocolate a solicitud' }).click()
-  await expect(page.getByRole('button', { name: /Mi solicitud · 1 producto/ })).toBeVisible()
+  await expect(page.locator('.public-request-header-button')).toBeVisible()
   await expect(submissionPayloads).toHaveLength(1)
 
   await page.keyboard.press('Escape')
@@ -295,7 +443,7 @@ test('public catalog persists a request once and keeps sharing attached to its r
   await gotoPublicCatalog(page, 'sin-whatsapp')
   const productCard = page.locator('.public-product-card').filter({ has: page.getByRole('button', { name: 'Ver detalle de Pastel de Chocolate' }) })
   await productCard.getByRole('button', { name: 'Agregar Pastel de Chocolate a solicitud' }).click()
-  await page.getByRole('button', { name: /Mi solicitud · 1 producto/ }).click()
+  await openCatalogRequest(page)
   const noWhatsAppPanel = page.getByRole('dialog', { name: 'Mi solicitud' })
   await noWhatsAppPanel.getByLabel('Tu nombre').fill('Carlos Ramírez')
   await expect(noWhatsAppPanel.getByRole('button', { name: 'Solicitar cotización por WhatsApp' })).toHaveCount(0)
@@ -315,7 +463,7 @@ test('public catalog persists a request once and keeps sharing attached to its r
   await expect.poll(() => page.evaluate(() => (window as Window & { __requestShared?: string }).__requestShared)).toContain('Carlos Ramírez')
   await page.keyboard.press('Escape')
   await expect(noWhatsAppPanel).not.toBeVisible()
-  await page.getByRole('button', { name: /Mi solicitud · 1 producto/ }).click()
+  await openCatalogRequest(page)
   await expect(page.getByRole('dialog', { name: 'Mi solicitud' })).toBeVisible()
   await noWhatsAppPanel.getByRole('button', { name: 'Crear otra solicitud' }).click()
   await expect(noWhatsAppPanel.getByText('Aún no agregas productos.')).toBeVisible()
@@ -356,7 +504,7 @@ test('public catalog retries the exact pending payload with one idempotency key'
   })
   await gotoPublicCatalog(page, 'arpe-dulce-encanto')
   await page.getByRole('button', { name: 'Agregar Pastel de Chocolate a solicitud' }).click()
-  await page.getByRole('button', { name: /Mi solicitud · 1 producto/ }).click()
+  await openCatalogRequest(page)
   const panel = page.getByRole('dialog', { name: 'Mi solicitud' })
   await panel.getByLabel('Tu nombre').fill('Lucía Prueba')
   await panel.getByRole('button', { name: 'Enviar solicitud' }).click()
@@ -367,7 +515,7 @@ test('public catalog retries the exact pending payload with one idempotency key'
   await expect(pastelCard.getByRole('button', { name: 'Aumentar cantidad de Pastel de Chocolate' })).toBeDisabled()
   const tresLechesCard = page.locator('.public-product-card').filter({ has: page.getByRole('button', { name: 'Ver detalle de Tres Leches' }) })
   await expect(tresLechesCard.getByRole('button', { name: 'Agregar Tres Leches a solicitud' })).toBeDisabled()
-  await page.getByRole('button', { name: /Mi solicitud · 1 producto/ }).click()
+  await openCatalogRequest(page)
   await panel.getByRole('button', { name: 'Reintentar envío' }).click()
   await expect(panel.getByText('SOL-2026-0002')).toBeVisible()
   expect(submissions).toHaveLength(2)
@@ -399,7 +547,7 @@ test('public catalog submits once when the send action is activated repeatedly',
   })
   await gotoPublicCatalog(page, 'arpe-dulce-encanto')
   await page.getByRole('button', { name: 'Agregar Pastel de Chocolate a solicitud' }).click()
-  await page.getByRole('button', { name: /Mi solicitud · 1 producto/ }).click()
+  await openCatalogRequest(page)
   const panel = page.getByRole('dialog', { name: 'Mi solicitud' })
   await panel.getByLabel('Tu nombre').fill('Prueba Doble')
   await panel.getByRole('button', { name: 'Enviar solicitud' }).evaluate(button => {
@@ -430,6 +578,46 @@ async function gotoPublicCatalog(page: Page, slug: string) {
   await Promise.all([profileResponse, productsResponse])
 }
 
+async function openCatalogRequest(page: Page) {
+  const floatingButton = page.locator('.catalog-request-floating')
+  if (await floatingButton.isVisible()) {
+    await floatingButton.click()
+    return
+  }
+  await page.locator('.public-request-header-button').click()
+}
+
+async function mockPublicCatalogBackend(
+  page: Page,
+  getProducts: (slug: string) => PublicCatalogProduct[],
+  submit?: (route: Route, payload: Record<string, unknown>) => Promise<void>,
+) {
+  await page.route('**/*.supabase.co/**', async route => {
+    const request = route.request()
+    const url = new URL(request.url())
+    if (url.pathname.startsWith('/storage/v1/object/public/ejnexa-catalog-media/')) {
+      await route.fulfill({ status: 200, contentType: 'image/png', body: tinyPng })
+      return
+    }
+    if (!url.pathname.startsWith('/rest/v1/rpc/')) {
+      await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ message: 'Unexpected endpoint' }) })
+      return
+    }
+    const payload = request.postDataJSON() as Record<string, unknown>
+    const slug = typeof payload.p_slug === 'string' ? payload.p_slug : ''
+    if (url.pathname.endsWith('/ejnexa_get_public_catalog_profile')) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ ...profile, catalog_slug: slug }]) })
+      return
+    }
+    if (url.pathname.endsWith('/ejnexa_submit_catalog_request')) {
+      if (submit) return submit(route, payload)
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 'public-request-id', request_number: 'SOL-2026-0099', status: 'new', submitted_at: new Date().toISOString() }]) })
+      return
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(getProducts(slug)) })
+  })
+}
+
 async function mockInternalCatalogBackend(page: Page) {
   await page.route('**/rest/v1/**', route => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }))
   await page.route('**/auth/v1/**', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(route.request().url().includes('/user') ? internalUser : internalSession) }))
@@ -454,6 +642,7 @@ test('internal catalog exposes sharing tools only while published and builds PDF
   await expect(page.getByRole('heading', { name: 'Dulce Encanto' })).toBeVisible()
   await page.getByRole('button', { name: 'Abrir menú' }).click()
   await page.getByRole('navigation', { name: 'Módulos complementarios' }).getByRole('link', { name: 'Catálogo' }).click()
+  await page.getByRole('navigation', { name: 'Secciones del catálogo' }).getByRole('link', { name: 'Catálogo público' }).click()
 
   const distribution = page.getByRole('region', { name: 'Compartir catálogo' })
   await expect(distribution).toBeVisible()
