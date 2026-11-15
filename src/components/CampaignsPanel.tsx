@@ -14,6 +14,7 @@ const offerLabels = { percentage: 'Descuento porcentual', fixed_discount: 'Descu
 export function CampaignsPanel({ business, products }: { business: Business; products: CatalogProduct[] }) {
   const [campaigns, setCampaigns] = useState<CampaignWithProducts[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [wizardOpen, setWizardOpen] = useState(false)
@@ -25,17 +26,17 @@ export function CampaignsPanel({ business, products }: { business: Business; pro
 
   const refresh = useCallback(async () => {
     setLoading(true)
-    setError('')
+    setLoadError('')
     try { setCampaigns(await listCatalogCampaigns(business.id)) }
-    catch (reason) { setError(campaignErrorMessage(reason)) }
+    catch (reason) { setLoadError(campaignErrorMessage(reason)) }
     finally { setLoading(false) }
   }, [business.id])
 
   useEffect(() => {
     let current = true
     void listCatalogCampaigns(business.id)
-      .then(data => { if (current) setCampaigns(data) })
-      .catch(reason => { if (current) setError(campaignErrorMessage(reason)) })
+      .then(data => { if (current) { setLoadError(''); setCampaigns(data) } })
+      .catch(reason => { if (current) setLoadError(campaignErrorMessage(reason)) })
       .finally(() => { if (current) setLoading(false) })
     return () => { current = false }
   }, [business.id])
@@ -62,9 +63,10 @@ export function CampaignsPanel({ business, products }: { business: Business; pro
   return <section className="campaigns-panel" aria-labelledby="campaigns-title">
     <div className="campaigns-heading"><div><span className="eyebrow accent">OFERTAS PARA TU CATÁLOGO</span><h2 id="campaigns-title">Promociones</h2><p className="muted">Crea ofertas que ayuden a mover tu catálogo.</p></div><button type="button" className="primary" onClick={startNew} disabled={!products.length}><Plus size={17} /> Nueva promoción</button></div>
     {notice && <Notice>{notice}</Notice>}{error && <Notice error>{error}</Notice>}
-    {!products.length && <Notice>Agrega primero al menos un producto en la pestaña Productos para crear una promoción.</Notice>}
-    {loading ? <Loading text="Cargando tus promociones…" /> : campaigns.length === 0
-      ? <section className="campaign-empty-state"><span className="campaign-empty-icon"><Sparkles size={27} aria-hidden="true" /></span><span className="subtle-badge">CATÁLOGO EN MOVIMIENTO</span><h3>Aún no has creado promociones</h3><p>Crea descuentos, 2x1, precios especiales o campañas visuales para destacar productos.</p><button type="button" className="primary" onClick={startNew} disabled={!products.length}><Plus size={17} /> Crear mi primera promoción</button></section>
+    {loading ? <div className="campaign-loading-state"><Loading text="Cargando tus promociones…" /></div> : loadError
+      ? <div className="campaign-error-state"><Notice error>{loadError}</Notice><button type="button" className="secondary-button" onClick={() => void refresh()}><span aria-hidden="true">↻</span> Reintentar</button></div>
+      : campaigns.length === 0
+      ? <section className="campaign-empty-state"><span className="campaign-empty-icon"><Sparkles size={27} aria-hidden="true" /></span><span className="subtle-badge">CATÁLOGO EN MOVIMIENTO</span><h3>Aún no has creado promociones</h3><p>{products.length ? 'Crea descuentos, 2x1, precios especiales o campañas visuales para destacar productos.' : 'Para crear una promoción, primero agrega al menos un producto en la pestaña Productos.'}</p><button type="button" className="primary" onClick={startNew} disabled={!products.length}><Plus size={17} /> Crear mi primera promoción</button></section>
       : <div className="campaign-list">{campaigns.map(campaign => {
         const status = getCampaignDisplayStatus(campaign)
         const associated = campaign.product_ids.map(id => productsById.get(id)).filter((product): product is CatalogProduct => Boolean(product))

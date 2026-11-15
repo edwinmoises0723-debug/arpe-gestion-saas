@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import type { Business, CatalogProduct } from '../src/lib/database.types'
 
 const userId = '71111111-1111-4111-8111-111111111111'
@@ -48,7 +48,9 @@ async function mockCampaignBackend(page: Page) {
       return json({ message: 'Unexpected product write in this test.' }, 405)
     }
     if (path.endsWith('/ejnexa_catalog_campaigns')) {
-      if (method === 'GET') return json(campaigns.filter(campaign => campaign.business_id === businessId))
+      if (method === 'GET') {
+        return json(campaigns.filter(campaign => campaign.business_id === businessId))
+      }
       directMutations.push(`campaigns:${method}`)
       return json({ message: 'Campaign writes must use RPC.' }, 405)
     }
@@ -98,6 +100,15 @@ async function mockCampaignBackend(page: Page) {
   }
 }
 
+async function captureVisual(page: Page, testInfo: TestInfo, filename: string, scrollTarget?: string) {
+  if (scrollTarget) await page.locator(scrollTarget).scrollIntoViewIfNeeded()
+  else await page.evaluate(() => window.scrollTo(0, 0))
+  if (scrollTarget === '.campaign-wizard-actions') await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+  await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur() })
+  await page.addStyleTag({ content: '.skip-link:focus { top: -100px !important; }' })
+  await page.screenshot({ path: testInfo.outputPath(`visual-review/${filename}.png`) })
+}
+
 async function openPromotions(page: Page) {
   await page.goto('/', { waitUntil: 'domcontentloaded' })
   await page.getByLabel('Correo electrónico').fill(user.email)
@@ -111,29 +122,60 @@ async function openPromotions(page: Page) {
   await expect(page.getByRole('heading', { name: 'Promociones', exact: true })).toBeVisible()
 }
 
-test('promotion wizard previews and saves a percentage offer as an inactive draft', async ({ page }) => {
+test('promotion wizard previews and saves a percentage offer as an inactive draft', async ({ page }, testInfo) => {
+  test.setTimeout(90000)
   const backend = await mockCampaignBackend(page)
   await page.setViewportSize({ width: 390, height: 844 })
   await openPromotions(page)
   await expect(page.getByText('Aún no has creado promociones')).toBeVisible()
+  const emptyCta = page.getByRole('button', { name: 'Crear mi primera promoción' })
+  await emptyCta.scrollIntoViewIfNeeded()
+  const emptyCtaBounds = await emptyCta.boundingBox()
+  const emptyNavBounds = await page.locator('.bottom-nav').boundingBox()
+  if (!emptyCtaBounds || !emptyNavBounds) throw new Error('Empty state CTA or bottom navigation is missing from the mobile layout.')
+  expect(emptyCtaBounds.y + emptyCtaBounds.height).toBeLessThanOrEqual(emptyNavBounds.y)
+  await captureVisual(page, testInfo, '390-promotions-empty', '.campaign-empty-state .primary')
   await page.getByRole('button', { name: 'Crear mi primera promoción' }).click()
+  await expect(page.locator('.campaign-stepper-summary')).toContainText('Paso 1 de 5')
+  await captureVisual(page, testInfo, '390-offer-selector', '.campaign-type-grid')
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await captureVisual(page, testInfo, '1440-offer-selector', '.campaign-type-grid')
+  await page.setViewportSize({ width: 390, height: 844 })
   await page.getByRole('button', { name: /Descuento porcentual/ }).click()
   await page.getByRole('button', { name: 'Continuar' }).click()
-  await page.getByLabel('Seleccionar Camisa de lino').check()
+  const productOption = page.locator('.campaign-product-option').filter({ hasText: 'Camisa de lino' })
+  const productCheckbox = productOption.getByRole('checkbox')
+  await expect(page.getByRole('img', { name: 'Sin imagen para Camisa de lino' })).toBeVisible()
+  await productCheckbox.check()
+  await expect(productCheckbox).toBeChecked()
+  await expect(productOption).toHaveClass(/is-selected/)
+  await expect(productOption).toContainText('Seleccionado')
+  await captureVisual(page, testInfo, '390-product-picker-selected', '.campaign-product-option.is-selected')
   await page.getByRole('button', { name: 'Continuar' }).click()
   await page.getByLabel('Porcentaje de descuento').fill('25')
   await page.getByLabel('Nombre de la campaña').fill('Temporada de verano')
+  await page.getByLabel('Descripción comercial').fill('Una selección ligera para los días de verano.')
   await page.getByLabel('Badge de promoción').fill('25% OFF')
+  await captureVisual(page, testInfo, '390-campaign-details', '.campaign-image-actions')
   await page.getByRole('button', { name: 'Continuar' }).click()
   await page.getByRole('button', { name: 'Empieza hoy' }).click()
   await page.getByRole('button', { name: 'Sin fecha final' }).click()
+  await expect(page.getByText('Empieza hoy · Sin fecha final')).toBeVisible()
+  await captureVisual(page, testInfo, '390-schedule-summary', '.campaign-schedule-summary')
   await page.getByRole('button', { name: 'Continuar' }).click()
   await expect(page.getByText('Camisa de lino')).toBeVisible()
   await expect(page.getByText('25% OFF').first()).toBeVisible()
-  await expect(page.getByText(/\$\s*75,00/)).toBeVisible()
+  await expect(page.getByText('$75', { exact: true })).toBeVisible()
+  await expect(page.getByText('Compra 1 y recibe 2', { exact: true })).toHaveCount(0)
+  await captureVisual(page, testInfo, '390-campaign-preview', '.campaign-wizard-actions')
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await captureVisual(page, testInfo, '1440-campaign-preview', '.campaign-preview-card')
+  await page.setViewportSize({ width: 390, height: 844 })
   await page.getByRole('button', { name: 'Guardar borrador' }).click()
   await expect(page.getByRole('heading', { name: 'Temporada de verano' })).toBeVisible()
   await expect(page.getByText('Inactiva')).toBeVisible()
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await captureVisual(page, testInfo, '1440-promotions-list')
   expect(backend.campaignRpcCalls).toHaveLength(1)
   expect(backend.campaignRpcCalls[0]).toMatchObject({ p_business_id: businessId, p_campaign_kind: 'promotion', p_promotion_type: 'percentage', p_percentage_discount: 25, p_active: false, p_product_ids: ['product-a'] })
   expect(backend.directMutations).toEqual([])
@@ -213,8 +255,10 @@ test('2x1 offer keeps its non-monetary rule and contact-price products remain av
   await page.getByLabel('Nombre de la campaña').fill('Doble beneficio')
   await page.getByRole('button', { name: 'Continuar' }).click()
   await page.getByRole('button', { name: 'Continuar' }).click()
-  await expect(page.getByText('Compra 1 y recibe 2').first()).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Vista previa de la promoción' }).getByText('2x1', { exact: true })).toBeVisible()
+  await expect(page.getByText('Compra 1 y recibe 2', { exact: true }).last()).toBeVisible()
   await expect(page.getByText('Precio pendiente').first()).toBeVisible()
+  await expect(page.getByText(/50% OFF/i)).toHaveCount(0)
 })
 
 test('promotion selector, picker, stepper and preview fit target widths without horizontal overflow', async ({ page }) => {
@@ -227,19 +271,37 @@ test('promotion selector, picker, stepper and preview fit target widths without 
     for (const width of widths) {
       await page.setViewportSize({ width, height: 900 })
       expect(await page.evaluate(() => document.documentElement.scrollWidth), `horizontal overflow at ${width}px`).toBeLessThanOrEqual(width + 1)
+      const stepper = page.locator('.campaign-stepper')
+      expect(await stepper.evaluate(element => element.scrollWidth - element.clientWidth), `stepper clipping at ${width}px`).toBeLessThanOrEqual(1)
+      if (width <= 400) await expect(stepper.locator('.campaign-stepper-summary')).toBeVisible()
+      else await expect(stepper.locator('.campaign-stepper-summary')).toBeHidden()
     }
   }
   await expectNoOverflow()
+  await expect(page.locator('.campaign-stepper-summary')).toContainText('Oferta')
   await page.setViewportSize({ width: 390, height: 900 })
   await page.getByRole('button', { name: /Descuento porcentual/ }).click()
   await page.getByRole('button', { name: 'Continuar' }).click()
   await expectNoOverflow()
+  await expect(page.locator('.campaign-stepper-summary')).toContainText('Productos')
   await page.setViewportSize({ width: 390, height: 900 })
   await page.getByLabel('Seleccionar Camisa de lino').check()
   await page.getByRole('button', { name: 'Continuar' }).click()
   await page.getByLabel('Porcentaje de descuento').fill('25')
   await page.getByLabel('Nombre de la campaña').fill('Prueba adaptable')
-  await page.getByRole('button', { name: 'Continuar' }).click()
+  await expectNoOverflow()
+  await expect(page.locator('.campaign-stepper-summary')).toContainText('Detalles')
+  await page.setViewportSize({ width: 390, height: 900 })
   await page.getByRole('button', { name: 'Continuar' }).click()
   await expectNoOverflow()
+  await expect(page.locator('.campaign-stepper-summary')).toContainText('Vigencia')
+  await page.getByRole('button', { name: 'Continuar' }).click()
+  await expectNoOverflow()
+  await expect(page.locator('.campaign-stepper-summary')).toContainText('Vista previa')
+  await page.setViewportSize({ width: 390, height: 900 })
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+  const actionBar = await page.locator('.campaign-wizard-actions').boundingBox()
+  const bottomNavigation = await page.locator('.bottom-nav').boundingBox()
+  if (!actionBar || !bottomNavigation) throw new Error('Wizard actions or bottom navigation are missing from the mobile layout.')
+  expect(bottomNavigation.y - (actionBar.y + actionBar.height)).toBeGreaterThanOrEqual(12)
 })

@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
-import { Image, Search } from 'lucide-react'
+import { Check, Image, Search } from 'lucide-react'
 import type { Business, CatalogProduct } from '../lib/database.types'
-import { catalogImageUrl } from '../lib/catalog'
 import { formatCurrency } from '../lib/quotes'
 import type { CampaignOfferType } from '../lib/catalog-campaigns'
+import { CampaignProductVisual } from './CampaignProductVisual'
 
 const monetaryOffers: CampaignOfferType[] = ['percentage', 'fixed_discount', 'fixed_price']
 
@@ -41,7 +41,6 @@ export function CampaignProductPicker({ business, products, offerType, selected,
       {visible.map(product => {
         const isSelected = selected.includes(product.id)
         const priceBlocked = monetaryOffers.includes(offerType) && product.public_price_mode === 'contact' && !isSelected
-        const image = catalogImageUrl(product.image_path)
         return <label key={product.id} className={`campaign-product-option${isSelected ? ' is-selected' : ''}${priceBlocked ? ' is-disabled' : ''}`}>
           <input
             type="checkbox"
@@ -50,8 +49,9 @@ export function CampaignProductPicker({ business, products, offerType, selected,
             onChange={() => toggle(product.id)}
             aria-label={`${isSelected ? 'Quitar' : 'Seleccionar'} ${product.name}`}
           />
-          <span className="campaign-product-image">{image ? <img src={image} alt="" loading="lazy" /> : <Image size={21} aria-hidden="true" />}</span>
+          <CampaignProductVisual product={product} className="campaign-product-image" fallbackClassName="campaign-product-image-fallback" />
           <span className="campaign-product-info"><strong>{product.name}</strong><small>{product.category}</small><span className="campaign-product-price">{product.public_price_mode === 'contact' || product.default_unit_price === null ? 'Precio pendiente' : `${product.public_price_mode === 'from' ? 'Desde ' : ''}${formatCurrency(Number(product.default_unit_price), business)} / ${product.unit_label}`}</span><span className="campaign-product-statuses"><small>{product.is_active ? 'Activo' : 'Inactivo'}</small><small>{product.is_public ? 'Público' : 'Privado'}</small></span>
+            {isSelected && <span className="campaign-product-selected-label"><Check size={13} aria-hidden="true" /> Seleccionado</span>}
             {priceBlocked && <small className="campaign-product-warning">Este producto tiene Precio pendiente. Define un precio antes de aplicar una promoción monetaria.</small>}
           </span>
         </label>
