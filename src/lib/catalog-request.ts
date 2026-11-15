@@ -15,6 +15,7 @@ export type CatalogRequestItem = {
   promotionBadge: string | null
   defaultPortions: number | null
   imagePath?: string | null
+  unavailable?: boolean
 }
 
 export type CatalogRequestForm = { customerName: string; desiredDate: string; details: string }
@@ -74,6 +75,7 @@ export function validateCatalogRequest(items: CatalogRequestItem[], form: Catalo
   if (!items.length) errors.items = 'Agrega al menos un producto a tu solicitud.'
   if (items.length > 50) errors.items = 'Puedes incluir hasta 50 productos distintos por solicitud.'
   if (items.some(item => !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 9999)) errors.items = 'Cada cantidad debe estar entre 1 y 9999.'
+  if (items.some(item => item.unavailable)) errors.items = 'Retira de tu solicitud los productos que ya no están disponibles en el catálogo actualizado.'
   const customerName = form.customerName.trim()
   if (customerName.length < 2 || customerName.length > 100) errors.customerName = 'Escribe un nombre de 2 a 100 caracteres.'
   if (form.desiredDate && (!isDateOnly(form.desiredDate) || form.desiredDate < today)) errors.desiredDate = 'Elige una fecha de hoy o posterior.'

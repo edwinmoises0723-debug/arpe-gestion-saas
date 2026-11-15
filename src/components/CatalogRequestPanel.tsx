@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CalendarDays, Clipboard, Minus, Plus, Send, Trash2, X } from 'lucide-react'
+import { CalendarDays, Clipboard, Minus, Plus, RefreshCw, Send, Trash2, X } from 'lucide-react'
 import { catalogImageUrl } from '../lib/catalog'
-import { buildCatalogRequestSubmissionPayload, buildQuoteRequestMessage, buildQuoteRequestWhatsAppUrl, calculateCatalogReference, CATALOG_OFFER_CHANGED_MESSAGE, formatRequestedDate, isCatalogOfferChangedError, localDateString, submitCatalogRequest, validateCatalogRequest, type CatalogRequestForm, type CatalogRequestItem, type CatalogRequestSubmission, type CatalogRequestSubmissionPayload } from '../lib/catalog-request'
+import { buildCatalogRequestSubmissionPayload, buildQuoteRequestMessage, buildQuoteRequestWhatsAppUrl, calculateCatalogReference, formatRequestedDate, isCatalogOfferChangedError, localDateString, submitCatalogRequest, validateCatalogRequest, type CatalogRequestForm, type CatalogRequestItem, type CatalogRequestSubmission, type CatalogRequestSubmissionPayload } from '../lib/catalog-request'
 import type { Currency } from '../lib/database.types'
 import './catalog-request.css'
 
@@ -9,6 +9,7 @@ type Props = {
   open: boolean
   onClose: () => void
   onRequestLockChange: (locked: boolean) => void
+  onRefreshCatalog: () => Promise<number>
   slug: string
   businessName: string
   whatsapp: string | null
@@ -25,7 +26,7 @@ const emptyForm: CatalogRequestForm = { customerName: '', desiredDate: '', detai
 type SubmissionState = { status: 'idle' } | { status: 'submitting'; pending: PendingSubmission } | { status: 'error'; pending: PendingSubmission } | { status: 'success'; pending: PendingSubmission; result: CatalogRequestSubmission }
 type PendingSubmission = { key: string; payload: CatalogRequestSubmissionPayload }
 
-export function CatalogRequestPanel({ open, onClose, onRequestLockChange, slug, businessName, whatsapp, catalogUrl, currency, items, onQuantity, onRemove, onClear }: Props) {
+export function CatalogRequestPanel({ open, onClose, onRequestLockChange, onRefreshCatalog, slug, businessName, whatsapp, catalogUrl, currency, items, onQuantity, onRemove, onClear }: Props) {
   const dialog = useRef<HTMLDialogElement>(null)
   const nameInput = useRef<HTMLInputElement>(null)
   const dateInput = useRef<HTMLInputElement>(null)
@@ -33,6 +34,8 @@ export function CatalogRequestPanel({ open, onClose, onRequestLockChange, slug, 
   const [form, setForm] = useState<CatalogRequestForm>(emptyForm)
   const [errors, setErrors] = useState<ReturnType<typeof validateCatalogRequest>>({})
   const [notice, setNotice] = useState('')
+  const [staleOffer, setStaleOffer] = useState(false)
+  const [refreshingCatalog, setRefreshingCatalog] = useState(false)
   const [confirmClear, setConfirmClear] = useState(false)
   const [submission, setSubmission] = useState<SubmissionState>({ status: 'idle' })
   const submitLock = useRef(false)
@@ -104,6 +107,7 @@ export function CatalogRequestPanel({ open, onClose, onRequestLockChange, slug, 
     setForm(emptyForm)
     setErrors({})
     setNotice('Solicitud limpiada.')
+    setStaleOffer(false)
     setConfirmClear(false)
     setSubmission({ status: 'idle' })
     onRequestLockChange(false)
@@ -118,7 +122,7 @@ export function CatalogRequestPanel({ open, onClose, onRequestLockChange, slug, 
       setErrors(nextErrors)
       setNotice('')
       if (Object.keys(nextErrors).length) {
-        if (nextErrors.items) dialog.current?.querySelector<HTMLButtonElement>('.catalog-request-add')?.focus()
+        if (nextErrors.items) (dialog.current?.querySelector<HTMLButtonElement>('.catalog-request-add') ?? dialog.current?.querySelector<HTMLButtonElement>('.catalog-request-remove'))?.focus()
         else if (nextErrors.customerName) nameInput.current?.focus()
         else if (nextErrors.desiredDate) dateInput.current?.focus()
         else detailsInput.current?.focus()
@@ -137,7 +141,8 @@ export function CatalogRequestPanel({ open, onClose, onRequestLockChange, slug, 
     } catch (error) {
       if (isCatalogOfferChangedError(error)) {
         setSubmission({ status: 'idle' })
-        setNotice(CATALOG_OFFER_CHANGED_MESSAGE)
+        setNotice('')
+        setStaleOffer(true)
         onRequestLockChange(false)
       } else {
         setSubmission({ status: 'error', pending })
@@ -147,11 +152,29 @@ export function CatalogRequestPanel({ open, onClose, onRequestLockChange, slug, 
     }
   }
 
+  async function refreshCatalog() {
+    if (refreshingCatalog) return
+    setRefreshingCatalog(true)
+    try {
+      const unavailableCount = await onRefreshCatalog()
+      setStaleOffer(false)
+      setErrors(current => ({ ...current, items: undefined }))
+      setNotice(unavailableCount
+        ? 'Catálogo actualizado. Retira los productos que ya no están disponibles y revisa los datos vigentes.'
+        : 'Catálogo actualizado. Revisa la información vigente antes de reenviar.')
+    } catch {
+      setNotice('No pudimos actualizar el catálogo. Revisa tu conexión e inténtalo de nuevo.')
+    } finally {
+      setRefreshingCatalog(false)
+    }
+  }
+
   function startAnotherRequest() {
     onClear()
     setForm(emptyForm)
     setErrors({})
     setNotice('')
+    setStaleOffer(false)
     setConfirmClear(false)
     setSubmission({ status: 'idle' })
     onRequestLockChange(false)
@@ -162,13 +185,14 @@ export function CatalogRequestPanel({ open, onClose, onRequestLockChange, slug, 
       <header className="catalog-request-header"><div><span className="public-eyebrow public-eyebrow-dark">PARA COTIZAR</span><h2 id="catalog-request-title">Mi solicitud</h2><p id="catalog-request-description">Revisa los productos y cuéntanos qué necesitas. Todavía no estás realizando una compra.</p></div><button type="button" className="catalog-request-close" aria-label="Cerrar mi solicitud" onClick={() => dialog.current?.close()}><X size={20} /></button></header>
       <div className="catalog-request-body">
         {errors.items && <p className="catalog-request-error" role="alert">{errors.items}</p>}
+        {staleOffer && <section className="catalog-request-stale" role="alert"><div><strong>Esta oferta cambió mientras preparabas tu solicitud.</strong><p>Actualiza el catálogo para ver la información vigente. Conservamos los productos y los datos que escribiste.</p></div><button type="button" disabled={refreshingCatalog} onClick={() => void refreshCatalog()}><RefreshCw size={16} aria-hidden="true" />{refreshingCatalog ? 'Actualizando…' : 'Actualizar catálogo'}</button></section>}
         <section className="catalog-request-products" aria-label="Productos seleccionados">
           {items.length ? items.map(item => {
             const imageUrl = catalogImageUrl(item.imagePath ?? null)
             return <article className="catalog-request-item" key={item.productId}>
               <div className="catalog-request-thumbnail">{imageUrl ? <img src={imageUrl} alt="" loading="lazy" /> : <span aria-hidden="true">{item.name.slice(0, 1)}</span>}</div>
-              <div className="catalog-request-item-copy"><span>{item.category}</span><h3>{item.name}</h3><p>{item.publicPriceMode === 'exact' ? '' : item.publicPriceMode === 'from' ? 'Desde ' : ''}{item.publicPriceMode === 'contact' || item.publicUnitPrice === null ? 'Consultar precio' : `${symbols[currency]} ${money(item.publicUnitPrice)}`} <small>/ {item.unitLabel}</small></p></div>
-              <div className="catalog-request-quantity" aria-label={`Cantidad de ${item.name}`}><button type="button" disabled={isLocked} aria-label={`Disminuir cantidad de ${item.name}`} onClick={() => onQuantity(item.productId, item.quantity - 1)}><Minus size={16} /></button><span aria-live="polite">{item.quantity}</span><button type="button" disabled={isLocked} aria-label={`Aumentar cantidad de ${item.name}`} onClick={() => onQuantity(item.productId, item.quantity + 1)}><Plus size={16} /></button></div>
+              <div className="catalog-request-item-copy"><span>{item.category}</span><h3>{item.name}</h3>{(item.promotionBadge || item.promotionType === 'two_for_one') && <span className="catalog-request-offer-badge">{item.promotionBadge || '2x1'}{item.promotionType === 'two_for_one' && <small>Compra 1 y recibe 2</small>}</span>}<p>{item.publicPriceMode === 'exact' ? '' : item.publicPriceMode === 'from' ? 'Desde ' : ''}{item.publicPriceMode === 'contact' || item.publicUnitPrice === null ? 'Precio pendiente' : `${symbols[currency]} ${money(item.publicUnitPrice)}`} <small>/ {item.unitLabel}</small></p>{item.unavailable && <span className="catalog-request-unavailable">Ya no está disponible</span>}</div>
+              <div className="catalog-request-quantity" aria-label={`Cantidad de ${item.name}`}><button type="button" disabled={isLocked || item.unavailable} aria-label={`Disminuir cantidad de ${item.name}`} onClick={() => onQuantity(item.productId, item.quantity - 1)}><Minus size={16} /></button><span aria-live="polite">{item.quantity}</span><button type="button" disabled={isLocked || item.unavailable} aria-label={`Aumentar cantidad de ${item.name}`} onClick={() => onQuantity(item.productId, item.quantity + 1)}><Plus size={16} /></button></div>
               <button type="button" className="catalog-request-remove" disabled={isLocked} aria-label={`Quitar ${item.name}`} onClick={() => onRemove(item.productId)}><Trash2 size={17} /></button>
             </article>
           }) : <div className="catalog-request-empty"><p>Aún no agregas productos.</p><button type="button" className="catalog-request-add" onClick={onClose}>Volver al catálogo</button></div>}

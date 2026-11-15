@@ -78,7 +78,7 @@
 
 /* Commercial surfaces are tenant-facing and always use their approved light palette.
    Reset inherited roles as well as native form controls, including export clones. */
-.public-catalog, .client-document {
+.client-document {
   color-scheme: light;
   --color-background: #f8f7f3;
   --color-surface: #ffffff;
@@ -111,4 +111,40 @@
   --line: #e6e8e1;
   --gold: #d8bd88;
   --surface: #ffffff;
+}
+
+/* Public catalogs stay light while following EJNEXA's blue and cyan brand roles. */
+.public-catalog {
+  color-scheme: light;
+  --color-background: #f5f7fb;
+  --color-surface: #ffffff;
+  --color-surface-secondary: #edf2f8;
+  --color-surface-elevated: #ffffff;
+  --color-text-primary: #16243a;
+  --color-text-secondary: #40536c;
+  --color-text-muted: #596b82;
+  --color-border: #dce4ef;
+  --color-border-strong: #a8b8cd;
+  --color-accent-primary: #174fb4;
+  --color-accent-secondary: #087e94;
+  --color-accent-tertiary: #117d87;
+  --color-brand-primary: #174fb4;
+  --color-brand-accent: #087e94;
+  --color-brand-solid: #174fc6;
+  --color-brand-hover: #103c9b;
+  --color-brand-surface: #eaf1fe;
+  --color-on-solid: #ffffff;
+  --color-success: #226b4b;
+  --color-success-surface: #e9f5ee;
+  --color-warning: #80591b;
+  --color-warning-surface: #fff3df;
+  --color-danger: #a83d39;
+  --color-danger-surface: #fceeed;
+  --color-info: #285c99;
+  --color-info-surface: #eaf2fc;
+  --color-focus: #147dbe;
+  --color-shadow: rgb(15 35 65 / 9%);
+  --color-overlay: rgb(8 20 40 / 48%);
+  --color-selection: #cce6ff;
+  --color-decoration: #d3e2f5;
 }
