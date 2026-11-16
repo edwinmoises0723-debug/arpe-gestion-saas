@@ -161,6 +161,8 @@
 }
 @media(max-width:459px){
   .campaigns-heading h2{font-size:1.35rem}
+  .catalog-tabs{margin-bottom:14px}
+  .campaigns-panel{gap:12px}
   .campaign-empty-state{min-height:0;gap:8px;padding:18px 16px}
   .campaign-empty-icon{width:50px;height:50px;border-radius:15px}
   .campaign-empty-state h3{font-size:1.12rem;line-height:1.25}
@@ -194,3 +196,30 @@
   .campaign-card-actions .secondary-button,.campaign-card-actions .primary,.campaign-card-actions .text-button{padding-inline:8px}
 }
 @media(prefers-reduced-motion:reduce){.campaign-product-option{transition:none}}
+
+/* Campaign lifecycle controls stay within the existing promotion-card language. */
+.campaign-lifecycle-tabs{display:flex;width:fit-content;max-width:100%;gap:5px;padding:4px;border:1px solid var(--color-border);border-radius:13px;background:var(--color-surface-secondary)}
+.campaign-lifecycle-tab{min-height:42px;padding:9px 15px;border:0;border-radius:9px;background:transparent;color:var(--color-text-secondary);font:inherit;font-size:.8rem;font-weight:650;white-space:nowrap;cursor:pointer}
+.campaign-lifecycle-tab[aria-selected=true]{background:var(--color-surface);color:var(--color-accent-primary);box-shadow:var(--shadow-sm)}
+.campaign-lifecycle-tab:focus-visible,.campaign-more-options>summary:focus-visible{outline:3px solid var(--color-focus);outline-offset:2px}
+.campaign-card.is-archived{border-color:var(--color-border);background:var(--color-surface-secondary)}
+.campaign-status.status-archived{background:var(--color-surface);color:var(--color-text-secondary);border:1px solid var(--color-border)}
+.campaign-card-actions{position:relative;align-items:center}
+.campaign-more-options{position:relative;margin-left:auto}
+.campaign-more-options>summary{display:grid;width:42px;height:42px;place-items:center;border:1px solid var(--color-border);border-radius:11px;background:var(--color-surface);color:var(--color-text-secondary);cursor:pointer;list-style:none}
+.campaign-more-options>summary::-webkit-details-marker{display:none}
+.campaign-more-options[open]>summary{color:var(--color-accent-primary);border-color:var(--color-accent-primary)}
+.campaign-more-menu{position:absolute;z-index:8;right:0;top:calc(100% + 6px);display:grid;min-width:190px;gap:3px;padding:6px;border:1px solid var(--color-border);border-radius:13px;background:var(--color-surface-elevated);box-shadow:var(--shadow-lg)}
+.campaign-more-menu button{display:flex;align-items:center;gap:9px;min-height:42px;padding:8px 10px;border:0;border-radius:9px;background:transparent;color:var(--color-text-primary);font:inherit;font-size:.78rem;text-align:left;cursor:pointer}
+.campaign-more-menu button:hover:not(:disabled){background:var(--color-surface-secondary)}
+.campaign-more-menu button:focus-visible{outline:2px solid var(--color-focus);outline-offset:1px}
+.campaign-card-actions .danger-button,.campaign-delete-actions .danger-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:44px;padding:9px 12px;font-size:.78rem}
+.campaign-delete-backdrop{z-index:1000}
+.campaign-delete-dialog{width:min(100% - 28px,460px);max-height:min(88dvh,700px);overflow-y:auto;padding:26px;text-align:left}
+.campaign-delete-icon{display:grid;width:48px;height:48px;place-items:center;margin:0 auto 14px;border-radius:15px;background:var(--color-warning-surface);color:var(--color-warning)}
+.campaign-delete-dialog h2{margin:0;text-align:center;font-size:1.2rem;line-height:1.3}
+.campaign-delete-dialog>p{margin:12px 0 18px;color:var(--color-text-secondary);font-size:.86rem;line-height:1.55;text-align:center;overflow-wrap:anywhere}
+.campaign-delete-dialog>.notice{margin:0 0 14px}
+.campaign-delete-actions{display:flex;justify-content:flex-end;gap:9px}
+.campaign-delete-actions>*{flex:1;min-width:0}
+@media(max-width:459px){.campaign-lifecycle-tabs{display:grid;width:100%;grid-template-columns:repeat(2,minmax(0,1fr))}.campaign-lifecycle-tab{padding-inline:8px}.campaign-empty-state{min-height:0}.campaign-card-actions .danger-button{flex:1}.campaign-more-menu{right:0}.campaign-delete-dialog{padding:22px 17px}.campaign-delete-actions{flex-direction:column-reverse}.campaign-delete-actions>*{width:100%}}

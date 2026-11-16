@@ -254,10 +254,11 @@ export type CatalogCampaign = {
   active: boolean
   featured: boolean
   sort_order: number
+  archived_at: string | null
   created_at: string
   updated_at: string
 }
-export type CatalogCampaignInput = Omit<CatalogCampaign, 'id' | 'created_at' | 'updated_at'>
+export type CatalogCampaignInput = Omit<CatalogCampaign, 'id' | 'created_at' | 'updated_at' | 'archived_at'>
 export type CatalogCampaignProduct = {
   campaign_id: string
   business_id: string
@@ -418,6 +419,10 @@ export type Database = {
         Args: { p_business_id: string; p_campaign_id: string; p_active: boolean }
         Returns: CatalogCampaign[]
       }
+      ejnexa_duplicate_catalog_campaign: { Args: { p_business_id: string; p_campaign_id: string }; Returns: CatalogCampaign[] }
+      ejnexa_archive_catalog_campaign: { Args: { p_business_id: string; p_campaign_id: string }; Returns: CatalogCampaign[] }
+      ejnexa_restore_catalog_campaign: { Args: { p_business_id: string; p_campaign_id: string }; Returns: CatalogCampaign[] }
+      ejnexa_delete_catalog_campaign: { Args: { p_business_id: string; p_campaign_id: string }; Returns: boolean }
       ejnexa_submit_catalog_request: {
         Args: {
           p_slug: string

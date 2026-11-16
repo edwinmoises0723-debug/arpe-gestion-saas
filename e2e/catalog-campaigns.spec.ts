@@ -49,7 +49,9 @@ async function mockCampaignBackend(page: Page) {
     }
     if (path.endsWith('/ejnexa_catalog_campaigns')) {
       if (method === 'GET') {
-        return json(campaigns.filter(campaign => campaign.business_id === businessId))
+        const archiveFilter = url.searchParams.get('archived_at')
+        return json(campaigns.filter(campaign => campaign.business_id === businessId
+          && (archiveFilter === 'not.is.null' ? campaign.archived_at !== null : campaign.archived_at == null)))
       }
       directMutations.push(`campaigns:${method}`)
       return json({ message: 'Campaign writes must use RPC.' }, 405)
@@ -72,7 +74,7 @@ async function mockCampaignBackend(page: Page) {
         campaign_kind: args.p_campaign_kind, promotion_type: args.p_promotion_type, percentage_discount: args.p_percentage_discount,
         fixed_discount: args.p_fixed_discount, promo_price: args.p_promo_price, badge_text: args.p_badge_text,
         image_path: args.p_image_path, starts_on: args.p_starts_on, ends_on: args.p_ends_on, active: args.p_active,
-        featured: args.p_featured, sort_order: args.p_sort_order, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        featured: args.p_featured, sort_order: args.p_sort_order, archived_at: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       }
       const existingIndex = campaigns.findIndex(row => row.id === campaignId)
       if (existingIndex >= 0) campaigns[existingIndex] = campaign
@@ -90,11 +92,56 @@ async function mockCampaignBackend(page: Page) {
       campaign.active = args.p_active
       return json(campaign)
     }
+    if (path.endsWith('/rpc/ejnexa_duplicate_catalog_campaign')) {
+      const args = request.postDataJSON() as Record<string, unknown>
+      const source = campaigns.find(row => row.id === args.p_campaign_id && row.business_id === args.p_business_id)
+      if (!source) return json({ code: '42501', message: 'Not authorized' }, 400)
+      const duplicate = { ...source, id: `campaign-${++sequence}`, name: `Copia de ${String(source.name)}`.slice(0, 120), active: false, archived_at: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+      campaigns.push(duplicate)
+      links.push(...links.filter(link => link.campaign_id === source.id).map(link => ({ ...link, campaign_id: duplicate.id })))
+      return json(duplicate)
+    }
+    if (path.endsWith('/rpc/ejnexa_archive_catalog_campaign')) {
+      const args = request.postDataJSON() as Record<string, unknown>
+      const campaign = campaigns.find(row => row.id === args.p_campaign_id && row.business_id === args.p_business_id)
+      if (!campaign) return json({ code: '42501', message: 'Not authorized' }, 400)
+      campaign.active = false
+      campaign.archived_at = new Date().toISOString()
+      return json(campaign)
+    }
+    if (path.endsWith('/rpc/ejnexa_restore_catalog_campaign')) {
+      const args = request.postDataJSON() as Record<string, unknown>
+      const campaign = campaigns.find(row => row.id === args.p_campaign_id && row.business_id === args.p_business_id)
+      if (!campaign) return json({ code: '42501', message: 'Not authorized' }, 400)
+      campaign.active = false
+      campaign.archived_at = null
+      return json(campaign)
+    }
+    if (path.endsWith('/rpc/ejnexa_delete_catalog_campaign')) {
+      const args = request.postDataJSON() as Record<string, unknown>
+      const index = campaigns.findIndex(row => row.id === args.p_campaign_id && row.business_id === args.p_business_id)
+      if (index < 0) return json({ code: '42501', message: 'Not authorized' }, 400)
+      const [deleted] = campaigns.splice(index, 1)
+      for (let index = links.length - 1; index >= 0; index -= 1) if (links[index].campaign_id === deleted.id) links.splice(index, 1)
+      return json(true)
+    }
     return json([])
   })
 
   return {
     campaigns, links, campaignRpcCalls, activationRpcCalls, directMutations,
+    seedCampaign(overrides: Record<string, unknown> = {}) {
+      const now = new Date().toISOString()
+      const campaign = {
+        id: `campaign-${++sequence}`, business_id: businessId, name: 'Campaña de prueba', description: 'Una oferta de temporada.',
+        campaign_kind: 'promotion', promotion_type: 'percentage', percentage_discount: 20, fixed_discount: null, promo_price: null,
+        badge_text: '20% OFF', image_path: null, starts_on: null, ends_on: null, active: true, featured: true, sort_order: 1,
+        archived_at: null, created_at: now, updated_at: now, ...overrides,
+      }
+      campaigns.push(campaign)
+      links.push({ campaign_id: campaign.id, business_id: businessId, product_id: 'product-a', position: 1 })
+      return campaign
+    },
     rejectNextPublication: () => { rejectNextPublication = true },
     rejectNextProductUpdate: () => { rejectNextProductUpdate = true },
   }
@@ -113,11 +160,12 @@ async function openPromotions(page: Page) {
   await page.goto('/', { waitUntil: 'domcontentloaded' })
   await page.getByLabel('Correo electrónico').fill(user.email)
   await page.getByLabel('Contraseña', { exact: true }).fill('Example-password-123')
+  const signedIn = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/auth/v1/token') && response.ok())
   await page.getByRole('button', { name: 'Entrar a mi negocio' }).click()
-  await expect(page.getByRole('banner')).toContainText('Retail Prueba')
-  const productsLoaded = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/arpe_catalog_products') && response.status() === 200)
+  await signedIn
+  await expect(page.locator('.header-business strong')).toHaveText('Retail Prueba')
   await page.goto('/catalogo?vista=promociones', { waitUntil: 'domcontentloaded' })
-  await productsLoaded
+  await expect(page.getByRole('heading', { name: 'Catálogo', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Nueva promoción' })).toBeEnabled()
   await expect(page.getByRole('heading', { name: 'Promociones', exact: true })).toBeVisible()
 }
@@ -198,6 +246,7 @@ test('publishes a campaign through the atomic save RPC', async ({ page }) => {
   await page.getByRole('button', { name: 'Continuar' }).click()
   await page.getByRole('button', { name: 'Publicar promoción' }).click()
   await page.getByRole('alertdialog').getByRole('button', { name: 'Publicar promoción' }).click()
+  await expect(page.locator('.campaign-wizard')).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'Oferta publicada' })).toBeVisible()
   expect(backend.campaignRpcCalls).toHaveLength(1)
   expect(backend.campaignRpcCalls[0]).toMatchObject({ p_percentage_discount: 12.5, p_active: true, p_product_ids: ['product-a'] })
@@ -304,4 +353,95 @@ test('promotion selector, picker, stepper and preview fit target widths without 
   const bottomNavigation = await page.locator('.bottom-nav').boundingBox()
   if (!actionBar || !bottomNavigation) throw new Error('Wizard actions or bottom navigation are missing from the mobile layout.')
   expect(bottomNavigation.y - (actionBar.y + actionBar.height)).toBeGreaterThanOrEqual(12)
+})
+
+test('campaign lifecycle duplicates, archives, restores and safely deletes from the archived list', async ({ page }) => {
+  test.setTimeout(90_000)
+  const backend = await mockCampaignBackend(page)
+  const source = backend.seedCampaign()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openPromotions(page)
+  await expect(page.getByRole('heading', { name: 'Campaña de prueba', exact: true })).toBeVisible()
+
+  const sourceMenu = page.locator('.campaign-more-options > summary[aria-label="Más opciones para Campaña de prueba"]')
+  await sourceMenu.click()
+  await page.getByRole('button', { name: 'Duplicar campaña' }).click()
+  await expect(page.getByRole('heading', { name: 'Copia de Campaña de prueba' })).toBeVisible()
+  expect(backend.campaigns).toHaveLength(2)
+  expect(backend.campaigns[1]).toMatchObject({ name: 'Copia de Campaña de prueba', active: false, archived_at: null, image_path: null })
+  expect(backend.links.filter(link => link.campaign_id === backend.campaigns[1].id)).toEqual([
+    expect.objectContaining({ product_id: 'product-a', business_id: businessId }),
+  ])
+
+  await sourceMenu.click()
+  const archiveResponse = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/rpc/ejnexa_archive_catalog_campaign'))
+  await expect(page.getByRole('button', { name: 'Archivar', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Archivar', exact: true }).click()
+  await archiveResponse
+  await expect(page.getByText('La campaña quedó archivada.', { exact: true })).toBeVisible()
+  await expect(page.locator('.campaign-loading-state')).toBeHidden()
+  await expect(page.getByRole('heading', { name: String(source.name), exact: true })).toHaveCount(0)
+  expect(backend.campaigns[0]).toMatchObject({ active: false })
+  expect(backend.campaigns[0].archived_at).toEqual(expect.any(String))
+
+  await page.getByRole('tab', { name: 'Archivadas' }).click()
+  await expect(page.getByRole('heading', { name: String(source.name), exact: true })).toBeVisible()
+  await expect(page.getByText('Archivada', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: `Restaurar ${String(source.name)}` }).click()
+  await expect(page.locator('.campaign-loading-state')).toBeHidden()
+  await expect(page.getByRole('heading', { name: String(source.name), exact: true })).toBeVisible()
+  await expect(page.getByText('Inactiva', { exact: true }).first()).toBeVisible()
+  expect(backend.campaigns[0]).toMatchObject({ active: false, archived_at: null })
+
+  await sourceMenu.click()
+  const rearchiveResponse = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/rpc/ejnexa_archive_catalog_campaign'))
+  await expect(page.getByRole('button', { name: 'Archivar', exact: true })).toBeEnabled()
+  await page.getByRole('button', { name: 'Archivar', exact: true }).click()
+  await rearchiveResponse
+  await expect(page.getByText('La campaña quedó archivada.', { exact: true })).toBeVisible()
+  await expect(page.locator('.campaign-loading-state')).toBeHidden()
+  await page.getByRole('tab', { name: 'Archivadas' }).click()
+  await page.getByRole('button', { name: `Eliminar campaña ${String(source.name)}` }).click()
+  const dialog = page.getByRole('alertdialog', { name: 'Eliminar campaña definitivamente' })
+  await expect(dialog).toBeVisible()
+  await expect(dialog).toContainText(String(source.name))
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+  await expect(page.getByRole('button', { name: `Eliminar campaña ${String(source.name)}` })).toBeFocused()
+  await page.getByRole('button', { name: `Eliminar campaña ${String(source.name)}` }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Eliminar definitivamente' }).click()
+  await expect(page.getByRole('heading', { name: String(source.name), exact: true })).toHaveCount(0)
+  expect(backend.campaigns.some(campaign => campaign.id === source.id)).toBe(false)
+  expect(backend.directMutations).toEqual([])
+})
+
+test('campaign lifecycle tabs, menu and delete dialog fit all target widths', async ({ page }) => {
+  test.setTimeout(90_000)
+  const backend = await mockCampaignBackend(page)
+  backend.seedCampaign()
+  backend.seedCampaign({ name: 'Campaña archivada', active: false, archived_at: new Date().toISOString() })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openPromotions(page)
+
+  for (const width of [320, 360, 390, 400, 768, 884, 1440]) {
+    await page.setViewportSize({ width, height: 900 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth), `horizontal overflow at ${width}px`).toBeLessThanOrEqual(width + 1)
+    const menu = page.locator('.campaign-more-options > summary[aria-label="Más opciones para Campaña de prueba"]')
+    await expect(menu).toBeVisible()
+    await menu.click()
+    await expect(page.getByRole('button', { name: 'Duplicar campaña' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Archivar', exact: true })).toBeVisible()
+    await menu.click()
+    await page.getByRole('tab', { name: 'Archivadas' }).click()
+    const deleteButton = page.getByRole('button', { name: 'Eliminar campaña Campaña archivada' })
+    await expect(deleteButton).toBeVisible()
+    await deleteButton.click()
+    const dialog = page.getByRole('alertdialog', { name: 'Eliminar campaña definitivamente' })
+    const bounds = await dialog.boundingBox()
+    if (!bounds) throw new Error(`Delete confirmation is missing at ${width}px.`)
+    expect(bounds.x, `dialog left edge at ${width}px`).toBeGreaterThanOrEqual(0)
+    expect(bounds.x + bounds.width, `dialog right edge at ${width}px`).toBeLessThanOrEqual(width + 1)
+    await page.getByRole('button', { name: 'Cancelar' }).click()
+    await page.getByRole('tab', { name: 'Promociones' }).click()
+  }
 })

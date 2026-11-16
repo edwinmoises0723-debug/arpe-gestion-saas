@@ -3,7 +3,7 @@ import { removeCatalogMedia, uploadCatalogMedia } from './catalog'
 import { client } from './supabase'
 
 export type CampaignOfferType = CatalogPromotionType | 'showcase'
-export type CampaignStatus = 'inactive' | 'scheduled' | 'active' | 'finished'
+export type CampaignStatus = 'inactive' | 'scheduled' | 'active' | 'finished' | 'archived'
 export type CampaignWithProducts = CatalogCampaign & { product_ids: string[] }
 
 export type CampaignDraft = {
@@ -53,7 +53,8 @@ export function defaultCampaignBadge(type: CampaignOfferType, value = '') {
   return 'Nuevo'
 }
 
-export function getCampaignDisplayStatus(campaign: Pick<CatalogCampaign, 'active' | 'starts_on' | 'ends_on'>, today = localDateString()): CampaignStatus {
+export function getCampaignDisplayStatus(campaign: Pick<CatalogCampaign, 'active' | 'starts_on' | 'ends_on'> & Partial<Pick<CatalogCampaign, 'archived_at'>>, today = localDateString()): CampaignStatus {
+  if (campaign.archived_at) return 'archived'
   if (!campaign.active) return 'inactive'
   if (campaign.ends_on && campaign.ends_on < today) return 'finished'
   if (campaign.starts_on && campaign.starts_on > today) return 'scheduled'
@@ -61,7 +62,7 @@ export function getCampaignDisplayStatus(campaign: Pick<CatalogCampaign, 'active
 }
 
 export function campaignStatusLabel(status: CampaignStatus) {
-  return { inactive: 'Inactiva', scheduled: 'Programada', active: 'Activa', finished: 'Finalizada' }[status]
+  return { inactive: 'Inactiva', scheduled: 'Programada', active: 'Activa', finished: 'Finalizada', archived: 'Archivada' }[status]
 }
 
 export function campaignTypeFromRecord(campaign: Pick<CatalogCampaign, 'campaign_kind' | 'promotion_type'>): CampaignOfferType {
@@ -193,6 +194,11 @@ export function buildCampaignSaveRpcArgs(values: CatalogCampaignInput, campaignI
 export function campaignErrorMessage(error: unknown) {
   const record = typeof error === 'object' && error !== null ? error as { message?: unknown; code?: unknown } : null
   const message = typeof record?.message === 'string' ? record.message : error instanceof Error ? error.message : ''
+  if (/EJNEXA_CAMPAIGN_HAS_HISTORY/.test(message)) return 'Esta campaña forma parte del historial del negocio. No puede eliminarse definitivamente porque fue utilizada en solicitudes anteriores. Puedes mantenerla archivada; ya no aparecerá entre tus promociones activas.'
+  if (/EJNEXA_CAMPAIGN_ARCHIVED_RESTORE_FIRST/.test(message)) return 'Restaura la campaña antes de publicarla.'
+  if (/Campaign has no available products to duplicate/i.test(message)) return 'No se puede duplicar porque ya no quedan productos disponibles en esta campaña.'
+  if (/Archive the campaign before deleting/i.test(message)) return 'Archiva la campaña antes de eliminarla definitivamente.'
+  if (/Campaign is not archived/i.test(message)) return 'Esta campaña ya no está archivada. Actualiza la lista e inténtalo nuevamente.'
   if (/overlapping active commercial promotions/i.test(message)) return CAMPAIGN_OVERLAP_MESSAGE
   if (/EJNEXA_CAMPAIGN_PRODUCT_PRICE_INVARIANT/.test(message)) return 'Uno de los productos ya no cumple las condiciones de esta promoción. Revisa su precio público antes de activarla.'
   if (/special price cannot exceed the usual price/i.test(message)) return 'El precio especial no puede superar el precio habitual de los productos seleccionados.'
@@ -201,8 +207,10 @@ export function campaignErrorMessage(error: unknown) {
   return 'No pudimos completar esta acción. Revisa la información e inténtalo de nuevo.'
 }
 
-export async function listCatalogCampaigns(businessId: string): Promise<CampaignWithProducts[]> {
-  const { data, error } = await client().from('ejnexa_catalog_campaigns').select('*').eq('business_id', businessId).order('created_at', { ascending: false })
+export async function listCatalogCampaigns(businessId: string, archived = false): Promise<CampaignWithProducts[]> {
+  let query = client().from('ejnexa_catalog_campaigns').select('*').eq('business_id', businessId)
+  query = archived ? query.not('archived_at', 'is', null) : query.is('archived_at', null)
+  const { data, error } = await query.order(archived ? 'archived_at' : 'created_at', { ascending: false })
   if (error) throw error
   const campaigns = data ?? []
   if (campaigns.length === 0) return []
@@ -238,7 +246,7 @@ export async function saveCatalogCampaign(args: {
     const { data, error } = await db.rpc('ejnexa_save_catalog_campaign', buildCampaignSaveRpcArgs(rpcValues, args.existing?.id ?? null, args.productIds)).single()
     if (error) throw error
     if (!data) throw new Error('Campaign save returned no campaign')
-    if (previousImagePath && previousImagePath !== nextImagePath) await removeCatalogMedia(previousImagePath, args.ownerId).catch(() => undefined)
+    if (previousImagePath && previousImagePath !== nextImagePath) await removeCampaignImageIfUnused(businessId, previousImagePath, args.ownerId)
     return data
   } catch (error) {
     if (uploadedPath) await removeCatalogMedia(uploadedPath, args.ownerId).catch(() => undefined)
@@ -254,6 +262,38 @@ export async function setCatalogCampaignActive(businessId: string, campaignId: s
   }).single()
   if (error) throw error
   return data
+}
+
+export async function duplicateCatalogCampaign(businessId: string, campaignId: string) {
+  const { data, error } = await client().rpc('ejnexa_duplicate_catalog_campaign', { p_business_id: businessId, p_campaign_id: campaignId }).single()
+  if (error) throw error
+  return data
+}
+
+export async function archiveCatalogCampaign(businessId: string, campaignId: string) {
+  const { data, error } = await client().rpc('ejnexa_archive_catalog_campaign', { p_business_id: businessId, p_campaign_id: campaignId }).single()
+  if (error) throw error
+  return data
+}
+
+export async function restoreCatalogCampaign(businessId: string, campaignId: string) {
+  const { data, error } = await client().rpc('ejnexa_restore_catalog_campaign', { p_business_id: businessId, p_campaign_id: campaignId }).single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteCatalogCampaign(businessId: string, campaignId: string, imagePath: string | null, ownerId: string) {
+  const { data, error } = await client().rpc('ejnexa_delete_catalog_campaign', { p_business_id: businessId, p_campaign_id: campaignId })
+  if (error) throw error
+  if (data !== true) throw new Error('Campaign delete returned no confirmation')
+  if (imagePath) await removeCampaignImageIfUnused(businessId, imagePath, ownerId)
+}
+
+async function removeCampaignImageIfUnused(businessId: string, imagePath: string, ownerId: string) {
+  const { data, error } = await client().from('ejnexa_catalog_campaigns').select('id')
+    .eq('business_id', businessId).eq('image_path', imagePath).limit(1)
+  if (error || data?.length) return
+  await removeCatalogMedia(imagePath, ownerId).catch(() => undefined)
 }
 
 export function campaignKindForType(type: CampaignOfferType): CatalogCampaignKind {

@@ -73,6 +73,7 @@ describe('campaign offers and previews', () => {
     expect(getCampaignDisplayStatus({ active: true, starts_on: '2026-11-13', ends_on: null }, today)).toBe('scheduled')
     expect(getCampaignDisplayStatus({ active: true, starts_on: null, ends_on: '2026-11-12' }, today)).toBe('active')
     expect(getCampaignDisplayStatus({ active: true, starts_on: null, ends_on: '2026-11-11' }, today)).toBe('finished')
+    expect(getCampaignDisplayStatus({ active: true, archived_at: '2026-11-12T12:00:00Z', starts_on: null, ends_on: null }, today)).toBe('archived')
   })
 
   it('translates overlap and database errors into safe Spanish copy', () => {
@@ -80,6 +81,8 @@ describe('campaign offers and previews', () => {
     expect(campaignErrorMessage({ code: '23514', message: 'Special price cannot exceed the usual price of any selected product' })).toBe('El precio especial no puede superar el precio habitual de los productos seleccionados.')
     expect(campaignErrorMessage({ code: '23514', message: 'raw SQL detail' })).toBe('No pudimos guardar la promoción. Revisa sus productos, fechas y valores.')
     expect(campaignErrorMessage({ code: 'PGRST', message: 'raw SQL detail' })).not.toContain('raw SQL')
+    expect(campaignErrorMessage({ code: '23503', message: 'EJNEXA_CAMPAIGN_HAS_HISTORY' })).toContain('No puede eliminarse definitivamente')
+    expect(campaignErrorMessage({ code: '23514', message: 'EJNEXA_CAMPAIGN_ARCHIVED_RESTORE_FIRST' })).toBe('Restaura la campaña antes de publicarla.')
   })
 })
 
